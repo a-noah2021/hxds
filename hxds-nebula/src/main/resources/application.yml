@@ -1,0 +1,78 @@
+server:
+  jetty:
+    threads:
+      acceptors: 4
+      selectors: 8
+  port: 8009
+  servlet:
+    context-path: /
+
+spring:
+  profiles:
+    include: common
+  application:
+    name: hxds-nebula
+  cloud:
+    inetutils:
+      #子系统注册到Nacos上的IP地址
+      preferred-networks: 127.0.0.1
+    nacos:
+      #配置子系统在Web管理页面上的注册信息
+      config:
+        group: DEFAULT_GROUP
+        file-extension: yaml
+        server-addr: 127.0.0.1:8848
+        prefix: ${spring.application.name}
+        namespace: hxds
+      #配置子系统在Nacos上的注册信息
+      discovery:
+        namespace: hxds
+        username: nacos
+        password: nacos
+        server-addr: 127.0.0.1:8848
+        heart-beat-interval: 1000
+        heart-beat-timeout: 1000
+        group: DEFAULT_GROUP
+  datasource:
+    driver-class-name: org.apache.phoenix.queryserver.client.Driver
+    url: jdbc:phoenix:thin:url=http://localhost:8765;serialization=PROTOBUF
+    type: com.alibaba.druid.pool.DruidDataSource
+    druid:
+      test-on-borrow: true
+      test-while-idle: true
+      max-active: 8
+      min-idle: 4
+  servlet:
+    multipart:
+      enabled: true
+      max-file-size: 20MB
+      max-request-size: 20MB
+
+mybatis:
+  mapper-locations: classpath*:mapper/*.xml
+  type-aliases-package: com.example.hxds.nebula.db.pojo
+  configuration:
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+    map-underscore-to-camel-case: true
+
+logging:
+  level:
+    root: info
+    com.example.hxds.nebula.db.dao: warn
+  pattern:
+    console: "%d{yyyy/MM/dd HH:mm:ss}  %-5level  %msg%n"
+
+springdoc:
+  api-docs:
+    enabled: true
+    path: /doc-api.html
+  swagger-ui:
+    path: /swagger-ui.html
+    disable-swagger-default-url: on
+
+feign:
+  client:
+    config:
+      default:
+        connectTimeout: 10000
+        readTimeout: 300000

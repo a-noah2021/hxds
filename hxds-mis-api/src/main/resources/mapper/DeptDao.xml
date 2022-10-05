@@ -1,0 +1,87 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.hxds.mis.api.db.dao.DeptDao">
+    <select id="searchAllDept" resultType="HashMap">
+        SELECT id,
+               dept_name AS deptName
+        FROM tb_dept
+        ORDER BY id
+    </select>
+    <select id="searchById" parameterType="int" resultType="HashMap">
+        SELECT id,
+               dept_name AS deptName,
+               tel,
+               email,
+               `desc`
+        FROM tb_dept
+        WHERE id = #{id}
+    </select>
+    <select id="searchDeptByPage" parameterType="Map" resultType="HashMap">
+        SELECT d.id,
+        d.dept_name AS deptName,
+        d.tel,
+        d.email,
+        d.`desc`,
+        COUNT(u.id) AS emps
+        FROM tb_dept d LEFT JOIN tb_user u ON u.dept_id=d.id AND u.status=1
+        WHERE 1=1
+        <if test="deptName!=null">
+            AND d.dept_name LIKE '%${deptName}%'
+        </if>
+        GROUP BY d.id
+        LIMIT #{start}, #{length}
+    </select>
+    <select id="searchDeptCount" parameterType="Map" resultType="long">
+        SELECT COUNT(*) FROM (
+        SELECT d.id
+        FROM tb_dept d LEFT JOIN tb_user u ON u.dept_id=d.id AND u.status=1
+        WHERE 1=1
+        <if test="deptName!=null">
+            AND d.dept_name LIKE '%${deptName}%'
+        </if>
+        GROUP BY d.id
+        ) AS temp
+    </select>
+    <select id="searchCanDelete" resultType="boolean">
+        SELECT IF( SUM( temp.users ) > 0, FALSE, TRUE ) AS result FROM (
+        SELECT COUNT( u.id ) AS users
+        FROM tb_dept d
+        JOIN tb_user u ON d.id=u.dept_id
+        WHERE d.id IN
+        <foreach collection="array" open="(" separator="," close=")" item="one">
+            #{one}
+        </foreach>
+        GROUP BY d.id
+        ) temp
+    </select>
+    <insert id="insert" parameterType="com.example.hxds.mis.api.db.pojo.DeptEntity">
+        INSERT INTO tb_dept
+        SET dept_name=#{deptName}
+        <if test="tel!=null">
+            ,tel=#{tel}
+        </if>
+        <if test="email!=null">
+            ,email=#{email}
+        </if>
+        <if test="desc!=null">
+            ,`desc`=#{desc}
+        </if>
+    </insert>
+    <update id="update" parameterType="com.example.hxds.mis.api.db.pojo.DeptEntity">
+        UPDATE tb_dept
+        SET dept_name=#{deptName},
+            tel=#{tel},
+            email=#{email},
+            `desc`=#{desc}
+        WHERE id=#{id}
+    </update>
+    <delete id="deleteDeptByIds">
+        DELETE FROM tb_dept
+        WHERE id IN
+        <foreach collection="array" open="(" separator="," close=")" item="one">
+            #{one}
+        </foreach>
+    </delete>
+</mapper>

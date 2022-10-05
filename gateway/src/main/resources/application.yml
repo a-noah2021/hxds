@@ -1,0 +1,84 @@
+server:
+  jetty:
+    threads:
+      acceptors: 4
+      selectors: 8
+  port: 8201
+  servlet:
+    context-path: /
+
+spring:
+  application:
+    name: gateway
+  cloud:
+    inetutils:
+      preferred-networks: 127.0.0.1
+    nacos:
+      #配置中心
+      config:
+        group: DEFAULT_GROUP
+        file-extension: yaml
+        server-addr: 127.0.0.1:8848
+        prefix: ${spring.application.name}
+        namespace: hxds
+      discovery:
+        namespace: hxds
+        username: nacos
+        password: nacos
+        server-addr: 127.0.0.1:8848
+        heart-beat-interval: 1000
+        heart-beat-timeout: 1000
+        group: DEFAULT_GROUP
+    sentinel:
+      transport:
+        dashboard: 127.0.0.1:8718
+    gateway:
+      discovery:
+        locator:
+          enabled: true
+      globalcors: # 全局的跨域处理
+        add-to-simple-url-handler-mapping: true # 解决options请求被拦截问题
+        corsConfigurations:
+          '[/**]':
+            allowedOrigins: # 允许哪些网站的跨域请求
+              - "http://localhost:3000"
+              - "http://127.0.0.1:3000"
+              - "http://192.168.99.106:3000"
+            allowedMethods: # 允许的跨域ajax的请求方式
+              - "GET"
+              - "POST"
+              - "DELETE"
+              - "PUT"
+              - "OPTIONS"
+            allowedHeaders: "*" # 允许在请求中携带的头信息
+            allowCredentials: true # 是否允许携带cookie
+            maxAge: 360000 # 这次跨域检测的有效期
+      routes:
+        - id: bff-driver
+          uri: lb://bff-driver
+          predicates:
+            - Path=/hxds-driver/**
+          filters:
+            - StripPrefix=1
+        - id: hxds-mis-api
+          uri: lb://hxds-mis-api
+          predicates:
+            - Path=/hxds-mis-api/**
+          filters:
+            - StripPrefix=1
+  servlet:
+    multipart:
+      enabled: true
+      max-file-size: 20MB
+      max-request-size: 20MB
+feign:
+  sentinel:
+    enabled: true
+
+management:
+  # 端点检查（健康检查）
+  endpoints:
+    web:
+      exposure:
+        include: "*"
+

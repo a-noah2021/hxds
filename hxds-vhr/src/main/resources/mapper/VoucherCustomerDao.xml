@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.hxds.vhr.db.dao.VoucherCustomerDao">
+    <insert id="insert" parameterType="com.example.hxds.vhr.db.pojo.VoucherCustomerEntity">
+        INSERT INTO tb_voucher_customer
+        SET customer_id = #{customerId},
+        voucher_id = #{voucherId},
+        status = 1,
+        <if test="startTime!=null">
+            start_time = #{startTime},
+        </if>
+        <if test="endTime!=null">
+            end_time = #{endTime},
+        </if>
+        create_time = NOW()
+    </insert>
+    <select id="validCanUseVoucher" parameterType="Map" resultType="String">
+        SELECT CAST(v.discount AS CHAR) AS discount
+        FROM tb_voucher_customer vc
+                 JOIN tb_voucher v ON vc.voucher_id = v.id
+        WHERE vc.voucher_id = #{voucherId}
+          AND vc.customer_id = #{customerId}
+          AND v.with_amount &lt;= #{amount}
+          AND vc.`status` = 1
+          AND ((CURRENT_DATE BETWEEN vc.start_time AND vc.end_time)
+            OR (vc.start_time IS NULL AND vc.end_time IS NULL));
+    </select>
+    <update id="bindVoucher" parameterType="Map">
+        UPDATE tb_voucher_customer
+        SET order_id = #{orderId},
+            `status` = 2
+        WHERE voucher_id = #{voucherId}
+    </update>
+</mapper>

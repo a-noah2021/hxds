@@ -1,0 +1,79 @@
+server:
+  jetty:
+    threads:
+      acceptors: 4
+      selectors: 8
+  port: 8003
+  servlet:
+    context-path: /
+
+spring:
+  profiles:
+    #引用application-common.yml文件
+    include: common
+  application:
+    name: hxds-snm
+  cloud:
+    inetutils:
+      #子系统注册到Nacos上的IP地址
+      preferred-networks: 127.0.0.1
+    nacos:
+      #配置子系统在Web管理页面上的注册信息
+      config:
+        group: DEFAULT_GROUP
+        file-extension: yaml
+        server-addr: 127.0.0.1:8848
+        prefix: ${spring.application.name}
+        namespace: hxds
+      #配置子系统在Nacos上的注册信息
+      discovery:
+        namespace: hxds
+        username: nacos
+        password: nacos
+        server-addr: 127.0.0.1:8848
+        heart-beat-interval: 1000
+        heart-beat-timeout: 1000
+        group: DEFAULT_GROUP
+  data:
+    mongodb:
+      host: localhost
+      port: 27017
+      database: hxds
+      authentication-database: admin
+      username: admin
+      password: abc123456
+      option:
+        min-connection-per-host: 0
+        max-connection-per-host: 100
+  servlet:
+    multipart:
+      enabled: true
+      max-file-size: 20MB
+      max-request-size: 20MB
+
+rabbitmq:
+  host: localhost
+  port: 5672
+  username: guest
+  password: guest
+
+logging:
+  level:
+    root: info
+  pattern:
+    console: "%d{yyyy/MM/dd HH:mm:ss}  %-5level  %msg%n"
+
+springdoc:
+  api-docs:
+    enabled: true
+    path: /doc-api.html
+  swagger-ui:
+    path: /swagger-ui.html
+    disable-swagger-default-url: on
+
+feign:
+  client:
+    config:
+      default:
+        connectTimeout: 10000
+        readTimeout: 300000

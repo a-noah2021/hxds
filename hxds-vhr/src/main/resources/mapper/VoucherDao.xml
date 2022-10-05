@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.hxds.vhr.db.dao.VoucherDao">
+    <insert id="insert" parameterType="com.example.hxds.vhr.db.pojo.VoucherEntity">
+        INSERT INTO tb_voucher
+        SET uuid = #{uuid},
+        name = #{name},
+        remark = #{remark},
+        tag = #{tag},
+        total_quota = #{totalQuota},
+        take_count = #{takeCount},
+        used_count = #{usedCount},
+        discount = #{discount},
+        with_amount = #{withAmount},
+        type = #{type},
+        limit_quota = #{limitQuota},
+        <if test="timeType!=null">
+            time_type = #{timeType},
+        </if>
+        <if test="days!=null">
+            days = #{days},
+        </if>
+        <if test="startTime!=null">
+            start_time = #{startTime},
+        </if>
+        <if test="endTime!=null">
+            end_time = #{endTime},
+        </if>
+        `status` = #{status}
+    </insert>
+    <select id="searchIdByUUID" parameterType="list" resultType="String">
+        SELECT CAST(id AS CHAR) AS id
+        FROM tb_voucher
+        WHERE uuid IN
+        <foreach collection="list" separator="," item="one" open="(" close=")">
+            #{one}
+        </foreach>
+    </select>
+
+</mapper>
