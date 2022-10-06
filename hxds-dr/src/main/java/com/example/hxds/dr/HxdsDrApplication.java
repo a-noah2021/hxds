@@ -17,7 +17,6 @@ import org.springframework.context.annotation.ComponentScan;
 @ComponentScan("com.example.*")
 @EnableDistributedTransaction
 public class HxdsDrApplication {
-
     public static void main(String[] args) {
         SpringApplication.run(HxdsDrApplication.class, args);
     }

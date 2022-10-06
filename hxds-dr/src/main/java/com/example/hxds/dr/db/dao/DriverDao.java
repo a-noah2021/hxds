@@ -7,6 +7,12 @@ import java.util.Map;
 
 public interface DriverDao {
 
+    int registerNewDriver(Map param);
+
+    long hasDriver(Map param);
+
+    String searchDriverId(String openId);
+
 }
 
 

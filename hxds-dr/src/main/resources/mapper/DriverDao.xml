@@ -3,5 +3,30 @@
         PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.example.hxds.dr.db.dao.DriverDao">
-
+    <insert id="registerNewDriver" parameterType="Map">
+        INSERT INTO tb_driver
+        SET open_id = #{openId},
+            nickname = #{nickname},
+            photo = #{photo},
+            real_auth = 1,
+            summary = '{"level":0,"totalOrder":0,"weekOrder":0,"weekComment":0,"appeal":0}',
+            archive = false,
+            `status` = 1
+    </insert>
+    <select id="hasDriver" parameterType="Map" resultType="long">
+        SELECT COUNT(id) AS ct
+        FROM tb_driver
+        WHERE 1=1
+        <if test="openId!=null">
+            AND open_id = #{openId}
+        </if>
+        <if test="driverId!=null">
+            AND id = #{driverId}
+        </if>
+    </select>
+    <select id="searchDriverId" parameterType="String" resultType="String">
+        SELECT CAST(id AS CHAR) AS id
+        FROM tb_driver
+        WHERE open_id = #{openId}
+    </select>
 </mapper>

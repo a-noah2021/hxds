@@ -1,3 +1,7 @@
+# 搭建环境
+
+这个项目对硬件的要求还是不低的，最低需要 16G 内存。我的笔记本运行起来很勉强，所以买了两个云服务器来搭建环境。两个服务器都是 2C4G 的，其中 MySQL 集群和 NoSQL 部署在一台，云存储和其他中间件部署在另一台。
+
 ## 搭建MySQL集群
 
 ### 目标
@@ -260,13 +264,13 @@ redis-server /usr/local/etc/redis/redis.conf
 1. 下载并导入 Minio 镜像文件
 
 ```shell
-docker load < Minio.tar,gz
+docker load < Minio.tar.gz
 ```
 
 2. 创建 Minio 文件存储路径
 
 ```shell
-mkdir /www/evmt/minio/data # 创建文件夹
+mkdir -p /www/evmt/minio/data # 创建文件夹
 chmod -R 777 /www/evmt/minio/data # 给其设置权限，否则Minio无法使用该文件夹保存文件
 ```
 
@@ -276,12 +280,14 @@ chmod -R 777 /www/evmt/minio/data # 给其设置权限，否则Minio无法使用
 docker run -it -d --name minio -m 400m \
 -p 9000:9000 -p 9001:9001 \
 --net mynet --ip 172.18.0.10 \
--v /root/minio/data:/data \
+-v /www/evmt/minio/data:/data \
 -e TZ=Asia/Shanghai --privileged=true \
 --env MINIO_ROOT_USER="root" \
 --env MINIO_ROOT_PASSWORD="abc123456" \
 bitnami/minio:latest
 ```
+
+4. 登陆 Minio [控制台](http://43.143.134.158:9001/login)，账号是：root，密码是：abc123456，进入即可查看具体状况
 
 ## 安装其他中间件
 
@@ -308,7 +314,7 @@ rabbitmq
 1. 下载并导入 Nacos 镜像文件
 
 ```shell
-docker load < Nacos.tar,gz
+docker load < Nacos.tar.gz
 ```
 
 2. 创建并启动 Nacos 容器
@@ -316,15 +322,17 @@ docker load < Nacos.tar,gz
 ```shell
 docker run -it -d -p 8848:8848 --env MODE=standalone \
 --net mynet --ip 172.18.0.12 -e TZ=Asia/Shanghai \
--name nacos nacos/nacos-server
+--name nacos nacos/nacos-server
 ```
+
+3. 登陆 Nacos [控制台](http://43.143.134.158:8848/nacos)，账密都是：nacos，进入即可查看具体状况
 
 ### 安装Sentinel
 
 1. 下载并导入 Sentinel 镜像文件
 
 ```shell
-docker load < Sentinel.tar,gz
+docker load < Sentinel.tar.gz
 ```
 
 2. 创建并启动 Sentinel 容器
@@ -337,4 +345,26 @@ docker run -it -d --name sentinel \
 bladex/sentinel-dashboard
 ```
 
-### 
+3. 登陆 Sentinel [控制台](http://43.143.134.158:8858/#/dashboard)，账密都是：sentinel，进入即可查看具体状况
+
+### 配置腾讯云COS
+
+1. 购买腾讯云COS后，进入对象存储菜单栏的[密钥管理](https://console.cloud.tencent.com/cos/secret)，它会引导进入访问密钥这个页面
+2. 点击新建密钥，然后生成 Appid、secretId、secretKey，这个后面会用到
+3. 接着退回对象存储菜单栏的[概览](https://console.cloud.tencent.com/cos)，然后点击新建存储桶，填写必要信息
+4. 接着进入[文件列表](https://console.cloud.tencent.com/cos/bucket?bucket=hxds-private-1309124223&region=ap-beijing)，新建文件夹 driver/auth
+5. 同理创建新的存储桶 hxds-public，设置成公有读私有写
+
+# 代码实现
+## 基于微服务的司机注册与实名认证
+### 司机微服务的用户注册功能上
+
+1. 写 hxds-dr 里面 dao#DriverDao/DriverSettingDao/WalletDao 五个 SQL 以及对应的 Mapper 文件
+2. 写 hxds-dr 里面 service#DriverService#registerNewDriver 的接口和实现类
+3. 写 hxds-dr 里面 controller#DriverController#registerNewDriver 和 form#RegisterNewDriverForm
+
+### 司机微服务的用户注册功能下
+
+1. 写 bff-driver 里面的 feign#DrServiceApi#registerNewDriver
+2. 写 bff-driver 里面的 service#DriverService#registerNewDriver
+3. 写 bff-driver 里面的 controller#

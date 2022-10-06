@@ -3,23 +3,22 @@ spring:
 
 tencent:
   cloud:
-    appId: 腾讯云APPID
-    secretId: 腾讯云SecretId
-    secretKey: 腾讯云SecretKey
-    region-public: 公有存储桶所在地域
-    bucket-public: 公有存储桶名称
-    region-private: 私有存储桶所在地域
-    bucket-private: 私有存储桶名称
+    appId: 1309124223 # 腾讯云APPID
+    secretId: AKIDbz4BHJuTu9EA1kNzYabcaWPQLEgAUdZK # 腾讯云SecretId
+    secretKey: d094j9wVNGZIvAIDwQhnhMm7GIVYQ5Gs # 腾讯云SecretKey
+    region-public: ap-beijing # 公有存储桶所在地域
+    bucket-public: hxds-public-1309124223 # 公有存储桶名称StdOutImpl
+    region-private: ap-beijing # 私有存储桶所在地域
+    bucket-private: hxds-private-1309124223 # 私有存储桶名称
 
 wx:
   app-id: wx8a663873c20f264c # 你的微信小程序APPID
   app-secret: 86c15039625267180afde3d2060e8891 # 你的微信小程序密钥
-  mch-id: 商户号（课程QQ群共享文件中获取）
-  key: 商户密钥（课程QQ群共享文件中获取）
-  cert-path: 商户数字证书文件路径（课程QQ群共享文件中获取）
+  mch-id: 1473426802 # 商户号（课程QQ群共享文件中获取）
+  key: T6m9iK73b0kn9g5v426MKfHQH7X8rKwb # 商户密钥（课程QQ群共享文件中获取）
+  cert-path: # 商户数字证书文件路径（课程QQ群共享文件中获取）
 
 minio:
-  endpoint: http://82.156.200.100:9000 # http://你本地电脑或者云主机IP:9000
+  endpoint: http://43.143.134.158:9000 # http://你本地电脑或者云主机IP:9000
   access-key: root
   secret-key: abc123456
-
