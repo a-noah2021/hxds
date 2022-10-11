@@ -341,7 +341,7 @@ docker load < Sentinel.tar.gz
 docker run -it -d --name sentinel \
 -p 8719:8719 -p 8858:8858 \
 --net mynet --ip 172.18.0.13 \
--e TZ=Asia/Shanghai -m 200m \
+-e TZ=Asia/Shanghai -m 400m \
 bladex/sentinel-dashboard
 ```
 
@@ -367,4 +367,4 @@ bladex/sentinel-dashboard
 
 1. 写 bff-driver 里面的 feign#DrServiceApi#registerNewDriver
 2. 写 bff-driver 里面的 service#DriverService#registerNewDriver
-3. 写 bff-driver 里面的 controller#DriverController#registerNewDriver
+3. 写 bff-driver 里面的 controller#
