@@ -367,4 +367,4 @@ bladex/sentinel-dashboard
 
 1. 写 bff-driver 里面的 feign#DrServiceApi#registerNewDriver
 2. 写 bff-driver 里面的 service#DriverService#registerNewDriver
-3. 写 bff-driver 里面的 controller#
+3. 写 bff-driver 里面的 controller#DriverController#registerNewDriver

@@ -79,7 +79,7 @@ springdoc:
 tx-lcn:
   client:
     #连接TM节点
-    manager-address: 127.0.0.1:8070
+    manager-address: 43.143.134.158:8070
 feign:
   client:
     config:

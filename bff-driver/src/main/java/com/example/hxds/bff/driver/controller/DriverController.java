@@ -1,4 +1,4 @@
-package com.example.hxds.bff.driver.cpmtroller;
+package com.example.hxds.bff.driver.controller;
 
 import cn.dev33.satoken.stp.StpUtil;
 import com.example.hxds.bff.driver.service.DriverService;

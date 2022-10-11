@@ -12,26 +12,26 @@ spring:
     name: gateway
   cloud:
     inetutils:
-      preferred-networks: 127.0.0.1
+      preferred-networks: 43.143.134.158
     nacos:
       #配置中心
       config:
         group: DEFAULT_GROUP
         file-extension: yaml
-        server-addr: 127.0.0.1:8848
+        server-addr: 43.143.134.158:8848
         prefix: ${spring.application.name}
         namespace: hxds
       discovery:
         namespace: hxds
         username: nacos
         password: nacos
-        server-addr: 127.0.0.1:8848
+        server-addr: 43.143.134.158:8848
         heart-beat-interval: 1000
         heart-beat-timeout: 1000
         group: DEFAULT_GROUP
     sentinel:
       transport:
-        dashboard: 127.0.0.1:8718
+        dashboard: 43.143.134.158:8718
     gateway:
       discovery:
         locator:
@@ -43,7 +43,7 @@ spring:
             allowedOrigins: # 允许哪些网站的跨域请求
               - "http://localhost:3000"
               - "http://127.0.0.1:3000"
-              - "http://192.168.99.106:3000"
+              - "http://223.104.39.177:3000"
             allowedMethods: # 允许的跨域ajax的请求方式
               - "GET"
               - "POST"
