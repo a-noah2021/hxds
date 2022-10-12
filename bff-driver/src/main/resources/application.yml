@@ -27,7 +27,7 @@ spring:
   cloud:
     inetutils:
       #子系统注册到Nacos上的IP地址
-      preferred-networks: 43.143.134.158
+      preferred-networks: 127.0.0.1
     nacos:
       #配置子系统在Web管理页面上的注册信息
       config:
@@ -79,7 +79,7 @@ springdoc:
 tx-lcn:
   client:
     #连接TM节点
-    manager-address: 43.143.134.158:8070
+    manager-address: 127.0.0.1:8070
 feign:
   client:
     config:

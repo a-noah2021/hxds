@@ -8,9 +8,10 @@ import org.springframework.cloud.openfeign.EnableFeignClients;
 import org.springframework.context.annotation.ComponentScan;
 
 @SpringBootApplication
+//TODO:nacos配置不正确，一直报错
 @EnableDiscoveryClient
 @EnableFeignClients
-@ComponentScan("com.example.*")
+@ComponentScan("com.example.hxds.bff")
 @EnableDistributedTransaction
 public class BffDriverApplication {
 

@@ -11,8 +11,9 @@ spring:
   application:
     name: gateway
   cloud:
+#    TODO:nacos配置不正确，一直报错
     inetutils:
-      preferred-networks: 43.143.134.158
+      preferred-networks: 127.0.0.1
     nacos:
       #配置中心
       config:
@@ -43,7 +44,7 @@ spring:
             allowedOrigins: # 允许哪些网站的跨域请求
               - "http://localhost:3000"
               - "http://127.0.0.1:3000"
-              - "http://223.104.39.177:3000"
+              - "http://223.104.39.177:3000" # 修改成自己本机的IP
             allowedMethods: # 允许的跨域ajax的请求方式
               - "GET"
               - "POST"

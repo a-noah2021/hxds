@@ -367,4 +367,13 @@ bladex/sentinel-dashboard
 
 1. 写 bff-driver 里面的 feign#DrServiceApi#registerNewDriver
 2. 写 bff-driver 里面的 service#DriverService#registerNewDriver
-3. 写 bff-driver 里面的 controller#
+3. 写 bff-driver 里面的 controller#DriverController#registerNewDriver
+
+### 小程序获取用户微信简介，实现司机注册
+
+1. 修改 main.js 里面的 IP 地址，不要 localhost 或者 127.0.0.1
+2. 在 hxds-driver-wx/pages/login/login.vue 里面实现司机注册的逻辑
+3. 在 hxds-driver-wx/pages/register/register.vue 里面实现司机注册的逻辑
+
+测试：依次启动 hxds-tm、bff-driver、hxds-dr、gateway 项目然后至少等待一分钟 ( 否则会出现503 )，再运行小程序测试司机注册
+其中启动 hxds-tm 节点后可以进入其[后台管理系统](http://localhost:7970/admin/index.html#/)，密码在 tx-lcn.manager.admin-key=abc123456 上配置
