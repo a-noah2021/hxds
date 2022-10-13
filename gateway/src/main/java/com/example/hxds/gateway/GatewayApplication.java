@@ -6,7 +6,6 @@ import org.springframework.cloud.client.discovery.EnableDiscoveryClient;
 import org.springframework.cloud.openfeign.EnableFeignClients;
 
 @SpringBootApplication
-//TODO:nacos配置不正确，一直报错
 @EnableDiscoveryClient
 @EnableFeignClients
 public class GatewayApplication {

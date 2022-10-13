@@ -59,7 +59,7 @@ public class DriverServiceImpl implements DriverService {
             put("openId", openId);
         }};
         if(driverDao.hasDriver(tempParam)!=0){
-            throw new HxdsException("该微信无法注册");
+            throw new HxdsException("该微信已完成注册");
         }
         // 未注册过，将凭证、登陆态信息落库
         param.put("openId", openId);

@@ -30,13 +30,13 @@ spring:
         namespace: hxds
         username: nacos
         password: nacos
-        server-addr: 127.0.0.1:8848
+        server-addr: 43.143.134.158:8848
         heart-beat-interval: 1000
         heart-beat-timeout: 1000
         group: DEFAULT_GROUP
   data:
     mongodb:
-      host: localhost
+      host: 43.143.134.158
       port: 27017
       database: hxds
       authentication-database: admin

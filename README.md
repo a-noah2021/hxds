@@ -335,7 +335,7 @@ docker run -it -d -p 8848:8848 --env MODE=standalone \
 docker load < Sentinel.tar.gz
 ```
 
-2. 创建并启动 Sentinel 容器
+2. 创建并启动 Sentinel 容器，和上面一样如果像视频那样只给 200M 的话可能会造成容器崩溃，所以我给了 400M
 
 ```shell
 docker run -it -d --name sentinel \
@@ -371,9 +371,23 @@ bladex/sentinel-dashboard
 
 ### 小程序获取用户微信简介，实现司机注册
 
-1. 修改 main.js 里面的 IP 地址，不要 localhost 或者 127.0.0.1
+1. 修改 main.js 里面的 IP 地址，不要 localhost 或者 127.0.0.1 (这是老师说的，事实上我用本机IP反而访问错误，用localhost是正常访问)
 2. 在 hxds-driver-wx/pages/login/login.vue 里面实现司机注册的逻辑
 3. 在 hxds-driver-wx/pages/register/register.vue 里面实现司机注册的逻辑
 
 测试：依次启动 hxds-tm、bff-driver、hxds-dr、gateway 项目然后至少等待一分钟 ( 否则会出现503 )，再运行小程序测试司机注册
 其中启动 hxds-tm 节点后可以进入其[后台管理系统](http://localhost:7970/admin/index.html#/)，密码在 tx-lcn.manager.admin-key=abc123456 上配置
+在启动的后 bff-driver、hxds-dr 会注册到 hxds-tm，而 bff-driver、hxds-dr、gateway 会注册到 nacos，我一直报错 nacos 连不上，谷歌后将配置文件名改成 bootstrap.yml 就好了
+
+### 司机实名认证
+
+1. 在腾讯云开通对象存储服务和数据万象服务
+   COS-SDK 使用文档:[进入](https://cloud.tencent.com/document/product/436/10199)
+   CI-SDK 使用文档:[进入](https://cloud.tencent.com/document/product/460/49286)
+2. 写 bff-driver 里面的 controller#form#DeleteCosFileForm/RegisterNewDriverForm
+   写 bff-driver 里面的 controller#CosController
+3. 在微信公众平台开通 OCR 识别插件
+   OCR 使用文档:[进入](https://mp.weixin.qq.com/wxopen/plugindevdoc?appid=wx4418e3e031e551be&token=1126410043&lang=zh_CN)
+   在 hxds-driver-wx/manifest.json 里面的 源码视图 里面包含了插件配置项，可以在那进行补充
+   
+   

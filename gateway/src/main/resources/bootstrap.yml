@@ -11,7 +11,6 @@ spring:
   application:
     name: gateway
   cloud:
-#    TODO:nacos配置不正确，一直报错
     inetutils:
       preferred-networks: 127.0.0.1
     nacos:
@@ -44,7 +43,7 @@ spring:
             allowedOrigins: # 允许哪些网站的跨域请求
               - "http://localhost:3000"
               - "http://127.0.0.1:3000"
-              - "http://223.104.39.177:3000" # 修改成自己本机的IP
+              - "http://223.104.39.177:3000" # 修改成自己本机的IP,只对前端有用，小程序不会造成跨域问题
             allowedMethods: # 允许的跨域ajax的请求方式
               - "GET"
               - "POST"
@@ -56,7 +55,7 @@ spring:
             maxAge: 360000 # 这次跨域检测的有效期
       routes:
         - id: bff-driver
-          uri: lb://bff-driver
+          uri: lb://driver
           predicates:
             - Path=/hxds-driver/**
           filters:
