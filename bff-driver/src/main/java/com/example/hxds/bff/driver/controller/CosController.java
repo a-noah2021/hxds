@@ -24,7 +24,8 @@ import java.util.HashMap;
  * @author: noah2021
  * @date: 2022-10-14 00:45
  **/
-@RestController
+//TODO:common模块读取配置文件异常
+//@RestController
 @RequestMapping("/cos")
 @Slf4j
 @Tag(name = "CosController", description = "对象存储Web接口")

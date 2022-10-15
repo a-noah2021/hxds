@@ -365,29 +365,29 @@ bladex/sentinel-dashboard
 
 ### 司机微服务的用户注册功能下
 
-1. 写 bff-driver 里面的 feign#DrServiceApi#registerNewDriver
-2. 写 bff-driver 里面的 service#DriverService#registerNewDriver
-3. 写 bff-driver 里面的 controller#DriverController#registerNewDriver
+1. 写 bff-driver 里面的 feign#DrServiceApi#registerNewDriver 定义远程调用的 API
+2. 写 bff-driver 里面的 service#DriverService#registerNewDriver 返回给上层 UserId
+3. 写 bff-driver 里面的 controller#DriverController#registerNewDriver 经过 SaToken 登陆验证返回给前端 token
 
 ### 小程序获取用户微信简介，实现司机注册
 
-1. 修改 main.js 里面的 IP 地址，不要 localhost 或者 127.0.0.1 (这是老师说的，事实上我用本机IP反而访问错误，用localhost是正常访问)
-2. 在 hxds-driver-wx/pages/login/login.vue 里面实现司机注册的逻辑
-3. 在 hxds-driver-wx/pages/register/register.vue 里面实现司机注册的逻辑
+1. 修改 main.js 里面的 IP 地址，不要 localhost 或者 127.0.0.1 (127.0.0.1如果用微信开发工具测试可以端，只是手机测试不行，这时用 NatApp 内网穿透可以解决这个问题)
+2. 在 hxds-driver-wx/pages/login/login.vue 实现司机注册的逻辑
+3. 在 hxds-driver-wx/pages/register/register.vue 实现司机注册的逻辑
 
 测试：依次启动 hxds-tm、bff-driver、hxds-dr、gateway 项目然后至少等待一分钟 ( 否则会出现503 )，再运行小程序测试司机注册
 其中启动 hxds-tm 节点后可以进入其[后台管理系统](http://localhost:7970/admin/index.html#/)，密码在 tx-lcn.manager.admin-key=abc123456 上配置
 在启动的后 bff-driver、hxds-dr 会注册到 hxds-tm，而 bff-driver、hxds-dr、gateway 会注册到 nacos，我一直报错 nacos 连不上，谷歌后将配置文件名改成 bootstrap.yml 就好了
-
+其中 yml 配置文件中的 spring.cloud.nacos.config/discovery.namespace 为 Nacos Web 管理界面的命名空间-命名空间ID
 ### 司机实名认证
 
 1. 在腾讯云开通对象存储服务和数据万象服务
    COS-SDK 使用文档:[进入](https://cloud.tencent.com/document/product/436/10199)
    CI-SDK 使用文档:[进入](https://cloud.tencent.com/document/product/460/49286)
-2. 写 bff-driver 里面的 controller#form#DeleteCosFileForm/RegisterNewDriverForm
-   写 bff-driver 里面的 controller#CosController
+2. 写 bff-driver 里面的 controller#form#DeleteCosFileForm/RegisterNewDriverForm 
+   写 bff-driver 里面的 controller#CosController#uploadCosPrivateFile/deleteCosPrivateFile 实现对接腾讯云 SDK 的上传/删除文件接口
 3. 在微信公众平台开通 OCR 识别插件
    OCR 使用文档:[进入](https://mp.weixin.qq.com/wxopen/plugindevdoc?appid=wx4418e3e031e551be&token=1126410043&lang=zh_CN)
-   在 hxds-driver-wx/manifest.json 里面的 源码视图 里面包含了插件配置项，可以在那进行补充
-   
-   
+   在 hxds-driver-wx/manifest.json-源码视图 里面包含了插件配置项，可以在那进行补充
+4. 在 hxds-driver-wx/main.js 里面添加上传、删除文件的对应的后端接口
+5. 

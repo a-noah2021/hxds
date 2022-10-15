@@ -20,9 +20,9 @@ spring:
         file-extension: yaml
         server-addr: 43.143.134.158:8848
         prefix: ${spring.application.name}
-        namespace: hxds
+        namespace: bbe54516-dc51-49ca-bf17-6d11d14ea608
       discovery:
-        namespace: hxds
+        namespace: bbe54516-dc51-49ca-bf17-6d11d14ea608
         username: nacos
         password: nacos
         server-addr: 43.143.134.158:8848
@@ -55,7 +55,7 @@ spring:
             maxAge: 360000 # 这次跨域检测的有效期
       routes:
         - id: bff-driver
-          uri: lb://driver
+          uri: lb://bff-driver
           predicates:
             - Path=/hxds-driver/**
           filters:
