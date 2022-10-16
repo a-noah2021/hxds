@@ -382,12 +382,176 @@ bladex/sentinel-dashboard
 ### 司机实名认证
 
 1. 在腾讯云开通对象存储服务和数据万象服务
-   COS-SDK 使用文档:[进入](https://cloud.tencent.com/document/product/436/10199)
-   CI-SDK 使用文档:[进入](https://cloud.tencent.com/document/product/460/49286)
-2. 写 bff-driver 里面的 controller#form#DeleteCosFileForm/RegisterNewDriverForm 
+   COS-SDK 使用文档:[进入](https://cloud.tencent.com/document/product/436/10199)，CI-SDK 使用文档:[进入](https://cloud.tencent.com/document/product/460/49286)
+2. 写 common 里面的 util#CosUtil 实现对腾讯云 COS 的增删文件
+   写 bff-driver 里面的 controller#form#DeleteCosFileForm/RegisterNewDriverForm 
    写 bff-driver 里面的 controller#CosController#uploadCosPrivateFile/deleteCosPrivateFile 实现对接腾讯云 SDK 的上传/删除文件接口
-3. 在微信公众平台开通 OCR 识别插件
-   OCR 使用文档:[进入](https://mp.weixin.qq.com/wxopen/plugindevdoc?appid=wx4418e3e031e551be&token=1126410043&lang=zh_CN)
+```java
+@Data
+@Schema(description = "新司机注册表单")
+public class RegisterNewDriverForm {
+
+    @NotBlank(message = "code不能为空")
+    @Schema(description = "微信小程序临时授权")
+    private String code;
+
+    @NotBlank(message = "nickname不能为空")
+    @Schema(description = "用户昵称")
+    private String nickname;
+
+    @NotBlank(message = "photo不能为空")
+    @Schema(description = "用户头像")
+    private String photo;
+
+}
+
+@PostMapping("/uploadCosPrivateFile")
+@SaCheckLogin
+@Operation(summary = "上传文件")
+public R uploadCosPrivateFile(@Param("file") MultipartFile file,@Param("module") String module){
+   if(file.isEmpty()){
+      throw new HxdsException("上传文件不能为空");
+   }
+   try{
+      String path=null;
+      if("driverAuth".equals(module)){
+         path="/driver/auth/";
+      }
+      else{
+         throw new HxdsException("module错误");
+      }
+      HashMap map=cosUtil.uploadPrivateFile(file,path);
+      return R.ok(map);
+   }catch (Exception e){
+      log.error("文件上传到腾讯云错误", e);
+      throw new HxdsException("文件上传到腾讯云错误");
+   }
+}
+
+@PostMapping("/deleteCosPrivateFile")
+@SaCheckLogin
+@Operation(summary = "删除文件")
+public R deleteCosPrivateFile(@Valid @RequestBody DeleteCosFileForm form){
+   cosUtil.deletePrivateFile(form.getPathes());
+   return R.ok();
+}
+```
+3. 在微信公众平台开通 OCR 识别插件，OCR 使用文档:[进入](https://mp.weixin.qq.com/wxopen/plugindevdoc?appid=wx4418e3e031e551be&token=1126410043&lang=zh_CN)
    在 hxds-driver-wx/manifest.json-源码视图 里面包含了插件配置项，可以在那进行补充
-4. 在 hxds-driver-wx/main.js 里面添加上传、删除文件的对应的后端接口
-5. 
+4. 在 hxds-driver-wx/main.js#url 里面添加上传、删除文件的对应的后端接口
+```vue
+Vue.prototype.url = {
+	registerNewDriver: `${baseUrl}/driver/registerNewDriver`,
+	uploadCosPriveteFile: `${baseUrl}/cos/uploadCosPriveteFile`,
+	deleteCosPriveteFile: `${baseUrl}/cos/deleteCosPriveteFile`
+}
+```
+5. 写 hxds-driver-wx/main.js#uploadCos ，实现上传文件到腾讯云 COS 的请求
+   写 hxds-driver-wx/identity/filling/filling.vue#scanIdcardFront ，实现 OCR 识别证件正面信息
+```vue
+Vue.prototype.uploadCos = function(url, path, module, fun) {
+	uni.uploadFile({
+		url: url,
+		filePath: path,
+		name: "file",
+		header: {
+			token: uni.getStorageSync("token")
+		},
+		formData: {
+			"module": module
+		},
+		success: function(resp) {
+			let data = JSON.parse(resp.data)
+			if (resp.statusCode == 401) {
+				uni.redirectTo({
+					url: "/pages/login/login.vue"
+				})
+			} else if (resp.statusCode == 200 && data.code == 200) {
+				fun(resp)
+			} else {
+				uni.showToast({
+					icon: "none",
+					title: data.error
+				})
+			}
+		}
+	})
+}
+
+scanIdcardFront: function(resp) {
+   let that = this;
+   let detail = resp.detail;
+   that.idcard.pid = detail.id.text;
+   that.idcard.name = detail.name.text;
+   that.idcard.sex = detail.gender.text;
+   that.idcard.address = detail.address.text;
+   //需要缩略身份证地址，文字太长页面显示不了
+   that.idcard.shortAddress = detail.address.text.substr(0, 15) + '...';
+   that.idcard.birthday = detail.birth.text;
+   //OCR插件拍摄到的身份证正面照片存储地址
+   that.idcard.idcardFront = detail.image_path;
+   //让身份证View标签加载身份证正面照片
+   that.cardBackground[0] = detail.image_path;
+   that.uploadCos(that.url.uploadCosPrivateFile, detail.image_path, 'driverAuth', function(resp) {
+   let data = JSON.parse(resp.data);
+   let path = data.path;
+   that.currentImg['idcardFront'] = path;
+   that.cosImg.push(path);
+   });
+}
+```
+
+6. 写 hxds-driver-wx/identity/identity_camera/identity_camera.vue#clickBtn/afresh ，实现拍摄手持身份证的拍照点击事件和重拍点击事件
+
+​		写 hxds-driver-wx/identity/filling/filling.vue#takePhoto/uploadPhoto ，实现上传/更新手持身份证照片
+
+```vue
+clickBtn:function(){
+	let that=this
+	if(that.btnText=="拍照"){
+		let ctx=uni.createCameraContext()
+		ctx.takePhoto({
+			quality:"high",
+			success:function(resp){
+				that.photoPath= resp.tempImagePath
+				that.showCamera=false
+				that.showImage=true
+				that.btnText="提交"
+			}
+		})
+	}else{
+		let pages=getCurrentPages();
+		let prevPage=pages[pages.length-2]
+		prevPage.$vm.updatePhoto(that.type,that.photoPath)
+		uni.navigateBack({
+			delta:1
+		})
+	}
+},
+afresh:function(){
+	let that = this;
+	that.showCamera = true;
+	that.showImage = false;
+	that.btnText = '拍照';
+}
+
+updatePhoto: function(type, path) {
+	let that = this;
+	that.uploadCos(that.url.uploadCosPrivateFile, path, 'driverAuth', function(resp) {
+		let data = JSON.parse(resp.data);
+		that.cosImg.push(data.path);
+		if (type == 'idcardHolding') {
+			that.cardBackground[2] = path;
+			that.currentImg['idcardHolding'] = data.path;
+			that.idcard.idcardHolding = data.path;
+		}
+	});
+	that.$forceUpdate();
+},
+takePhoto: function(type) {
+	uni.navigateTo({
+		url: '../identity_camera/identity_camera?type=' + type
+	});
+}
+```
+
