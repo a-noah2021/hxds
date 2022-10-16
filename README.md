@@ -442,12 +442,14 @@ public R deleteCosPrivateFile(@Valid @RequestBody DeleteCosFileForm form){
 ```vue
 Vue.prototype.url = {
 	registerNewDriver: `${baseUrl}/driver/registerNewDriver`,
-	uploadCosPriveteFile: `${baseUrl}/cos/uploadCosPriveteFile`,
-	deleteCosPriveteFile: `${baseUrl}/cos/deleteCosPriveteFile`
+	uploadCosPrivateFile: `${baseUrl}/cos/uploadCosPrivateFile`,
+	deleteCosPrivateFile: `${baseUrl}/cos/deleteCosPrivateFile`
 }
 ```
 5. 写 hxds-driver-wx/main.js#uploadCos ，实现上传文件到腾讯云 COS 的请求
-   写 hxds-driver-wx/identity/filling/filling.vue#scanIdcardFront ，实现 OCR 识别证件正面信息
+   写 hxds-driver-wx/identity/filling/filling.vue#scanIdcardFront/scanIdcardBack ，实现 OCR 识别证件正/反面信息
+   注意：在真机调试的时候还要买 [OCR识别次数](https://fuwu.weixin.qq.com/service/detail/000ce4cec24ca026d37900ed551415)，要不然会报下面的错误
+   `{base_resp: {err_code: 101002, err_msg: "not enough market quota"}}`
 ```vue
 Vue.prototype.uploadCos = function(url, path, module, fun) {
 	uni.uploadFile({
@@ -493,17 +495,34 @@ scanIdcardFront: function(resp) {
    //让身份证View标签加载身份证正面照片
    that.cardBackground[0] = detail.image_path;
    that.uploadCos(that.url.uploadCosPrivateFile, detail.image_path, 'driverAuth', function(resp) {
-   let data = JSON.parse(resp.data);
-   let path = data.path;
-   that.currentImg['idcardFront'] = path;
-   that.cosImg.push(path);
+      let data = JSON.parse(resp.data);
+      let path = data.path;
+      that.currentImg['idcardFront'] = path;
+      that.cosImg.push(path);
    });
 }
+
+scanIdcardBack: function(resp) {
+   let that = this;
+   let detail = resp.detail;
+   //OCR插件拍摄到的身份证背面照片存储地址
+   that.idcard.idcardBack = detail.image_path;
+   //View标签加载身份证背面照片
+   that.cardBackground[1] = detail.image_path;
+   let validDate = detail.valid_date.text.split('-')[1];
+   that.idcard.expiration = dayjs(validDate, 'YYYYMMDD').format('YYYY-MM-DD');
+   that.uploadCos(that.url.uploadCosPrivateFile, detail.image_path, 'driverAuth', function(resp) {
+      let data = JSON.parse(resp.data);
+      let path = data.path;
+      that.currentImg['idcardBack'] = path;
+      that.cosImg.push(path);
+   });
+},
 ```
 
-6. 写 hxds-driver-wx/identity/identity_camera/identity_camera.vue#clickBtn/afresh ，实现拍摄手持身份证的拍照点击事件和重拍点击事件
+6. 写 hxds-driver-wx/identity/identity_camera/identity_camera.vue#clickBtn/afresh，实现拍摄手持身份证的拍照点击事件和重拍点击事件
 
-​		写 hxds-driver-wx/identity/filling/filling.vue#takePhoto/uploadPhoto ，实现上传/更新手持身份证照片
+​		写 hxds-driver-wx/identity/filling/filling.vue#takePhoto/uploadPhoto，实现拍摄/上传照片
 
 ```vue
 clickBtn:function(){
@@ -544,9 +563,17 @@ updatePhoto: function(type, path) {
 			that.cardBackground[2] = path;
 			that.currentImg['idcardHolding'] = data.path;
 			that.idcard.idcardHolding = data.path;
-		}
+        }/* else if (type == 'drcardBack') {
+            that.cardBackground[4] = path;
+            that.currentImg['drcardBack'] = data.path;
+            that.idcard.drcardBack = data.path;
+        } else if (type == 'drcardHolding') {
+            that.cardBackground[5] = path;
+            that.currentImg['drcardHolding'] = data.path;
+            that.idcard.drcardHolding = data.path;
+        }*/ //先注释掉，等写到拍摄驾驶证背面和手持驾驶证时再恢复
 	});
-	that.$forceUpdate();
+	that.$forceUpdate(); //强制刷新视图层
 },
 takePhoto: function(type) {
 	uni.navigateTo({
@@ -554,4 +581,240 @@ takePhoto: function(type) {
 	});
 }
 ```
+7. 写 hxds-driver-wx/identity/filling/filling.vue#scanDrcardFront，实现驾驶证正面的信息扫描
+   删除掉上面代码块的注释内容
+```vue
+scanDrcardFront: function(resp) {
+   let that = this;
+   let detail = resp.detail;
+   that.drcard.issueDate = detail.issue_date.text; //初次领证日期
+   that.drcard.carClass = detail.car_class.text; //准驾车型
+   that.drcard.validFrom = detail.valid_from.text; //驾驶证起始有效期
+   that.drcard.validTo = detail.valid_to.text; //驾驶证截止有效期
+   that.drcard.drcardFront = detail.image_path;
+   that.cardBackground[3] = detail.image_path;
+   that.uploadCos(that.url.uploadCosPrivateFile, detail.image_path, 'driverAuth', function(resp) {
+       let data = JSON.parse(resp.data);
+       let path = data.path;
+       that.currentImg['drcardFront'] = path;
+       that.cosImg.push(path);
+   });
+},
+```
+8. 写 ，实现后端实名认证数据持久化
+```java
 
+```
+8. 写 hxds-driver-wx/identity/filling/filling.vue#enterContent/save/showAddressContent，实现移动端 ( 输入-保存-展示 ) 联络方式/紧急联系人一整套链路
+```vue
+enterContent: function(title, key) {
+   let that = this;
+   uni.showModal({
+       title: title,
+       editable: true,
+       content: that.contact[key],
+       success: function(resp) {
+           if (resp.confirm) {
+               if (key == 'mailAddress') {
+                   that.contact['shortMailAddress'] = resp.content.substr(0, 15) + (resp.content.length > 15 ? '...' : '');
+               } else if (key == 'email') {
+                   that.contact['shortEmail'] = resp.content.substr(0, 25) + (resp.content.length > 25 ? '...' : '');
+               }
+               that.contact[key] = resp.content;
+           }
+       }
+   });
+},
+save: function() {
+   let that = this;
+   //判断是否设置了6张照片
+   if (Object.keys(that.currentImg).length != 6) {
+       that.$refs.uToast.show({
+           title: '证件上传不完整',
+           type: 'error'
+       });
+   }
+   //执行前端验证
+   else if (
+       that.checkValidTel(that.contact.tel, '手机号码') &&
+       that.checkValidEmail(that.contact.email, '电子信箱') &&
+       that.checkValidAddress(that.contact.mailAddress, '收信地址') &&
+       that.checkValidName(that.contact.contactName, '联系人') &&
+       that.checkValidTel(that.contact.contactTel, '联系人电话')
+   ) {
+       uni.showModal({
+           title: '提示信息',
+           content: '确认提交实名资料？',
+           success: function(resp) {
+               if (resp.confirm) {
+                   //比较哪些照片需要删除
+                   let temp = [];
+                   let values = [];
+                   //从JSON中获取6张证件照片的云端存储地址
+               for (let key in that.currentImg) {
+                       let path = that.currentImg[key];
+                       values.push(path);
+                   }
+                   //判断cosImg数组里面哪些图片的云端地址不是6张图片的，这些图片要在云端删除
+                   for (let one of that.cosImg) {
+                       if (!values.includes(one)) {
+                           temp.push(one);
+                       }
+                   }
+                   if (temp.length > 0) {
+                       //删除云端文件
+                       that.ajax(that.url.deleteCosPrivateFile, 'POST', JSON.stringify({ pathes: temp }), function() {
+                           console.log('文件删除成功');
+                       });
+                   }
+                   //需要上传的实名认证数据
+                   let data = {
+                       pid: that.idcard.pid,
+                       name: that.idcard.name,
+                       sex: that.idcard.sex,
+                       birthday: that.idcard.birthday,
+                       tel: that.contact.tel,
+                       email: that.contact.email,
+                       mailAddress: that.contact.mailAddress,
+                       contactName: that.contact.contactName,
+                       contactTel: that.contact.contactTel,
+                       idcardAddress: that.idcard.address,
+                       idcardFront: that.currentImg.idcardFront,
+                       idcardBack: that.currentImg.idcardBack,
+                       idcardHolding: that.currentImg.idcardHolding,
+                       idcardExpiration: that.idcard.expiration,
+                       drcardType: that.drcard.carClass,
+                       drcardExpiration: that.drcard.validTo,
+                       drcardIssueDate: that.drcard.issueDate,
+                       drcardFront: that.currentImg.drcardFront,
+                       drcardBack: that.currentImg.drcardBack,
+                       drcardHolding: that.currentImg.drcardHolding
+                   };
+                   //提交Ajax请求，上传数据
+                   that.ajax(that.url.updateDriverAuth, 'POST', data, function(resp) {
+                       console.log('更新成功');
+                       that.$refs.uToast.show({
+                           title: '资料提交成功',
+                           type: 'success',
+                           callback: function() {
+                               uni.setStorageSync('realAuth', 3); //更新小程序Storage
+                               that.realAuth = 3; //更新模型层
+                               if (that.mode == 'create') {
+                                   //提示新注册的司机采集面部数据
+                                   uni.navigateTo({
+                                       url:"../face_camera/face_camera?mode=create"
+                                   })
+                               } else {
+                                   //跳转到工作台页面
+                                   uni.switchTab({
+                                       url: '../../pages/workbench/workbench'
+                                   });
+                               }
+                           }
+                       });
+                   });
+               }
+           }
+       });
+   }
+},
+showAddressContent: function() {
+   if (this.idcard.address.length > 0) {
+       uni.showModal({
+           title: '身份证地址',
+           content: this.idcard.address,
+           showCancel: false
+       });
+   }
+}
+```
+9. 写 hxds-driver-wx/identity/filling/filling.vue#onLoad，实现
+```vue
+	onLoad: function(options) {
+		// console.log(uni.getStorageSync('token'));
+		let that = this;
+		that.mode = options.mode;
+		if(uni.getStorageSync('realAuth')==1){
+			uni.showModal({
+			    title: '提示信息',
+			    content: '新注册的代驾司机请填写实名认证信息，并且上传相关证件照片',
+			    showCancel: false
+			});
+		}else{
+			that.ajax(that.url.searchDriverAuth,"GET",null,function(resp){
+				let json=resp.data.result
+				// console.log(json)
+				that.idcard.pid=json.pid
+				that.idcard.name = json.name;
+				that.idcard.sex = json.sex;
+				that.idcard.birthday = json.birthday;
+				that.idcard.address = json.idcardAddress;
+				that.idcard.shortAddress = json.idcardAddress.substr(0, 15) + (json.idcardAddress.length > 15 ? '...' : '');
+				that.idcard.expiration = json.idcardExpiration;
+				that.idcard.idcardFront = json.idcardFront;
+				if(json.idcardFrontUrl.length>0){
+					that.cardBackground[0]=json.idcardFrontUrl
+				}
+				that.idcard.idcardBack = json.idcardBack;
+				if (json.idcardBackUrl.length > 0) {
+				    that.cardBackground[1] = json.idcardBackUrl;
+				}
+				that.idcard.idcardHolding = json.idcardHolding;
+				if (json.idcardHoldingUrl.length > 0) {
+				    that.cardBackground[2] = json.idcardHoldingUrl;
+				}
+				
+				that.contact.tel = json.tel;
+				that.contact.email = json.email;
+				that.contact.shortEmail = json.email.substr(0, 25) + (json.email.length > 25 ? '...' : '');
+				that.contact.mailAddress = json.mailAddress;
+				that.contact.shortMailAddress = json.mailAddress.substr(0, 15) + (json.mailAddress.length > 15 ? '...' : '');
+				that.contact.contactName = json.contactName;
+				that.contact.contactTel = json.contactTel;
+				
+				that.drcard.carClass = json.drcardType;
+				that.drcard.validTo = json.drcardExpiration;
+				that.drcard.issueDate = json.drcardIssueDate;
+				that.drcard.drcardFront = json.drcardFront;
+				if (json.drcardFrontUrl.length > 0) {
+				    that.cardBackground[3] = json.drcardFrontUrl;
+				}
+				that.drcard.drcardBack = json.drcardBack;
+				if (json.drcardBackUrl.length > 0) {
+				    that.cardBackground[4] = json.drcardBackUrl;
+				}
+				that.drcard.drcardHolding = json.drcardHolding;
+				if (json.drcardHoldingUrl.length > 0) {
+				    that.cardBackground[5] = json.drcardHoldingUrl;
+				}
+				
+				if(that.idcard.idcardFront.length>0){
+					that.cosImg.push(that.idcard.idcardFront)
+					that.currentImg['idcardFront']=that.idcard.idcardFront
+				}
+				if (that.idcard.idcardBack.length > 0) {
+				    that.cosImg.push(that.idcard.idcardBack);
+				    that.currentImg['idcardBack'] = that.idcard.idcardBack;
+				}
+				if (that.idcard.idcardHolding.length > 0) {
+				    that.cosImg.push(that.idcard.idcardHolding);
+				    that.currentImg['idcardHolding'] = that.idcard.idcardHolding;
+				}
+				if (that.drcard.drcardFront.length > 0) {
+				    that.cosImg.push(that.drcard.drcardFront);
+				    that.currentImg['drcardFront'] = that.drcard.drcardFront;
+				}
+				if (that.drcard.drcardBack.length > 0) {
+				    that.cosImg.push(that.drcard.drcardBack);
+				    that.currentImg['drcardBack'] = that.drcard.drcardBack;
+				}
+				if (that.drcard.drcardHolding.length > 0) {
+				    that.cosImg.push(that.drcard.drcardHolding);
+				    that.currentImg['drcardHolding'] = that.drcard.drcardHolding;
+				}
+				
+			})
+		}
+	}
+};
+```

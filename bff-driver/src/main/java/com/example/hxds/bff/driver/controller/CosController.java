@@ -3,7 +3,7 @@ package com.example.hxds.bff.driver.controller;
 import cn.dev33.satoken.annotation.SaCheckLogin;
 import com.example.hxds.bff.driver.controller.form.DeleteCosFileForm;
 import com.example.hxds.common.exception.HxdsException;
-import com.example.hxds.common.util.CosUtil;
+import com.example.hxds.bff.driver.util.CosUtil;
 import com.example.hxds.common.util.R;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -25,7 +25,7 @@ import java.util.HashMap;
  * @date: 2022-10-14 00:45
  **/
 //TODO:common模块读取配置文件异常
-//@RestController
+@RestController
 @RequestMapping("/cos")
 @Slf4j
 @Tag(name = "CosController", description = "对象存储Web接口")
