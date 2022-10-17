@@ -29,4 +29,29 @@
         FROM tb_driver
         WHERE open_id = #{openId}
     </select>
+    <update id="updateDriverAuth" parameterType="Map">
+        UPDATE tb_driver
+        SET `name`            = #{name},
+            sex               = #{sex},
+            pid               = #{pid},
+            birthday          = #{birthday},
+            tel               = #{tel},
+            mail_address      = #{mailAddress},
+            contact_name      = #{contactName},
+            contact_tel       = #{contactTel},
+            email             = #{email},
+            real_auth         = 3,
+            idcard_address    = #{idcardAddress},
+            idcard_expiration = #{idcardExpiration},
+            idcard_front      = #{idcardFront},
+            idcard_back       = #{idcardBack},
+            idcard_holding    = #{idcardHolding},
+            drcard_type       = #{drcardType},
+            drcard_expiration = #{drcardExpiration},
+            drcard_issue_date = #{drcardIssueDate},
+            drcard_front      = #{drcardFront},
+            drcard_back       = #{drcardBack},
+            drcard_holding    = #{drcardHolding}
+        WHERE id = #{driverId}
+    </update>
 </mapper>
