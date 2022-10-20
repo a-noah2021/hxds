@@ -362,6 +362,7 @@ bladex/sentinel-dashboard
 1. 写 hxds-dr 里面 dao#DriverDao/DriverSettingDao/WalletDao 五个 SQL 以及对应的 Mapper 文件
 2. 写 hxds-dr 里面 service#DriverService#registerNewDriver 的接口和实现类
 3. 写 hxds-dr 里面 controller#DriverController#registerNewDriver 和 form#RegisterNewDriverForm
+4. 进入 [Swagger](http://localhost:8001/swagger-ui/index.html?configUrl=/doc-api.html/swagger-config)，可查看 API 文档
 
 ### 司机微服务的用户注册功能下
 
@@ -521,8 +522,7 @@ scanIdcardBack: function(resp) {
 ```
 
 6. 写 hxds-driver-wx/identity/identity_camera/identity_camera.vue#clickBtn/afresh，实现拍摄手持身份证的拍照点击事件和重拍点击事件
-
-​		写 hxds-driver-wx/identity/filling/filling.vue#takePhoto/uploadPhoto，实现拍摄/上传照片
+   写 hxds-driver-wx/identity/filling/filling.vue#takePhoto/uploadPhoto，实现拍摄/上传照片
 
 ```vue
 clickBtn:function(){
@@ -602,10 +602,10 @@ scanDrcardFront: function(resp) {
 },
 ```
 8. 写 hxds-dr/src/main/resource/mapper/DriverDao.xml#updateDriverAuth 及其对应接口
-      service/DriverService#updateDriverAuth 及其实现类
-      controller/form/UpdateDriverAuthForm
-      controller/DriverController#updateDriverAuth
-      实现后端实名认证中的联络方式/紧急联系人数据持久化到 tb_driver
+    写 service/DriverService#updateDriverAuth 及其实现类
+    写 controller/form/UpdateDriverAuthForm
+    写 controller/DriverController#updateDriverAuth
+    实现后端实名认证中的联络方式/紧急联系人数据持久化到 tb_driver
 ```java
 <update id="updateDriverAuth" parameterType="Map">
     UPDATE tb_driver
@@ -635,7 +635,7 @@ scanDrcardFront: function(resp) {
 
 int updateDriverAuth(Map param);
 
-public int updateDriverAuth(Map param);
+int updateDriverAuth(Map param);
 
 @Override
 @Transactional
@@ -758,26 +758,12 @@ public R updateDriverAuth(@RequestBody @Valid UpdateDriverAuthForm form) {
     return R.ok().put("rows", rows);
 }
 ```
-9. 写 bff-driver/src/main/feign/DrServiceApi#updateDriverAuth
-      service/DriverService#updateDriverAuth 及其实现类
-      controller/form/UpdateDriverAuthForm
-      controller/DriverController#updateDriverAuth
+9. 写 controller/form/UpdateDriverAuthForm
+   写 bff-driver/src/main/feign/DrServiceApi#updateDriverAuth
+   写 service/DriverService#updateDriverAuth 及其实现类
+   写 controller/DriverController#updateDriverAuth
       实现后端远程 feign 调用数据持久化
 ```java
-@PostMapping("/driver/updateDriverAuth")
-public R updateDriverAuth(UpdateDriverAuthForm form);
-
-int updateDriverAuth(UpdateDriverAuthForm form);
-
-@Override
-@Transactional
-@LcnTransaction
-public int updateDriverAuth(UpdateDriverAuthForm form) {
-    R r = drServiceApi.updateDriverAuth(form);
-    int rows = Convert.toInt(r.get("rows"));
-    return rows;
-}
-
 @Data
 @Schema(description = "更新司机认证信息表单")
 public class UpdateDriverAuthForm {
@@ -878,6 +864,20 @@ public class UpdateDriverAuthForm {
     @Schema(description = "手持驾驶证")
     private String drcardHolding;
 
+}
+
+@PostMapping("/driver/updateDriverAuth")
+R updateDriverAuth(UpdateDriverAuthForm form);
+
+int updateDriverAuth(UpdateDriverAuthForm form);
+
+@Override
+@Transactional
+@LcnTransaction
+public int updateDriverAuth(UpdateDriverAuthForm form) {
+    R r = drServiceApi.updateDriverAuth(form);
+    int rows = Convert.toInt(r.get("rows"));
+    return rows;
 }
 
 @PostMapping("/updateDriverAuth")

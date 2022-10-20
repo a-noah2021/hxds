@@ -1,9 +1,11 @@
 package com.example.hxds.bff.driver.controller;
 
+import cn.dev33.satoken.annotation.SaCheckLogin;
 import cn.dev33.satoken.stp.StpUtil;
+import com.example.hxds.bff.driver.controller.form.UpdateDriverAuthForm;
 import com.example.hxds.bff.driver.service.DriverService;
 import com.example.hxds.common.util.R;
-import com.example.hxds.dr.controller.form.RegisterNewDriverForm;
+import com.example.hxds.bff.driver.controller.form.RegisterNewDriverForm;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -36,6 +38,16 @@ public class DriverController {
         StpUtil.login(driverId);
         String token = StpUtil.getTokenInfo().getTokenValue();
         return R.ok().put("token", token);
+    }
+
+    @PostMapping("/updateDriverAuth")
+    @Operation(summary = "更新实名认证信息")
+    @SaCheckLogin
+    public R updateDriverAuth(@RequestBody @Valid UpdateDriverAuthForm form){
+        long driverId=StpUtil.getLoginIdAsLong();
+        form.setDriverId(driverId);
+        int rows=driverService.updateDriverAuth(form);
+        return R.ok().put("rows",rows);
     }
 
 }

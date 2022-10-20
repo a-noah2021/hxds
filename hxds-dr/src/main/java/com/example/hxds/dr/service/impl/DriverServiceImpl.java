@@ -84,4 +84,13 @@ public class DriverServiceImpl implements DriverService {
         walletDao.insert(walletEntity);
         return driverId; // BFF需要driverId颁布token
     }
+
+    @Override
+    @Transactional
+    @LcnTransaction
+    public int updateDriverAuth(Map param) {
+        int rows = driverDao.updateDriverAuth(param);
+        return rows;
+    }
+
 }

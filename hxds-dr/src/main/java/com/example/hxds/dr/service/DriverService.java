@@ -12,4 +12,6 @@ public interface DriverService {
 
     String registerNewDriver(Map param);
 
+    int updateDriverAuth(Map param);
+
 }

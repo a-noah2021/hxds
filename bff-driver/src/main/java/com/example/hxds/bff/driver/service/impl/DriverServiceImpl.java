@@ -5,7 +5,8 @@ import com.codingapi.txlcn.tc.annotation.LcnTransaction;
 import com.example.hxds.bff.driver.feign.DrServiceApi;
 import com.example.hxds.bff.driver.service.DriverService;
 import com.example.hxds.common.util.R;
-import com.example.hxds.dr.controller.form.RegisterNewDriverForm;
+import com.example.hxds.bff.driver.controller.form.RegisterNewDriverForm;
+import com.example.hxds.bff.driver.controller.form.UpdateDriverAuthForm;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -31,4 +32,14 @@ public class DriverServiceImpl implements DriverService {
         long userId = Convert.toLong(r.get("userId"));
         return userId;
     }
+
+    @Override
+    @Transactional
+    @LcnTransaction
+    public int updateDriverAuth(UpdateDriverAuthForm form) {
+        R r = drServiceApi.updateDriverAuth(form);
+        int rows = Convert.toInt(r.get("rows"));
+        return rows;
+    }
+
 }

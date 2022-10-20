@@ -1,6 +1,7 @@
 package com.example.hxds.bff.driver.service;
 
-import com.example.hxds.dr.controller.form.RegisterNewDriverForm;
+import com.example.hxds.bff.driver.controller.form.RegisterNewDriverForm;
+import com.example.hxds.bff.driver.controller.form.UpdateDriverAuthForm;
 
 /**
  * @program: hxds
@@ -11,5 +12,7 @@ import com.example.hxds.dr.controller.form.RegisterNewDriverForm;
 public interface DriverService {
 
     long registerNewDriver(RegisterNewDriverForm form);
+
+    int updateDriverAuth(UpdateDriverAuthForm form);
 
 }
