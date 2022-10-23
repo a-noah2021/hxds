@@ -10,6 +10,9 @@ tencent:
     bucket-public: hxds-public-1309124223
     region-private: ap-beijing
     bucket-private: hxds-private-1309124223
+    face:
+      groupName: hxds
+      region: ap-beijing
 
 wx:
   app-id: wx8a663873c20f264c # 你的微信小程序APPID

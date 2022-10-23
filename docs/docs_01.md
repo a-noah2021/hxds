@@ -362,7 +362,7 @@ bladex/sentinel-dashboard
 1. 写 hxds-dr 里面 dao#DriverDao/DriverSettingDao/WalletDao 五个 SQL 以及对应的 Mapper 文件
 2. 写 hxds-dr 里面 service#DriverService#registerNewDriver 的接口和实现类
 3. 写 hxds-dr 里面 controller#DriverController#registerNewDriver 和 form#RegisterNewDriverForm
-4. 进入 [Swagger](http://localhost:8001/swagger-ui/index.html?configUrl=/doc-api.html/swagger-config)，可查看 API 文档
+4. 启动项目后，进入 [Swagger](http://localhost:8001/swagger-ui/index.html?configUrl=/doc-api.html/swagger-config)，可查看 API 文档
 
 ### 司机微服务的用户注册功能下
 
@@ -891,6 +891,8 @@ public R updateDriverAuth(@RequestBody @Valid UpdateDriverAuthForm form){
 }
 ```
 8. 写 hxds-driver-wx/identity/filling/filling.vue#enterContent/save/showAddressContent，实现移动端 ( 输入-保存-展示 ) 联络方式/紧急联系人一整套链路
+小程序视图层上面的联系方式排版设计比较简单，直接引用的 uView 组件库里的列表控件，相关文档：[传送门](https://v1.uviewui.com/components/cell.html)
+每个列表项都设置里点击事件 enterContent
 ```vue
 enterContent: function(title, key) {
    let that = this;
@@ -985,7 +987,7 @@ save: function() {
                                uni.setStorageSync('realAuth', 3); //更新小程序Storage
                                that.realAuth = 3; //更新模型层
                                if (that.mode == 'create') {
-                                   //提示新注册的司机采集面部数据
+                                   //TODO: 提示新注册的司机采集面部数据
                                    uni.navigateTo({
                                        url:"../face_camera/face_camera?mode=create"
                                    })
@@ -1013,93 +1015,7 @@ showAddressContent: function() {
    }
 }
 ```
-9. 写 hxds-driver-wx/identity/filling/filling.vue#onLoad，实现加载
-```vue
-	onLoad: function(options) {
-		// console.log(uni.getStorageSync('token'));
-		let that = this;
-		that.mode = options.mode;
-		if(uni.getStorageSync('realAuth')==1){
-			uni.showModal({
-			    title: '提示信息',
-			    content: '新注册的代驾司机请填写实名认证信息，并且上传相关证件照片',
-			    showCancel: false
-			});
-		}else{
-			that.ajax(that.url.searchDriverAuth,"GET",null,function(resp){
-				let json=resp.data.result
-				// console.log(json)
-				that.idcard.pid=json.pid
-				that.idcard.name = json.name;
-				that.idcard.sex = json.sex;
-				that.idcard.birthday = json.birthday;
-				that.idcard.address = json.idcardAddress;
-				that.idcard.shortAddress = json.idcardAddress.substr(0, 15) + (json.idcardAddress.length > 15 ? '...' : '');
-				that.idcard.expiration = json.idcardExpiration;
-				that.idcard.idcardFront = json.idcardFront;
-				if(json.idcardFrontUrl.length>0){
-					that.cardBackground[0]=json.idcardFrontUrl
-				}
-				that.idcard.idcardBack = json.idcardBack;
-				if (json.idcardBackUrl.length > 0) {
-				    that.cardBackground[1] = json.idcardBackUrl;
-				}
-				that.idcard.idcardHolding = json.idcardHolding;
-				if (json.idcardHoldingUrl.length > 0) {
-				    that.cardBackground[2] = json.idcardHoldingUrl;
-				}
-				
-				that.contact.tel = json.tel;
-				that.contact.email = json.email;
-				that.contact.shortEmail = json.email.substr(0, 25) + (json.email.length > 25 ? '...' : '');
-				that.contact.mailAddress = json.mailAddress;
-				that.contact.shortMailAddress = json.mailAddress.substr(0, 15) + (json.mailAddress.length > 15 ? '...' : '');
-				that.contact.contactName = json.contactName;
-				that.contact.contactTel = json.contactTel;
-				
-				that.drcard.carClass = json.drcardType;
-				that.drcard.validTo = json.drcardExpiration;
-				that.drcard.issueDate = json.drcardIssueDate;
-				that.drcard.drcardFront = json.drcardFront;
-				if (json.drcardFrontUrl.length > 0) {
-				    that.cardBackground[3] = json.drcardFrontUrl;
-				}
-				that.drcard.drcardBack = json.drcardBack;
-				if (json.drcardBackUrl.length > 0) {
-				    that.cardBackground[4] = json.drcardBackUrl;
-				}
-				that.drcard.drcardHolding = json.drcardHolding;
-				if (json.drcardHoldingUrl.length > 0) {
-				    that.cardBackground[5] = json.drcardHoldingUrl;
-				}
-				
-				if(that.idcard.idcardFront.length>0){
-					that.cosImg.push(that.idcard.idcardFront)
-					that.currentImg['idcardFront']=that.idcard.idcardFront
-				}
-				if (that.idcard.idcardBack.length > 0) {
-				    that.cosImg.push(that.idcard.idcardBack);
-				    that.currentImg['idcardBack'] = that.idcard.idcardBack;
-				}
-				if (that.idcard.idcardHolding.length > 0) {
-				    that.cosImg.push(that.idcard.idcardHolding);
-				    that.currentImg['idcardHolding'] = that.idcard.idcardHolding;
-				}
-				if (that.drcard.drcardFront.length > 0) {
-				    that.cosImg.push(that.drcard.drcardFront);
-				    that.currentImg['drcardFront'] = that.drcard.drcardFront;
-				}
-				if (that.drcard.drcardBack.length > 0) {
-				    that.cosImg.push(that.drcard.drcardBack);
-				    that.currentImg['drcardBack'] = that.drcard.drcardBack;
-				}
-				if (that.drcard.drcardHolding.length > 0) {
-				    that.cosImg.push(that.drcard.drcardHolding);
-				    that.currentImg['drcardHolding'] = that.drcard.drcardHolding;
-				}
-				
-			})
-		}
-	}
-};
-```
+### 开通活体检测，甄别真实注册司机
+1. 进入腾讯云-[人脸识别](https://console.cloud.tencent.com/aiface)-人员库管理-人员管理-新建人员库
+2. 腾讯云没有提供 Java 版本的人员库 API 文档，现在只能看 Web 版本的 API [文档](https://cloud.tencent.com/document/api/867/45014)来逆向研究 Java 版本人员库 SDK
+3. 写 
