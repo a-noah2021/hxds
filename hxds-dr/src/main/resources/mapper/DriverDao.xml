@@ -54,4 +54,14 @@
             drcard_holding    = #{drcardHolding}
         WHERE id = #{driverId}
     </update>
+    <select id="searchDriverNameAndSex" parameterType="long" resultType="HashMap">
+        SELECT name, sex
+        FROM tb_driver
+        WHERE id = #{driverId}
+    </select>
+    <select id="updateDriverArchive" parameterType="long">
+        update tb_driver
+        set archive = 1
+        WHERE id = #{driverId}
+    </select>
 </mapper>

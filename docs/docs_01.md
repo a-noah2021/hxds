@@ -758,8 +758,8 @@ public R updateDriverAuth(@RequestBody @Valid UpdateDriverAuthForm form) {
     return R.ok().put("rows", rows);
 }
 ```
-9. 写 controller/form/UpdateDriverAuthForm
-   写 bff-driver/src/main/feign/DrServiceApi#updateDriverAuth
+9. 写 bff-driver/src/main/controller/form/UpdateDriverAuthForm
+   写 feign/DrServiceApi#updateDriverAuth
    写 service/DriverService#updateDriverAuth 及其实现类
    写 controller/DriverController#updateDriverAuth
       实现后端远程 feign 调用数据持久化
@@ -1016,6 +1016,9 @@ showAddressContent: function() {
 }
 ```
 ### 开通活体检测，甄别真实注册司机
-1. 进入腾讯云-[人脸识别](https://console.cloud.tencent.com/aiface)-人员库管理-人员管理-新建人员库
+1. 进入腾讯云-[人脸识别](https://console.cloud.tencent.com/aiface)-人员库管理-人员管理-新建人员库，填写信息创建完人员库后在 application-common.yml 配置人脸识别
 2. 腾讯云没有提供 Java 版本的人员库 API 文档，现在只能看 Web 版本的 API [文档](https://cloud.tencent.com/document/api/867/45014)来逆向研究 Java 版本人员库 SDK
-3. 写 
+3. 写 hxds-dr/src/main/resource/mapper/DriverDao.xml#searchDriverNameAndSex 及其对应接口
+   写 service/DriverService#updateDriverAuth 及其实现类
+   写 controller/form/UpdateDriverAuthForm
+   写 controller/DriverController#updateDriverAuth

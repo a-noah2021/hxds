@@ -15,6 +15,10 @@ public interface DriverDao {
 
     int updateDriverAuth(Map param);
 
+    HashMap searchDriverNameAndSex(long driverId);
+
+    int updateDriverArchive(long driverId);
+
 }
 
 
