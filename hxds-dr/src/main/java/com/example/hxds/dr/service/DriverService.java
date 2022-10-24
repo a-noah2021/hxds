@@ -14,4 +14,5 @@ public interface DriverService {
 
     int updateDriverAuth(Map param);
 
+    String createDriverFaceModel(long driverId, String photo);
 }

@@ -12,6 +12,7 @@ import com.example.hxds.dr.db.pojo.DriverSettingsEntity;
 import com.example.hxds.dr.db.pojo.WalletEntity;
 import com.example.hxds.dr.service.DriverService;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -41,6 +42,18 @@ public class DriverServiceImpl implements DriverService {
 
     @Resource
     private WalletDao walletDao;
+
+    @Value("${tencent.cloud.appId}")
+    private String appId;
+
+    @Value("${tencent.cloud.secretId}")
+    private String secretId;
+
+    @Value("${tencent.cloud.face.groupName}")
+    private String groupName;
+
+    @Value("${tencent.cloud.face.region}")
+    private String region;
 
     /**
      * 前端传来的参数到微信校验是否注册过，若没注册过将存储必要信息落库
@@ -91,6 +104,15 @@ public class DriverServiceImpl implements DriverService {
     public int updateDriverAuth(Map param) {
         int rows = driverDao.updateDriverAuth(param);
         return rows;
+    }
+
+    @Override
+    @Transactional
+    @LcnTransaction
+    public String createDriverFaceModel(long driverId, String photo) {
+        HashMap hashMap = driverDao.searchDriverNameAndSex(driverId);
+        //TODO:后续
+        return null;
     }
 
 }
