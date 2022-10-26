@@ -1,6 +1,7 @@
 package com.example.hxds.dr.service.impl;
 
 import cn.hutool.core.map.MapUtil;
+import cn.hutool.core.util.StrUtil;
 import cn.hutool.json.JSONObject;
 import com.codingapi.txlcn.tc.annotation.LcnTransaction;
 import com.example.hxds.common.exception.HxdsException;
@@ -11,15 +12,18 @@ import com.example.hxds.dr.db.dao.WalletDao;
 import com.example.hxds.dr.db.pojo.DriverSettingsEntity;
 import com.example.hxds.dr.db.pojo.WalletEntity;
 import com.example.hxds.dr.service.DriverService;
+import com.tencentcloudapi.common.exception.TencentCloudSDKException;
+import com.tencentcloudapi.iai.v20200303.models.CreatePersonRequest;
+import com.tencentcloudapi.common.Credential;
+import com.tencentcloudapi.iai.v20200303.IaiClient;
+import com.tencentcloudapi.iai.v20200303.models.CreatePersonResponse;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
 import javax.annotation.Resource;
 import java.math.BigDecimal;
-import java.util.HashMap;
-import java.util.Map;
+import java.util.*;
 
 /**
  * @program: hxds
@@ -43,11 +47,11 @@ public class DriverServiceImpl implements DriverService {
     @Resource
     private WalletDao walletDao;
 
-    @Value("${tencent.cloud.appId}")
-    private String appId;
-
     @Value("${tencent.cloud.secretId}")
     private String secretId;
+
+    @Value("${tencent.cloud.secretKey}")
+    private String secretKey;
 
     @Value("${tencent.cloud.face.groupName}")
     private String groupName;
@@ -110,9 +114,33 @@ public class DriverServiceImpl implements DriverService {
     @Transactional
     @LcnTransaction
     public String createDriverFaceModel(long driverId, String photo) {
-        HashMap hashMap = driverDao.searchDriverNameAndSex(driverId);
-        //TODO:后续
-        return null;
+        HashMap map = driverDao.searchDriverNameAndSex(driverId);
+        String name = MapUtil.getStr(map, "name");
+        String sex = MapUtil.getStr(map, "sex");
+        Credential cred = new Credential(secretId, secretKey); //import v20200303.models.CreatePersonRequest
+        IaiClient client = new IaiClient(cred, region);
+        try {
+            CreatePersonRequest req = new CreatePersonRequest();
+            req.setGroupId(groupName);
+            req.setPersonId(driverId + "");
+            long gender = sex.equals("男") ? 1L : 2L;
+            req.setGender(gender);
+            req.setQualityControl(4L);  //照片质量登记
+            req.setUniquePersonControl(4L); //重复人员识别登记
+            req.setPersonName(name);
+            req.setImage(photo); //base图片
+            CreatePersonResponse resp = client.CreatePerson(req);
+            if (StrUtil.isNotBlank(resp.getFaceId())) {
+                int rows = driverDao.updateDriverArchive(driverId);
+                if (rows != 1) {
+                    return "更新司机归档字段失败";
+                }
+            }
+        } catch (TencentCloudSDKException e) {
+            log.error("创建腾讯云端司机档案失败", e);
+            return "创建腾讯云端司机档案失败";
+        }
+        return "";
     }
 
 }
