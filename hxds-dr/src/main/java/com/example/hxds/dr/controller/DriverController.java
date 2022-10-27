@@ -2,6 +2,7 @@ package com.example.hxds.dr.controller;
 
 import cn.hutool.core.bean.BeanUtil;
 import com.example.hxds.common.util.R;
+import com.example.hxds.dr.controller.form.CreateDriverFaceModelForm;
 import com.example.hxds.dr.controller.form.RegisterNewDriverForm;
 import com.example.hxds.dr.controller.form.UpdateDriverAuthForm;
 import com.example.hxds.dr.service.DriverService;
@@ -45,4 +46,10 @@ public class DriverController {
         return R.ok().put("rows", rows);
     }
 
+    @PostMapping("/createDriverFaceModel")
+    @Operation(summary = "创建司机人脸模型归档")
+    public R createDriverFaceModel(@RequestBody @Valid CreateDriverFaceModelForm form){
+        String result = driverService.createDriverFaceModel(form.getDriverId(), form.getPhoto());
+        return R.ok().put("result", result);
+    }
 }

@@ -125,8 +125,8 @@ public class DriverServiceImpl implements DriverService {
             req.setPersonId(driverId + "");
             long gender = sex.equals("男") ? 1L : 2L;
             req.setGender(gender);
-            req.setQualityControl(4L);  //照片质量登记
-            req.setUniquePersonControl(4L); //重复人员识别登记
+            req.setQualityControl(4L);  //照片质量等级
+            req.setUniquePersonControl(4L); //重复人员识别等级
             req.setPersonName(name);
             req.setImage(photo); //base图片
             CreatePersonResponse resp = client.CreatePerson(req);

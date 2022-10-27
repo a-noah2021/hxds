@@ -1,10 +1,12 @@
 package com.example.hxds.bff.driver.feign;
 
+import com.example.hxds.bff.driver.controller.form.CreateDriverFaceModelForm;
 import com.example.hxds.bff.driver.controller.form.RegisterNewDriverForm;
 import com.example.hxds.common.util.R;
 import com.example.hxds.bff.driver.controller.form.UpdateDriverAuthForm;
 import org.springframework.cloud.openfeign.FeignClient;
 import org.springframework.web.bind.annotation.PostMapping;
+
 
 /**
  * @program: hxds
@@ -21,4 +23,6 @@ public interface DrServiceApi {
     @PostMapping("/driver/updateDriverAuth")
     R updateDriverAuth(UpdateDriverAuthForm form);
 
+    @PostMapping("/driver/createDriverFaceModel")
+    R createDriverFaceModel(CreateDriverFaceModelForm form);
 }

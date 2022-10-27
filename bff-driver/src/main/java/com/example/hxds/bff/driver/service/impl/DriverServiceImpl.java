@@ -1,7 +1,9 @@
 package com.example.hxds.bff.driver.service.impl;
 
 import cn.hutool.core.convert.Convert;
+import cn.hutool.core.map.MapUtil;
 import com.codingapi.txlcn.tc.annotation.LcnTransaction;
+import com.example.hxds.bff.driver.controller.form.CreateDriverFaceModelForm;
 import com.example.hxds.bff.driver.feign.DrServiceApi;
 import com.example.hxds.bff.driver.service.DriverService;
 import com.example.hxds.common.util.R;
@@ -40,6 +42,15 @@ public class DriverServiceImpl implements DriverService {
         R r = drServiceApi.updateDriverAuth(form);
         int rows = Convert.toInt(r.get("rows"));
         return rows;
+    }
+
+    @Override
+    @Transactional
+    @LcnTransaction
+    public String createDriverFaceModel(CreateDriverFaceModelForm form) {
+        R r = drServiceApi.createDriverFaceModel(form);
+        String result = MapUtil.getStr(r, "result");
+        return result;
     }
 
 }

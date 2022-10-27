@@ -369,6 +369,22 @@ bladex/sentinel-dashboard
 1. 写 bff-driver 里面的 feign#DrServiceApi#registerNewDriver 定义远程调用的 API
 2. 写 bff-driver 里面的 service#DriverService#registerNewDriver 返回给上层 UserId
 3. 写 bff-driver 里面的 controller#DriverController#registerNewDriver 经过 SaToken 登陆验证返回给前端 token
+这里介绍一下 SaToken 的常用 API
+```java
+StpUtil.setLoginId(10001);              // 标记当前会话登录的账号id
+StpUtil.getLoginId();                   // 获取当前会话登录的账号id
+StpUtil.isLogin();                      // 获取当前会话是否已经登录, 返回true或false
+StpUtil.logout();                       // 当前会话注销登录
+StpUtil.logoutByLoginId(10001);         // 让账号为10001的会话注销登录（踢人下线）
+StpUtil.hasRole("super-admin");         // 查询当前账号是否含有指定角色标识, 返回true或false
+StpUtil.hasPermission("user:add");      // 查询当前账号是否含有指定权限, 返回true或false
+StpUtil.getSession();                   // 获取当前账号id的Session 
+StpUtil.getSessionByLoginId(10001);     // 获取账号id为10001的Session
+StpUtil.getTokenValueByLoginId(10001);  // 获取账号id为10001的token令牌值
+StpUtil.setLoginId(10001, "PC");        // 指定设备标识登录
+StpUtil.logoutByLoginId(10001, "PC");   // 指定设备标识进行强制注销 (不同端不受影响)
+StpUtil.switchTo(10044);                // 将当前会话身份临时切换为其它账号
+```
 
 ### 小程序获取用户微信信息
 
@@ -1023,7 +1039,76 @@ showAddressContent: function() {
    写 controller/form/CreateDriverFaceModelForm
    写 controller/DriverController#createDriverFaceModel
 ```java
+<select id="searchDriverNameAndSex" parameterType="long" resultType="HashMap">
+  SELECT name, sex
+  FROM tb_driver
+  WHERE id = #{driverId}
+</select>
+<select id="updateDriverArchive" parameterType="long">
+  update tb_driver
+  set archive = 1
+  WHERE id = #{driverId}
+</select>
 
+
+HashMap searchDriverNameAndSex(long driverId);
+
+int updateDriverArchive(long driverId);
+
+String createDriverFaceModel(long driverId, String photo);
+        
+@Override
+@Transactional
+@LcnTransaction
+public String createDriverFaceModel(long driverId, String photo) {
+     HashMap map = driverDao.searchDriverNameAndSex(driverId);
+     String name = MapUtil.getStr(map, "name");
+     String sex = MapUtil.getStr(map, "sex");
+     Credential cred = new Credential(secretId, secretKey); //import v20200303.models.CreatePersonRequest
+     IaiClient client = new IaiClient(cred, region);
+     try {
+        CreatePersonRequest req = new CreatePersonRequest();
+        req.setGroupId(groupName);
+        req.setPersonId(driverId + "");
+        long gender = sex.equals("男") ? 1L : 2L;
+        req.setGender(gender);
+        req.setQualityControl(4L);  //照片质量等级
+        req.setUniquePersonControl(4L); //重复人员识别等级
+        req.setPersonName(name);
+        req.setImage(photo); //base图片
+        CreatePersonResponse resp = client.CreatePerson(req);
+        if (StrUtil.isNotBlank(resp.getFaceId())) {
+        int rows = driverDao.updateDriverArchive(driverId);
+        if (rows != 1) {
+            return "更新司机归档字段失败";
+        }
+     }
+     } catch (TencentCloudSDKException e) {
+         log.error("创建腾讯云端司机档案失败", e);
+        return "创建腾讯云端司机档案失败";
+     }
+     return "";
+}
+
+@Data
+@Schema(description = "创建司机人脸模型归档的表单")
+public class CreateDriverFaceModelForm {
+   @NotNull(message = "driverId不能为空")
+   @Min(value = 1, message = "driverId不能小于1")
+   @Schema(description = "司机ID")
+   private Long driverId;
+
+   @NotBlank(message = "photo不能为空")
+   @Schema(description = "司机面部照片Base64字符串")
+   private String photo;
+}
+
+@PostMapping("/createDriverFaceModel")
+@Operation(summary = "创建司机人脸模型归档")
+public R createDriverFaceModel(@RequestBody @Valid CreateDriverFaceModelForm form) {
+     String result = driverService.createDriverFaceModel(form.getDriverId(), form.getPhoto());
+     return R.ok().put("result", result);
+}
 ```
 4. 写 bff-driver/src/main/controller/form/CreateDriverFaceModelForm
    写 feign/DrServiceApi#createDriverFaceModel
@@ -1031,5 +1116,40 @@ showAddressContent: function() {
    写 controller/DriverController#createDriverFaceModel
    实现后端远程 feign 调用数据持久化
 ```java
+@Data
+@Schema(description = "创建司机人脸模型归档的表单")
+public class CreateDriverFaceModelForm {
 
+    @Schema(description = "司机ID")
+    private Long driverId;
+
+    @NotBlank(message = "photo不能为空")
+    @Schema(description = "司机面部照片Base64字符串")
+    private String photo;
+
+}
+
+@PostMapping("/driver/createDriverFaceModel")
+R createDriverFaceModel(CreateDriverFaceModelForm form);
+
+String createDriverFaceModel(long driverId, String photo);
+
+@Override
+@Transactional
+@LcnTransaction
+public String createDriverFaceModel(CreateDriverFaceModelForm form) {
+   R r = drServiceApi.createDriverFaceModel(form);
+   String result = MapUtil.getStr(r, "result");
+   return result;
+}
+
+@PostMapping("/createDriverFaceModel")
+@Operation(summary = "创建司机人脸模型归档")
+@SaCheckLogin
+public R createDriverFaceModel(@RequestBody @Valid CreateDriverFaceModelForm form){
+   long driverId = StpUtil.getLoginIdAsLong(); //satoken获取当前会话登录id, 并转化为long类型
+   form.setDriverId(driverId);
+   String result = driverService.createDriverFaceModel(form);
+   return R.ok().put("result", result);
+}
 ```

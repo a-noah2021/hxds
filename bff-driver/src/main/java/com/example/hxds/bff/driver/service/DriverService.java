@@ -1,5 +1,6 @@
 package com.example.hxds.bff.driver.service;
 
+import com.example.hxds.bff.driver.controller.form.CreateDriverFaceModelForm;
 import com.example.hxds.bff.driver.controller.form.RegisterNewDriverForm;
 import com.example.hxds.bff.driver.controller.form.UpdateDriverAuthForm;
 
@@ -14,5 +15,7 @@ public interface DriverService {
     long registerNewDriver(RegisterNewDriverForm form);
 
     int updateDriverAuth(UpdateDriverAuthForm form);
+
+    String createDriverFaceModel(CreateDriverFaceModelForm form);
 
 }
