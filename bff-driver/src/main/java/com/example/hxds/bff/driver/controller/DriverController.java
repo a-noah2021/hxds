@@ -44,17 +44,17 @@ public class DriverController {
     @PostMapping("/updateDriverAuth")
     @Operation(summary = "更新实名认证信息")
     @SaCheckLogin
-    public R updateDriverAuth(@RequestBody @Valid UpdateDriverAuthForm form){
-        long driverId=StpUtil.getLoginIdAsLong();
+    public R updateDriverAuth(@RequestBody @Valid UpdateDriverAuthForm form) {
+        long driverId = StpUtil.getLoginIdAsLong();
         form.setDriverId(driverId);
-        int rows=driverService.updateDriverAuth(form);
-        return R.ok().put("rows",rows);
+        int rows = driverService.updateDriverAuth(form);
+        return R.ok().put("rows", rows);
     }
 
     @PostMapping("/createDriverFaceModel")
     @Operation(summary = "创建司机人脸模型归档")
     @SaCheckLogin
-    public R createDriverFaceModel(@RequestBody @Valid CreateDriverFaceModelForm form){
+    public R createDriverFaceModel(@RequestBody @Valid CreateDriverFaceModelForm form) {
         long driverId = StpUtil.getLoginIdAsLong(); // SaToken获取当前会话登录id, 并转化为long类型
         form.setDriverId(driverId);
         String result = driverService.createDriverFaceModel(form);
