@@ -32,3 +32,6 @@ build/
 
 ### tx-lcn ###
 .txlcn
+
+### MacOS ###
+.DS_Store
