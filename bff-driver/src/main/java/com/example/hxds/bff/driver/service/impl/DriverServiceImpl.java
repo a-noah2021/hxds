@@ -3,16 +3,15 @@ package com.example.hxds.bff.driver.service.impl;
 import cn.hutool.core.convert.Convert;
 import cn.hutool.core.map.MapUtil;
 import com.codingapi.txlcn.tc.annotation.LcnTransaction;
-import com.example.hxds.bff.driver.controller.form.CreateDriverFaceModelForm;
+import com.example.hxds.bff.driver.controller.form.*;
 import com.example.hxds.bff.driver.feign.DrServiceApi;
 import com.example.hxds.bff.driver.service.DriverService;
 import com.example.hxds.common.util.R;
-import com.example.hxds.bff.driver.controller.form.RegisterNewDriverForm;
-import com.example.hxds.bff.driver.controller.form.UpdateDriverAuthForm;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import javax.annotation.Resource;
+import java.util.HashMap;
 
 /**
  * @program: hxds
@@ -51,6 +50,20 @@ public class DriverServiceImpl implements DriverService {
         R r = drServiceApi.createDriverFaceModel(form);
         String result = MapUtil.getStr(r, "result");
         return result;
+    }
+
+    @Override
+    public HashMap login(LoginForm form) {
+        R r = drServiceApi.login(form);
+        HashMap map = (HashMap) r.get("result");
+        return map;
+    }
+
+    @Override
+    public HashMap searchDriverBaseInfo(SearchDriverBaseInfoForm form) {
+        R r = drServiceApi.searchDriverBaseInfo(form);
+        HashMap map = (HashMap) r.get("result");
+        return map;
     }
 
 }

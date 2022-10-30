@@ -59,9 +59,35 @@
         FROM tb_driver
         WHERE id = #{driverId}
     </select>
-    <select id="updateDriverArchive" parameterType="long">
+    <update id="updateDriverArchive" parameterType="long">
         update tb_driver
         set archive = 1
         WHERE id = #{driverId}
+    </update>
+    <select id="login" parameterType="String" resultType="HashMap">
+        SELECT CAST(id AS CHAR) AS id,
+               real_auth        AS realAuth,
+               archive,
+               tel
+        FROM tb_driver
+        WHERE `status` != 2 AND open_id = #{openId}
+    </select>
+    <select id="searchDriverBaseInfo" parameterType="long" resultType="HashMap">
+        SELECT d.open_id               AS openId,
+               d.`name`,
+               d.nickname,
+               d.sex,
+               d.photo,
+               d.tel,
+               d.email,
+               d.pid,
+               d.real_auth             AS realAuth,
+               d.summary,
+               d.`status`,
+               CAST(w.balance AS CHAR) AS balance,
+               d.create_time           AS createTime
+        FROM tb_driver d
+                 JOIN tb_wallet w ON d.id = w.driver_id
+        WHERE d.id = #{driverId};
     </select>
 </mapper>

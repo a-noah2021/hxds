@@ -17,8 +17,23 @@ public interface DriverDao {
 
     HashMap searchDriverNameAndSex(long driverId);
 
+    /**
+     * archive:是否在腾讯云归档存放司机面部信息 0未录入，1录入
+     * 更新tb_driver的archive字段0->1
+     * @param driverId
+     * @return
+     */
     int updateDriverArchive(long driverId);
 
+    /**
+     * status:状态，1正常，2禁用，3.降低接单量
+     * 根据openId筛选status不是2的司机用户
+     * @param openId
+     * @return
+     */
+    HashMap login(String openId);
+
+    HashMap searchDriverBaseInfo(long driverId);
 }
 
 

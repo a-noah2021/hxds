@@ -3,6 +3,7 @@ package com.example.hxds.dr.service.impl;
 import cn.hutool.core.map.MapUtil;
 import cn.hutool.core.util.StrUtil;
 import cn.hutool.json.JSONObject;
+import cn.hutool.json.JSONUtil;
 import com.codingapi.txlcn.tc.annotation.LcnTransaction;
 import com.example.hxds.common.exception.HxdsException;
 import com.example.hxds.common.util.MicroAppUtil;
@@ -141,6 +142,43 @@ public class DriverServiceImpl implements DriverService {
             return "创建腾讯云端司机档案失败";
         }
         return "";
+    }
+
+    /**
+     * 每天司机第一次接单时用当前微信用户登陆，同时判断是否人脸识别认证和当前手机号是否与注册手机号不一致 TODO:desc可能不对
+     * @param code
+     * @param phoneCode
+     * @return
+     */
+    @Override
+    public HashMap login(String code){ //, String phoneCode) {
+        String openId = microAppUtil.getOpenId(code);
+        HashMap result = driverDao.login(openId);
+        if(result != null){
+            // 之前已经注册过，接下来判断是否经历过人脸识别认证
+            if(result.containsKey("archive")){
+                int temp = MapUtil.getInt(result, "archive");
+                boolean archive = (temp == 1)? true:false;
+                // HashMap.replace(K key, V oldValue, V newValue) 如果 oldValue 不存，则替换 key 对应的值，返回 key 对应的旧值
+                // 如果存在 oldValue，替换成功返回 true，如果 key 不存在，则返回 null。
+                result.replace("archive", archive);
+            }
+            /* TODO: 司机端登陆抛异常
+            String tel = MapUtil.getStr(result, "tel");
+            String realTel = microAppUtil.getTel(phoneCode);
+            if(!tel.equals(realTel)){
+                throw new HxdsException("当前手机号与注册手机号不一致");
+            }*/
+        }
+        return result;
+    }
+
+    @Override
+    public HashMap searchDriverBaseInfo(long driverId) {
+        HashMap result = driverDao.searchDriverBaseInfo(driverId);
+        JSONObject summary = JSONUtil.parseObj(MapUtil.getStr(result, "summary")); //将摘要信息转换成JSON对象
+        result.replace("summary", summary);
+        return result;
     }
 
 }

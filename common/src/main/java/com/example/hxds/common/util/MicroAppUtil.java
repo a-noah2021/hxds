@@ -1,5 +1,7 @@
 package com.example.hxds.common.util;
 
+import cn.hutool.http.HttpRequest;
+import cn.hutool.http.HttpResponse;
 import cn.hutool.http.HttpUtil;
 import cn.hutool.json.JSONObject;
 import cn.hutool.json.JSONUtil;
@@ -45,6 +47,25 @@ public class MicroAppUtil {
         if (json.containsKey("access_token")) {
             String accessToken = json.getStr("access_token");
             return accessToken;
+        } else {
+            throw new HxdsException(json.getStr("errmsg"));
+        }
+    }
+
+    public String getTel(String phoneCode) {
+        String accessToken = getAccessToken();
+        String url = "https://api.weixin.qq.com/wxa/business/getuserphonenumber?access_token=" + accessToken;
+        JSONObject param = new JSONObject();
+        param.set("code", phoneCode);
+        HttpRequest post = HttpUtil.createPost(url);
+        post.body(param.toString(), "application/json");
+        HttpResponse response = post.execute();
+        JSONObject json = JSONUtil.parseObj(response.body());
+        if (json.containsKey("phone_info")) {
+            //TODO: 司机端登陆抛异常
+            String tel = json.getJSONObject("phone_info").getStr("phoneNumber");
+//            String tel = json.getJSONObject("phone_info").getStr("purePhoneNumber");
+            return tel;
         } else {
             throw new HxdsException(json.getStr("errmsg"));
         }

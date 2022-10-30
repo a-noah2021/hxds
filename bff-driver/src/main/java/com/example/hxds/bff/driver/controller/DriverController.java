@@ -2,11 +2,10 @@ package com.example.hxds.bff.driver.controller;
 
 import cn.dev33.satoken.annotation.SaCheckLogin;
 import cn.dev33.satoken.stp.StpUtil;
-import com.example.hxds.bff.driver.controller.form.CreateDriverFaceModelForm;
-import com.example.hxds.bff.driver.controller.form.UpdateDriverAuthForm;
+import cn.hutool.core.map.MapUtil;
+import com.example.hxds.bff.driver.controller.form.*;
 import com.example.hxds.bff.driver.service.DriverService;
 import com.example.hxds.common.util.R;
-import com.example.hxds.bff.driver.controller.form.RegisterNewDriverForm;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -16,6 +15,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import javax.annotation.Resource;
 import javax.validation.Valid;
+import java.util.HashMap;
 
 /**
  * @program: hxds
@@ -61,4 +61,29 @@ public class DriverController {
         return R.ok().put("result", result);
     }
 
+    @PostMapping("/login")
+    @Operation(summary = "登陆系统")
+    public R login(@RequestBody @Valid LoginForm form) {
+        HashMap map = driverService.login(form);
+        if (map != null) {
+            long driverId = MapUtil.getLong(map, "id");
+            byte realAuth = Byte.parseByte(MapUtil.getStr(map, "realAuth")); // real_auth:1未认证，2已认证，3审核中
+            boolean archive = MapUtil.getBool(map, "archive");
+            StpUtil.login(driverId);    // 本质上是根据openId识别用户，driverId也就是数据表tb_driver的主键id和open_id绑定
+            String token = StpUtil.getTokenInfo().getTokenValue();
+            return R.ok().put("token", token).put("realAuth", realAuth).put("archive", archive);
+        }
+        return R.ok();
+    }
+
+    @PostMapping("/searchDriverBaseInfo")
+    @Operation(summary = "查询司机基本信息")
+    @SaCheckLogin
+    public R searchDriverBaseInfo(){
+        long driverId=StpUtil.getLoginIdAsLong();
+        SearchDriverBaseInfoForm form=new SearchDriverBaseInfoForm();
+        form.setDriverId(driverId);
+        HashMap map = driverService.searchDriverBaseInfo(form);
+        return R.ok().put("result",map);
+    }
 }

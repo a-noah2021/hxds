@@ -1,5 +1,6 @@
 package com.example.hxds.dr.service;
 
+import java.util.HashMap;
 import java.util.Map;
 
 /**
@@ -15,4 +16,8 @@ public interface DriverService {
     int updateDriverAuth(Map param);
 
     String createDriverFaceModel(long driverId, String photo);
+
+    HashMap login(String code); //, String phoneCode);
+
+    HashMap searchDriverBaseInfo(long driverId);
 }

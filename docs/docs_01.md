@@ -396,6 +396,9 @@ StpUtil.switchTo(10044);                // 将当前会话身份临时切换为�
 其中启动 hxds-tm 节点后可以进入其[后台管理系统](http://localhost:7970/admin/index.html#/)，密码在 tx-lcn.manager.admin-key=abc123456 上配置
 在启动的后 bff-driver、hxds-dr 会注册到 hxds-tm，而 bff-driver、hxds-dr、gateway 会注册到 nacos，我一直报错 nacos 连不上，谷歌后将配置文件名改成 bootstrap.yml 就好了
 其中 yml 配置文件中的 spring.cloud.nacos.config/discovery.namespace 为 Nacos Web 管理界面的命名空间-命名空间ID
+
+【题外话】截止目前感觉单纯跟着视频敲代码甚至直接 COPY 原作者的代码收获不大，从下一小节开始会把相关代码复制到文档里，这里更有针对性。所以之前的代码大家也跟着 COPY 原代码，部分有坑 ( 存在部分人是学习跟着敲的，部分代码涉及到后面内容记个 TODO 没写下去的情况 ) 也不好复现就不填了
+
 ### 司机实名认证
 
 1. 在腾讯云开通对象存储服务和数据万象服务
@@ -906,10 +909,12 @@ public R updateDriverAuth(@RequestBody @Valid UpdateDriverAuthForm form){
     return R.ok().put("rows",rows);
 }
 ```
-8. 写 hxds-driver-wx/identity/filling/filling.vue#enterContent/save/showAddressContent，实现移动端 ( 输入-保存-展示 ) 联络方式/紧急联系人一整套链路
-小程序视图层上面的联系方式排版设计比较简单，直接引用的 uView 组件库里的列表控件，相关文档：[传送门](https://v1.uviewui.com/components/cell.html)
-每个列表项都设置里点击事件 enterContent
+8. 写 hxds-driver-wx/identity/filling/filling.vue#enterContent/save/showAddressContent，实现移动端 ( 输入-保存-展示 ) 联络方式/紧急联系人一整套链路。小程序视图层上面的联系方式排版设计比较简单，直接引用的 uView 组件库里的列表控件，相关文档：[传送门](https://v1.uviewui.com/components/cell.html)，每个列表项都设置点击事件 enterContent
+
+​	   写 hxds-driver-wx/main.js 通过 Ajax 向后端发请求
+
 ```vue
+<!--filling.vue-->
 enterContent: function(title, key) {
    let that = this;
    uni.showModal({
@@ -1030,6 +1035,8 @@ showAddressContent: function() {
        });
    }
 }
+<!--main.js-->
+updateDriverAuth: `${baseUrl}/driver/updateDriverAuth`,
 ```
 ### 开通活体检测，甄别真实注册司机
 1. 进入腾讯云-[人脸识别](https://console.cloud.tencent.com/aiface)-人员库管理-人员管理-新建人员库，填写信息创建完人员库后在 application-common.yml 配置人脸识别
@@ -1044,11 +1051,11 @@ showAddressContent: function() {
   FROM tb_driver
   WHERE id = #{driverId}
 </select>
-<select id="updateDriverArchive" parameterType="long">
+<update id="updateDriverArchive" parameterType="long">
   update tb_driver
   set archive = 1
   WHERE id = #{driverId}
-</select>
+</update>
 
 
 HashMap searchDriverNameAndSex(long driverId);
@@ -1155,9 +1162,15 @@ public R createDriverFaceModel(@RequestBody @Valid CreateDriverFaceModelForm for
 ```
 
 5. 写 hxds-driver-wx/identity/face_camera/face_camera.vue
-   实现司机每天第一次节点时的人脸识别认证
+   写 hxds-driver-wx/main.js 通过 Ajax 向后端发请求
+   实现司机注册时必须的人脸识别认证。需要注意的一点是：腾讯云人脸识别-人员库的信息每人只能有一个，如果想重写注册不仅要删除 MySQL 还要删除人员库的数据
+
+【拓展】 1、小程序初始化完成后，页面首次加载触发 onLoad()，只会触发一次。
+				2、当小程序进入到后台，先执行页面 onHide() 方法再执行应用 onHide() 方法。
+				3、当小程序从后台进入到前台，先执行应用 onShow() 方法再执行页面 onShow() 方法
 
 ```vue
+<!--face_camera.vue-->
 <view>
   <view class="face-container">
     <camera device-position="front" flash="off" class="camera" @error="error" v-if="showCamera">
@@ -1265,5 +1278,404 @@ public R createDriverFaceModel(@RequestBody @Valid CreateDriverFaceModelForm for
 			this.audio.stop()
 		}
 	}
+<!--main.js-->
+createDriverFaceModel: `${baseUrl}/driver/createDriverFaceModel`,
+verificateDriverFace: `${baseUrl}/driver/recognition/verificateDriverFace`,
 ```
+### 司机微服务封装登陆过程
+1. 写 hxds-dr/src/main/resource/mapper/DriverDao.xml#login 及其对应接口
+   写 service/DriverService#login 及其实现类
+   写 controller/form/LoginForm
+   写 controller/DriverController#login
+   【拓展】在 MySQL 中数字的查询速度要快于字符串的查询速度
+```java
+<select id="login" parameterType="String" resultType="HashMap">
+  SELECT CAST(id AS CHAR) AS id,
+         real_auth        AS realAuth,
+         archive,
+         tel
+  FROM tb_driver
+  WHERE `status` != 2 AND open_id = #{openId}
+</select>
 
+HashMap login(String openId);
+
+HashMap login(String code, String phoneCode);
+
+@Override
+public HashMap login(String code, String phoneCode) {
+     String openId = microAppUtil.getOpenId(code);
+     HashMap result = driverDao.login(openId);
+     if (result != null) {
+        if (result.containsKey("archive")) {
+           int temp = MapUtil.getInt(result, "archive");
+           boolean archive = (temp == 1) ? true : false;
+           result.replace("archive", archive);
+        }
+        String tel = MapUtil.getStr(result, "tel");
+        String realTel = microAppUtil.getTel(phoneCode);
+        if (!tel.equals(realTel)) {
+           throw new HxdsException("当前手机号与注册手机号不一致");
+        }
+     }
+     return result;
+}
+
+@Data
+@Schema(description = "司机登陆表单")
+public class LoginForm {
+
+   @NotBlank(message = "code不能为空")
+   @Schema(description = "微信小程序临时授权")
+   private String code;
+
+   @NotBlank(message = "phoneCode不能为空")
+   @Schema(description = "微信小程序获取电话号码临时授权")
+   private String phoneCode;
+}
+
+@PostMapping("/login")
+@Operation(summary = "登陆系统")
+public R login(@RequestBody @Valid LoginForm form) {
+   HashMap map = driverService.login(form.getCode(), form.getPhoneCode());
+   return R.ok().put("result", map);
+}
+```
+2. 写 bff-driver/src/main/controller/form/LoginForm
+   写 feign/DrServiceApi#login
+   写 service/DriverService#login 及其实现类
+   写 controller/DriverController#login
+   通过后端远程 feign 调用实现司机登陆
+   【总结】截止目前决定注册司机的状态有2个字段。archive:是否在腾讯云归档存放司机面部信息。0未录入，1录入；real_auth: 认证状态。1未认证，2已认证，3审核中
+```java
+@Data
+@Schema(description = "司机登陆表单")
+public class LoginForm {
+
+    @NotBlank(message = "code不能为空")
+    @Schema(description = "微信小程序临时授权")
+    private String code;
+
+    @NotBlank(message = "phoneCode不能为空")
+    @Schema(description = "微信小程序获取电话号码临时授权")
+    private String phoneCode;
+}
+
+@PostMapping("/driver/login")
+public R login(LoginForm form);
+
+HashMap login(LoginForm form);
+
+@Override
+public HashMap login(LoginForm form) {
+   R r = drServiceApi.login(form);
+   HashMap map = (HashMap) r.get("result");
+   return map;
+}
+
+@PostMapping("/login")
+@Operation(summary = "登陆系统")
+public R login(@RequestBody @Valid LoginForm form){
+   HashMap map=driverService.login(form);
+   if(map!=null){
+      long driverId= MapUtil.getLong(map,"id");
+      byte realAuth=Byte.parseByte(MapUtil.getStr(map,"realAuth"));
+      boolean archive=MapUtil.getBool(map,"archive");
+      StpUtil.login(driverId);
+      String token=StpUtil.getTokenInfo().getTokenValue();
+      return R.ok().put("token",token).put("realAuth",realAuth).put("archive",archive);
+   }
+   return R.ok();
+}
+```
+3. 写 hxds-driver-wx/pages/login/login.vue
+   写 hxds-driver-wx/main.js 通过 Ajax 向后端发请求
+   实现司机登陆
+
+【拓展】1、redirectTo：关闭当前页，跳转到指定页；2、navigateTo：保留当前页，跳转到指定页；3、switchTab：只能用于跳转到 tabBar 页面，并关闭其他非 tabBar 页面
+
+tabBar 页面：小程序的底部有图标加文字的几个按钮，每个按钮对应一个页面，而整个小程序中有很多页面，小程序底部图标加文字对应的几个页面是 tabBar 页面，这个在 pages.json 中有设置
+
+```vue
+<!--修改View-->
+<button class="btn" open-type="getPhoneNumber" @getphonenumber="login">微信登陆</button>
+
+login: function(e) {
+    let that = this;
+    console.log(e.detail.code)
+    let phoneCode = e.detail.code;
+    uni.login({
+        provider: 'weixin',
+        success: function(resp) {
+            let code = resp.code;
+            let data = {
+                code: code,
+                phoneCode: phoneCode
+            };
+            console.log(data);
+            that.ajax(that.url.login, 'POST', data,
+            function(resp) {
+                if (!resp.data.hasOwnProperty('token')) {
+                    that.$refs.uToast.show({
+                        title: '请先注册',
+                        type: 'error'
+                    });
+                } else {
+                    let token = resp.data.token;
+                    let realAuth = resp.data.realAuth;
+                    let archive = resp.data.archive;
+                    uni.setStorageSync('token', token);
+                    uni.setStorageSync('realAuth', realAuth);
+                    uni.removeStorageSync('executeOrder');
+                    that.$refs.uToast.show({
+                        title: '登陆成功',
+                        type: 'success',
+                        callback: function() {
+                            uni.setStorageSync('workStatus', '停止接单');
+                            //检查用户是否没有填写实名信息
+                            if (realAuth == 1) {
+                                uni.redirectTo({
+                                    url: '../../identity/filling/filling?mode=create'
+                                });
+                            } else if (archive == false) {
+                                //检查系统是否存有司机的面部数据
+                                uni.showModal({
+                                    title: '提示消息',
+                                    content: '您还没有录入用于核实身份的面部特征信息，如果不录入将无法接单',
+                                    confirmText: '录入',
+                                    cancelText: '取消',
+                                    success: function(resp) {
+                                        if (resp.confirm) {
+                                            //跳转到面部识别页面，采集人脸数据
+                                            uni.redirectTo({
+                                                url: '../../identity/face_camera/face_camera?mode=create'
+                                            });
+                                        } else {
+                                            uni.switchTab({
+                                                url: '../workbench/workbench'
+                                            });
+                                        }
+                                    }
+                                });
+                            } else {
+                                uni.switchTab({
+                                    url: '../workbench/workbench'
+                                });
+                            }
+                        }
+                    });
+                }
+            });
+        }
+    });
+},
+
+login: `${baseUrl}/driver/login`,
+```
+### 司机微服务查询司机个人汇总信息
+1. 写 hxds-dr/src/main/resource/mapper/DriverDao.xml#searchDriverBaseInfo 及其对应接口
+   写 service/DriverService#searchDriverBaseInfo 及其实现类
+   写 controller/form/SearchDriverBaseInfoForm
+   写 controller/DriverController#searchDriverBaseInfo
+```java
+<select id="searchDriverBaseInfo" parameterType="long" resultType="HashMap">
+  SELECT d.open_id               AS openId,
+         d.`name`,
+         d.nickname,
+         d.sex,
+         d.photo,
+         d.tel,
+         d.email,
+         d.pid,
+         d.real_auth             AS realAuth,
+         d.summary,
+         d.`status`,
+         CAST(w.balance AS CHAR) AS balance,
+         d.create_time           AS createTime
+  FROM tb_driver d
+           JOIN tb_wallet w ON d.id = w.driver_id
+  WHERE d.id = #{driverId};
+</select>
+
+HashMap searchDriverBaseInfo(long driverId);
+
+HashMap searchDriverBaseInfo(long driverId);
+
+@Override
+public HashMap searchDriverBaseInfo(long driverId) {
+     HashMap result = driverDao.searchDriverBaseInfo(driverId);
+     JSONObject summary = JSONUtil.parseObj(MapUtil.getStr(result, "summary"));
+     result.replace("summary", summary);
+     return result;
+}
+
+@Data
+@Schema(description = "查询司机基本信息的表单")
+public class SearchDriverBaseInfoForm {
+   @NotNull(message = "driverId不能为空")
+   @Min(value = 1, message = "driverId不能小于1")
+   @Schema(description = "司机ID")
+   private Long driverId;
+}
+
+@PostMapping("/searchDriverBaseInfo")
+@Operation(summary = "查询司机基本信息")
+public R searchDriverBaseInfo(@RequestBody @Valid SearchDriverBaseInfoForm form) {
+     HashMap result = driverService.searchDriverBaseInfo(form.getDriverId());
+     return R.ok().put("result", result);
+}
+```
+2. 写 bff-driver/src/main/controller/form/SearchDriverBaseInfoForm
+   写 feign/DrServiceApi#searchDriverBaseInfo
+   写 service/DriverService#searchDriverBaseInfo 及其实现类
+   写 controller/DriverController#searchDriverBaseInfo
+   通过后端远程 feign 调用实现查询司机基础信息
+   在[Swagger-dr](http://localhost:8001/swagger-ui/index.html?configUrl=/doc-api.html/swagger-config#/DriverController/searchDriverBaseInfo)和
+   [Swagger-bff](http://localhost:8101/swagger-ui/index.html?configUrl=/doc-api.html/swagger-config)测试 searchDriverBaseInfo 接口
+```java
+@Data
+@Schema(description = "查询司机基本信息的表单")
+public class SearchDriverBaseInfoForm {
+    @Schema(description = "司机ID")
+    private Long driverId;
+}
+
+@PostMapping("/driver/searchDriverBaseInfo")
+public R searchDriverBaseInfo(SearchDriverBaseInfoForm form);
+
+HashMap searchDriverBaseInfo(SearchDriverBaseInfoForm form);
+
+@Override
+public HashMap searchDriverBaseInfo(SearchDriverBaseInfoForm form) {
+   R r = drServiceApi.searchDriverBaseInfo(form);
+   HashMap map = (HashMap) r.get("result");
+   return map;
+}
+
+@PostMapping("/searchDriverBaseInfo")
+@Operation(summary = "查询司机基本信息")
+@SaCheckLogin
+public R searchDriverBaseInfo(){
+   long driverId=StpUtil.getLoginIdAsLong();
+   SearchDriverBaseInfoForm form=new SearchDriverBaseInfoForm();
+   form.setDriverId(driverId);
+   HashMap map = driverService.searchDriverBaseInfo(form);
+   return R.ok().put("result",map);
+}
+```
+3. 写 hxds-driver-wx/pages/mine/mine.vue
+   写 hxds-driver-wx/main.js 通过 Ajax 向后端发请求
+```vue
+methods: {
+    logoutHandle: function() {
+        let that = this;
+        uni.vibrateShort({});
+        uni.showModal({
+            title: '提示信息',
+            content: '确认退出系统？',
+            success: function(resp) {
+                if (resp.confirm) {
+                    that.ajax(that.url.logout, 'GET', null,
+                    function(resp) {
+                        uni.removeStorageSync('realAuth');
+                        uni.removeStorageSync('token');
+                        uni.showToast({
+                            title: '已经退出系统',
+                            success: function() {
+                                setTimeout(function() {
+                                    uni.redirectTo({
+                                        url: '../login/login'
+                                    });
+                                },
+                                1500);
+                            }
+                        });
+                    });
+                }
+            }
+        });
+    },
+    serviceHandle: function() {
+        uni.vibrateShort({});
+        uni.makePhoneCall({
+            phoneNumber: '10086'
+        });
+    },
+    clearHandle: function() {
+        uni.vibrateShort({});
+        uni.showModal({
+            title: '提示消息',
+            content: '清理本地缓存',
+            success: function(resp) {
+                if (resp.confirm) {
+                    uni.vibrateShort({});
+                    uni.showLoading({
+                        title: '执行中'
+                    });
+                    let cache = uni.getStorageInfoSync();
+                    for (let key of cache.keys) {
+                        if (key == 'token' || key == 'realAuth') {
+                            continue;
+                        }
+                        uni.removeStorageSync(key);
+                        console.log('删除Storage缓存成功');
+                    }
+                    uni.getSavedFileList({
+                        success: function(resp) {
+                            for (let one of resp.fileList) {
+                                let path = one.filePath;
+                                uni.removeSavedFile({
+                                    filePath: path,
+                                    success: function() {
+                                        console.log('缓存文件删除成功');
+                                    }
+                                });
+                            }
+                        }
+                    });
+                    setTimeout(function() {
+                        uni.hideLoading();
+                        uni.showToast({
+                            title: '清理完毕'
+                        });
+                    },
+                    500);
+                }
+            }
+        });
+    }
+},
+onShow: function() {
+    let that = this;
+    that.ajax(that.url.searchDriverBaseInfo, 'POST', null,
+    function(resp) {
+        let result = resp.data.result;
+        that.name = result.name;
+        that.photo = result.photo;
+        that.realAuth = uni.getStorageSync('realAuth') == 1;
+
+        let createTime = dayjs(result.createTime, 'YYYY-MM-DD');
+        let current = dayjs();
+        let years = current.diff(createTime, 'years');
+        that.years = years;
+        that.level = result.summary.level;
+        if (that.level < 10) {
+            that.levelName = '初级代驾';
+        } else if (that.level < 30) {
+            that.levelName = '中级代驾';
+        } else if (that.level < 50) {
+            that.levelName = '高级代驾';
+        } else {
+            that.levelName = '王牌代驾';
+        }
+        that.balance = result.balance;
+        that.totalOrder = result.summary.totalOrder;
+        that.weekOrder = result.summary.weekOrder;
+        that.weekComment = result.summary.weekComment;
+        that.appeal = result.summary.appeal;
+    });
+},
+
+searchDriverBaseInfo: `${baseUrl}/driver/searchDriverBaseInfo`,
+```
+### 司机微服务查询首页信息
