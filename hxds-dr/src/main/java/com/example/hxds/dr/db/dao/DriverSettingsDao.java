@@ -11,6 +11,9 @@ public interface DriverSettingsDao {
 
     int insertDriverSettings(DriverSettingsEntity entity);
 
+    String searchDriverSettings(long driverId);
+
+
 }
 
 

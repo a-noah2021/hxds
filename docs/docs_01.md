@@ -909,7 +909,7 @@ public R updateDriverAuth(@RequestBody @Valid UpdateDriverAuthForm form){
 ```
 8. 写 hxds-driver-wx/identity/filling/filling.vue#enterContent/save/showAddressContent，实现移动端 ( 输入-保存-展示 ) 联络方式/紧急联系人一整套链路。小程序视图层上面的联系方式排版设计比较简单，直接引用的 uView 组件库里的列表控件，相关文档：[传送门](https://v1.uviewui.com/components/cell.html)，每个列表项都设置点击事件 enterContent
 
-​	   写 hxds-driver-wx/main.js 通过 Ajax 向后端发请求
+​	   写 hxds-driver-wx/main.js 定义全局 URL 路径
 
 ```vue
 <!--filling.vue-->
@@ -1160,11 +1160,11 @@ public R createDriverFaceModel(@RequestBody @Valid CreateDriverFaceModelForm for
 ```
 
 5. 写 hxds-driver-wx/identity/face_camera/face_camera.vue
-   写 hxds-driver-wx/main.js 通过 Ajax 向后端发请求
+   写 hxds-driver-wx/main.js 定义全局 URL 路径
    实现司机注册时必须的人脸识别认证。需要注意的一点是：腾讯云人脸识别-人员库的信息每人只能有一个，如果想重写注册不仅要删除 MySQL 还要删除人员库的数据
 
-【拓展】 1、小程序初始化完成后，页面首次加载触发 onLoad()，只会触发一次。
-				2、当小程序进入到后台，先执行页面 onHide() 方法再执行应用 onHide() 方法。
+【拓展】 1、小程序初始化完成后，页面首次加载触发 onLoad()，只会触发一次；而 onShow() 可以执行多次。
+				2、当小程序进入到后台(比如打电话去了)，先执行页面 onHide() 方法再执行应用 onHide() 方法。
 				3、当小程序从后台进入到前台，先执行应用 onShow() 方法再执行页面 onShow() 方法
 
 ```vue
@@ -1377,7 +1377,7 @@ public R login(@RequestBody @Valid LoginForm form){
 }
 ```
 3. 写 hxds-driver-wx/pages/login/login.vue
-   写 hxds-driver-wx/main.js 通过 Ajax 向后端发请求
+   写 hxds-driver-wx/main.js 定义全局 URL 路径
    实现司机登陆
 
 【拓展】1、redirectTo：关闭当前页，跳转到指定页；2、navigateTo：保留当前页，跳转到指定页；3、switchTab：只能用于跳转到 tabBar 页面，并关闭其他非 tabBar 页面
@@ -1549,7 +1549,7 @@ public R searchDriverBaseInfo(){
 }
 ```
 3. 写 hxds-driver-wx/pages/mine/mine.vue
-   写 hxds-driver-wx/main.js 通过 Ajax 向后端发请求
+   写 hxds-driver-wx/main.js 定义全局 URL 路径
 ```vue
 methods: {
     logoutHandle: function() {
@@ -1668,6 +1668,189 @@ searchDriverBaseInfo: `${baseUrl}/driver/searchDriverBaseInfo`,
    写 service/OrderService#searchDriverTodayBusinessData 及其实现类
    写 controller/form/SearchDriverTodayBusinessDataForm
    写 controller/OrderController#searchDriverTodayBusinessData
+【拓展】ShardingSphere 不支持 count(*) 语句[出处](https://shardingsphere.apache.org/document/current/cn/features/sharding/limitation/)
+对于为空的字段如果转换成 JSON 字符串会不显示该字段，这时需要用到 IFNULL 转化
+CURRENT_DATE 返回一个 DATE 值，表示本地时间的当前日期。 与所有无参数的 SQL 函数一样，不需要，也不接受任何括号。 在一个节点的处理过程中所有对 CURRENT_DATE 的调用保证都返回相同的值
 ```java
+<select id="searchDriverTodayBusinessData" parameterType="long" resultType="HashMap">
+     SELECT IFNULL(SUM(TIMESTAMPDIFF(HOUR, end_time, start_time)), 0) AS duration,
+     CAST(IFNULL(SUM(real_fee),0) AS CHAR) AS income,
+     COUNT(id) AS orders
+     FROM tb_order
+     WHERE driver_id = #{driverId}
+     AND `status` IN (5,6,7,8)
+     AND date = CURRENT_DATE
+</select>
+        
+HashMap searchDriverTodayBusinessData(long driverId);
 
+@Override
+public HashMap searchDriverTodayBusinessData(long driverId) {
+     return orderDao.searchDriverTodayBusinessData(driverId);
+}
+
+@Data
+@Schema(description = "SearchDriverTodayBusinessDataForm")
+public class SearchDriverTodayBusinessDataForm {
+
+   @NotNull(message = "driverId cannot be null")
+   @Min(value = 1, message = "driverId cannot less than 1")
+   @Schema(description = "driverId")
+   private Long driverId;
+
+}
+
+@PostMapping("/searchDriverTodayBusinessData")
+@Operation(summary = "Search Driver Today Business Data")
+public R searchDriverTodayBusinessData(@RequestBody @Valid SearchDriverTodayBusinessDataForm form) {
+   HashMap result = orderService.searchDriverTodayBusinessData(form.getDriverId());
+   return R.ok().put("result", result);
+}
 ```
+2. 写 hxds-dr/src/main/resource/mapper/DriverSettingDao.xml#searchDriverSettings 及其对应接口
+   写 service/DriverService#searchDriverSettings 及其实现类
+   写 controller/form/SearchDriverSettingsForm
+   写 controller/DriverController#searchDriverSettings
+```java
+<select id="searchDriverSettings" parameterType="long" resultType="String">
+   SELECT settings
+   FROM tb_driver_settings
+   WHERE driver_id = #{driverId}
+</select>
+
+String searchDriverSettings(long driverId);
+
+HashMap searchDriverSettings(long driverId);
+
+@Override
+public HashMap searchDriverSettings(long driverId) {
+     String settings = driverSettingsDao.searchDriverSettings(driverId);
+     HashMap map = JSONUtil.parseObj(settings).toBean(HashMap.class);
+     boolean bool = MapUtil.getInt(map,"listenService")==1;
+     map.replace("listenService",bool);
+
+     bool = MapUtil.getInt(map,"autoAccept")==1;
+     map.replace("autoAccept",bool);
+
+     return map;
+}
+
+@Data
+@Schema(description = "查询司机设置的表单")
+public class SearchDriverSettingsForm {
+   @NotNull(message = "driverId不能为空")
+   @Min(value = 1, message = "driverId不能小于1")
+   @Schema(description = "司机ID")
+   private Long driverId;
+}
+
+@RestController
+@RequestMapping("/settings")
+@Tag(name = "SettingsController", description = "Driver Settings Web Controller")
+public class DriverSettingsController {
+   @Resource
+   private DriverSettingsService driverSettingsService;
+
+   @PostMapping("/searchDriverSettings")
+   @Operation(summary = "Search Driver Settings")
+   public R searchDriverSettings(@RequestBody @Valid SearchDriverSettingsForm form){
+      HashMap result = driverSettingsService.searchDriverSettings(form.getDriverId());
+      return R.ok().put("result", result);
+   }
+}
+```
+3. 写 bff-driver/src/main/controller/form/SearchDriverTodayBusinessDataForm & SearchDriverSettingsForm
+   写 feign/OdrServiceApi#searchDriverTodayBusinessData
+   写 feign/DrServiceApi#searchDriverSettings
+   写 service/DriverService#searchWorkbenchData 及其实现类
+   写 controller/DriverController#searchWorkbenchData
+```java
+@Data
+@Schema(description = "Search Driver Today Business Data Form")
+public class SearchDriverTodayBusinessDataForm {
+    @Schema(description = "DriverId")
+    private Long driverId;
+}
+
+@Data
+@Schema(description = "SearchDriverSettingsForm")
+public class SearchDriverSettingsForm {
+   @Schema(description = "DriverId")
+   private Long driverId;
+}
+
+@PostMapping("/settings/searchDriverSettings")
+public R searchDriverSettings(SearchDriverSettingsForm form);
+
+@PostMapping("/order/searchDriverTodayBusinessData")
+public R searchDriverTodayBusinessData(SearchDriverTodayBusinessDataForm form);
+
+public HashMap searchWorkbenchData(long driverId);
+
+@Override
+public HashMap searchWorkbenchData(long driverId) {
+   SearchDriverTodayBusinessDataForm form_1 = new SearchDriverTodayBusinessDataForm();
+   form_1.setDriverId(driverId);
+   R r = odrServiceApi.searchDriverTodayBusinessData(form_1);
+   HashMap order = (HashMap) r.get("result");
+
+   SearchDriverSettingsForm form_2 = new SearchDriverSettingsForm();
+   form_2.setDriverId(driverId);
+   r = drServiceApi.searchDriverSettings(form_2);
+   HashMap settings = (HashMap) r.get("result");
+
+   HashMap result = new HashMap<>() {{
+      put("business", order);
+      put("settings", settings);
+   }};
+   return result;
+}
+
+@PostMapping("/searchWorkbenchData")
+@Operation(summary = "查找司机工作台数据")
+@SaCheckLogin
+public R searchWorkbenchData(){
+   HashMap result = driverService.searchWorkbenchData(StpUtil.getLoginIdAsLong());
+   return R.ok().put("result", result);
+}
+```
+4. 写 hxds-driver-wx/pages/workbench/workbench.vue
+   写 hxds-driver-wx/main.js 定义全局 URL 路径
+   给 tb_driver 表里的 real_auth 字段修改成 2已认证，然后启动后端5个子系统进行测试
+```vue
+methods: {
+    changeListenService: function(bool) {
+       if (bool) {
+           this.service.listenIcon = '../../static/workbench/service-icon-3.png';
+           this.service.listenStyle = 'color:#46B68F';
+           this.service.listenText = '收听订单';
+       } else {
+            this.service.listenIcon = '../../static/workbench/service-icon-7.png';
+            this.service.listenStyle = 'color:#FF4D4D';
+            this.service.listenText = '不听订单';
+       }
+    },
+},
+onLoad: function() {},
+onShow: function() {
+   let that = this;
+      if (!that.reviewAuth) {
+      that.ajax(that.url.searchWorkbenchData, 'POST', null, function(resp) {
+         let result = resp.data.result;
+         that.hour = result.business.duration;
+         that.income = result.business.income;
+         that.orders = result.business.orders;
+         
+         let settings = result.settings;
+         uni.setStorageSync('settings', settings);
+         that.settings.listenService = settings.listenService;
+         that.settings.autoAccept = settings.autoAccept;
+         that.changeListenService(that.settings.listenService);
+      });
+   }
+},
+onHide: function() {}
+
+searchWorkbenchData: `${baseUrl}/driver/searchWorkbenchData`,
+```
+### 司机微服务查询司机分页记录

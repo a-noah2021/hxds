@@ -86,4 +86,12 @@ public class DriverController {
         HashMap map = driverService.searchDriverBaseInfo(form);
         return R.ok().put("result",map);
     }
+
+    @PostMapping("/searchWorkbenchData")
+    @Operation(summary = "查找司机工作台数据")
+    @SaCheckLogin
+    public R searchWorkbenchData(){
+        HashMap result = driverService.searchWorkbenchData(StpUtil.getLoginIdAsLong());
+        return R.ok().put("result", result);
+    }
 }
