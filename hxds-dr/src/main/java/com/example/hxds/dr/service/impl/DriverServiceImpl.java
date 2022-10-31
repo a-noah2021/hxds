@@ -22,6 +22,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
 import javax.annotation.Resource;
 import java.math.BigDecimal;
 import java.util.*;
@@ -62,6 +63,7 @@ public class DriverServiceImpl implements DriverService {
 
     /**
      * 前端传来的参数到微信校验是否注册过，若没注册过将存储必要信息落库
+     *
      * @param param
      * @return
      */
@@ -76,7 +78,7 @@ public class DriverServiceImpl implements DriverService {
         HashMap tempParam = new HashMap() {{
             put("openId", openId);
         }};
-        if(driverDao.hasDriver(tempParam)!=0){
+        if (driverDao.hasDriver(tempParam) != 0) {
             throw new HxdsException("该微信已完成注册");
         }
         // 未注册过，将凭证、登陆态信息落库
@@ -146,29 +148,22 @@ public class DriverServiceImpl implements DriverService {
 
     /**
      * 每天司机第一次接单时用当前微信用户登陆，同时判断是否人脸识别认证和当前手机号是否与注册手机号不一致 TODO:desc可能不对
+     *
      * @param code
      * @param phoneCode
      * @return
      */
     @Override
-    public HashMap login(String code){ //, String phoneCode) {
+    public HashMap login(String code) { //, String phoneCode) {
         String openId = microAppUtil.getOpenId(code);
         HashMap result = driverDao.login(openId);
-        if(result != null){
-            // 之前已经注册过，接下来判断是否经历过人脸识别认证
-            if(result.containsKey("archive")){
-                int temp = MapUtil.getInt(result, "archive");
-                boolean archive = (temp == 1)? true:false;
-                // HashMap.replace(K key, V oldValue, V newValue) 如果 oldValue 不存，则替换 key 对应的值，返回 key 对应的旧值
-                // 如果存在 oldValue，替换成功返回 true，如果 key 不存在，则返回 null。
-                result.replace("archive", archive);
-            }
-            /* TODO: 司机端登陆抛异常
-            String tel = MapUtil.getStr(result, "tel");
-            String realTel = microAppUtil.getTel(phoneCode);
-            if(!tel.equals(realTel)){
-                throw new HxdsException("当前手机号与注册手机号不一致");
-            }*/
+        // 之前已经注册过，同时还要判断是否经历过人脸识别认证
+        if (result != null && result.containsKey("archive")) {
+            int temp = MapUtil.getInt(result, "archive");
+            boolean archive = (temp == 1) ? true : false;
+            // HashMap.replace(K key, V oldValue, V newValue) 如果 oldValue 不存，则替换 key 对应的值，返回 key 对应的旧值
+            // 如果存在 oldValue，替换成功返回 true，如果 key 不存在，则返回 null。
+            result.replace("archive", archive);
         }
         return result;
     }

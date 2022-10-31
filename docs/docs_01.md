@@ -18,17 +18,15 @@
 
 
 
-​		规则是：在MySQL_1和MySQL_2两个节点上分别创建订单表，然后在ShardingSphere做好设置。如果INSERT语句主键值对2求模余0，这个INSERT语句就路由给MySQL_1节点；如果余数是1，INSERT语句就被路由给MyQL_2执行，通过控制SQL语句的转发就能把订单数据切分到不同的MySQL节点上。将来查询的数据的时候，ShardingSphere把SELECT语句发送给每个MySQL节点执行，然后ShardingSphere把得到的数据做汇总返回给Navicat就行了。我们在Navicat上面执行CRUD操作，几乎跟操作单节点MySQL差不多，但是这背后确实通过路由SQL语句来实现的。
+​		规则是：在 MySQL_1 和 MySQL_2 两个节点上分别创建订单表，然后在 ShardingSphere 做好设置。如果 INSERT 语句主键值对2求模余0，这个 INSERT 语句就路由给 MySQL_1 节点；如果余数是1，INSERT 语句就被路由给 MySQL_2 执行，通过控制 SQL 语句的转发就能把订单数据切分到不同的 MySQL 节点上。将来查询的数据的时候，ShardingSphere 把SELECT语句发送给每个 MySQL 节点执行，然后 ShardingSphere 把得到的数据做汇总返回给Navicat就行了。我们在Navicat上面执行CRUD操作，几乎跟操作单节点 MySQL 差不多，但是这背后确实通过路由 SQL 语句来实现的。
 
-​		解释：我们可以将海量得数据切分到不同得mysql节点。但是时间日积月累 每个mysql里面得数据还是会超过几千万条， 这时候 就必须做归档。 对于一年以上得业务数据,可以看作过期得冷数据，我们可以把这部分得数据转移到归档数据库， 例如ToKuDB、MongoDB或者HBase里面（虽然没用过）
-
-   	这样MySQL节点就实现缩表了，性能也就上去了。比方说你在银行APP上面只能插到12个月以内的流水账单，再早的账单是查不到的。这就是银行做了冷数据归档操作，只有银行内部少数人可以查阅这些过期的冷数据
+​		解释：我们可以将海量得数据切分到不同得 MySQL 节点。但是时间日积月累每个 MySQL 里面得数据还是会超过几千万条， 这时候 就必须做归档。 对于一年以上得业务数据,可以看作过期得冷数据，我们可以把这部分得数据转移到归档数据库， 例如 ToKuDB、 MongoDB 或者 HBase 里面。这样 MySQL 节点就实现缩表了，性能也就上去了。比方说你在银行APP上面只能插到12个月以内的流水账单，再早的账单是查不到的。这就是银行做了冷数据归档操作，只有银行内部少数人可以查阅这些过期的冷数据
 
 #### 数据同步
 
-​		数据切分虽然能应对大量业务数据的存储，但是MySQL_1和MySQL_2节点数据是不同的，而且还没有备用的冗余节点，一旦宕机就会严重影响线上业务。接下来我们要考虑怎么给MySQL节点设置冗余节点。
+​		数据切分虽然能应对大量业务数据的存储，但是 MySQL_1 和 MySQL_2 节点数据是不同的，而且还没有备用的冗余节点，一旦宕机就会严重影响线上业务。接下来我们要考虑怎么给MySQL节点设置冗余节点。
 
-​		MySQL自带了Master-Slave数据同步模式，也被称作主从同步模式。例如MySQL_A节点开启了binlog日志文件之后，MySQL_A上面执行SQL语句都会被记录在binlog日志里面。MySQL_B节点通过订阅MySQL_A的binlog文件，能实时下载到这个日志文件，然后在MySQL_B节点上运行这些SQL语句，于是就保证了自己的数据和MySQL_A节点一致
+​		MySQL自带了 Master-Slave 数据同步模式，也被称作主从同步模式。例如 MySQL_A 节点开启了 binlog 日志文件之后，MySQL_A上面执行SQL语句都会被记录在binlog日志里面。MySQL_B节点通过订阅MySQL_A的binlog文件，能实时下载到这个日志文件，然后在MySQL_B节点上运行这些SQL语句，于是就保证了自己的数据和MySQL_A节点一致
 
   ![https://img1.sycdn.imooc.com/62f4d7b60001f9e504960270.jpg](https://img1.sycdn.imooc.com/62f4d7b60001f9e504960270.jpg)
 
@@ -74,7 +72,7 @@
 docker load < MySQL.tar.gz
 ```
 
-2. 创建 Docker 内网网段。为了给 Docker 中的容器分配固定的 Docker 内网 IP 地址，而且和其他现存容器 IP 不发生冲突，我们需要创建一个 Docker 内网的网段 mycat: 172.18.0.X，以后我们创建的容器都分配到这个网段上。需要注意的是，172.18.0.1 是网关的 IP ( 不可用 )
+2. 创建 Docker 内网网段。为了给 Docker 中的容器分配固定的 Docker 内网 IP 地址，而且和其他现存容器 IP 不发生冲突，我们需要创建一个 Docker 内网的网段 mynet: 172.18.0.X，以后我们创建的容器都分配到这个网段上。需要注意的是，172.18.0.1 是网关的 IP ( 不可用 )
 
 ```
 docker network create --subnet=172.18.0.0/18 mynet
@@ -1300,25 +1298,21 @@ verificateDriverFace: `${baseUrl}/driver/recognition/verificateDriverFace`,
 
 HashMap login(String openId);
 
-HashMap login(String code, String phoneCode);
+HashMap login(String code);
 
 @Override
-public HashMap login(String code, String phoneCode) {
-     String openId = microAppUtil.getOpenId(code);
-     HashMap result = driverDao.login(openId);
-     if (result != null) {
-        if (result.containsKey("archive")) {
-           int temp = MapUtil.getInt(result, "archive");
-           boolean archive = (temp == 1) ? true : false;
-           result.replace("archive", archive);
-        }
-        String tel = MapUtil.getStr(result, "tel");
-        String realTel = microAppUtil.getTel(phoneCode);
-        if (!tel.equals(realTel)) {
-           throw new HxdsException("当前手机号与注册手机号不一致");
-        }
-     }
-     return result;
+public HashMap login(String code) {
+  	String openId = microAppUtil.getOpenId(code);
+  	HashMap result = driverDao.login(openId);
+  	// 之前已经注册过，同时还要判断是否经历过人脸识别认证
+  	if (result != null && result.containsKey("archive")) {
+ 		   int temp = MapUtil.getInt(result, "archive");
+ 		   boolean archive = (temp == 1) ? true : false;
+ 		   // HashMap.replace(K key, V oldValue, V newValue) 如果 oldValue 不存，则替换 key 对应的值，返回 key 对应的旧值
+ 		   // 如果存在 oldValue，替换成功返回 true，如果 key 不存在，则返回 null。
+ 		   result.replace("archive", archive);
+ 		}
+  	return result;
 }
 
 @Data
@@ -1329,15 +1323,12 @@ public class LoginForm {
    @Schema(description = "微信小程序临时授权")
    private String code;
 
-   @NotBlank(message = "phoneCode不能为空")
-   @Schema(description = "微信小程序获取电话号码临时授权")
-   private String phoneCode;
 }
 
 @PostMapping("/login")
 @Operation(summary = "登陆系统")
 public R login(@RequestBody @Valid LoginForm form) {
-   HashMap map = driverService.login(form.getCode(), form.getPhoneCode());
+   HashMap map = driverService.login(form.getCode());
    return R.ok().put("result", map);
 }
 ```
@@ -1355,10 +1346,7 @@ public class LoginForm {
     @NotBlank(message = "code不能为空")
     @Schema(description = "微信小程序临时授权")
     private String code;
-
-    @NotBlank(message = "phoneCode不能为空")
-    @Schema(description = "微信小程序获取电话号码临时授权")
-    private String phoneCode;
+  
 }
 
 @PostMapping("/driver/login")
@@ -1398,19 +1386,16 @@ tabBar 页面：小程序的底部有图标加文字的几个按钮，每个按�
 
 ```vue
 <!--修改View-->
-<button class="btn" open-type="getPhoneNumber" @getphonenumber="login">微信登陆</button>
+<button class="btn" @tap="login()">微信登陆</button>
 
-login: function(e) {
+login: function() {
     let that = this;
-    console.log(e.detail.code)
-    let phoneCode = e.detail.code;
     uni.login({
         provider: 'weixin',
         success: function(resp) {
             let code = resp.code;
             let data = {
-                code: code,
-                phoneCode: phoneCode
+                code: code
             };
             console.log(data);
             that.ajax(that.url.login, 'POST', data,
@@ -1679,3 +1664,10 @@ onShow: function() {
 searchDriverBaseInfo: `${baseUrl}/driver/searchDriverBaseInfo`,
 ```
 ### 司机微服务查询首页信息
+1. 写 hxds-order/src/main/resource/mapper/OrderDao.xml#searchDriverTodayBusinessData 及其对应接口
+   写 service/OrderService#searchDriverTodayBusinessData 及其实现类
+   写 controller/form/SearchDriverTodayBusinessDataForm
+   写 controller/OrderController#searchDriverTodayBusinessData
+```java
+
+```

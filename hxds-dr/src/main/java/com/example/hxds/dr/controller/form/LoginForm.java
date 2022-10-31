@@ -17,8 +17,5 @@ public class LoginForm {
     @NotBlank(message = "code不能为空")
     @Schema(description = "微信小程序临时授权")
     private String code;
-/*  TODO: 司机端登陆抛异常
-    @NotBlank(message = "phoneCode不能为空")
-    @Schema(description = "微信小程序获取电话号码临时授权")
-    private String phoneCode;*/
+
 }
