@@ -34,6 +34,12 @@ public interface DriverDao {
     HashMap login(String openId);
 
     HashMap searchDriverBaseInfo(long driverId);
+
+    ArrayList<HashMap> searchDriverByPage(Map param);
+
+    long searchDriverCount(Map param);
+
+
 }
 
 

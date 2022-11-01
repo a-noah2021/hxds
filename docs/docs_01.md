@@ -1668,9 +1668,9 @@ searchDriverBaseInfo: `${baseUrl}/driver/searchDriverBaseInfo`,
    写 service/OrderService#searchDriverTodayBusinessData 及其实现类
    写 controller/form/SearchDriverTodayBusinessDataForm
    写 controller/OrderController#searchDriverTodayBusinessData
-【拓展】ShardingSphere 不支持 count(*) 语句[出处](https://shardingsphere.apache.org/document/current/cn/features/sharding/limitation/)
-对于为空的字段如果转换成 JSON 字符串会不显示该字段，这时需要用到 IFNULL 转化
-CURRENT_DATE 返回一个 DATE 值，表示本地时间的当前日期。 与所有无参数的 SQL 函数一样，不需要，也不接受任何括号。 在一个节点的处理过程中所有对 CURRENT_DATE 的调用保证都返回相同的值
+   【拓展】ShardingSphere 不支持 count(*) 语句[出处](https://shardingsphere.apache.org/document/current/cn/features/sharding/limitation/)
+   对于为空的字段如果转换成 JSON 字符串会不显示该字段，这时需要用到 IFNULL 转化
+   CURRENT_DATE 返回一个 DATE 值，表示本地时间的当前日期。 与所有无参数的 SQL 函数一样，不需要，也不接受任何括号。 在一个节点的处理过程中所有对 CURRENT_DATE 的调用保证都返回相同的值
 ```java
 <select id="searchDriverTodayBusinessData" parameterType="long" resultType="HashMap">
      SELECT IFNULL(SUM(TIMESTAMPDIFF(HOUR, end_time, start_time)), 0) AS duration,
@@ -1854,3 +1854,341 @@ onHide: function() {}
 searchWorkbenchData: `${baseUrl}/driver/searchWorkbenchData`,
 ```
 ### 司机微服务查询司机分页记录
+1. 写 hxds-dr/src/main/resource/mapper/DriverDao.xml#searchDriverCount & searchDriverByPage 及其对应接口
+   写 service/DriverService#searchDriverByPage 及其实现类
+   写 controller/form/SearchDriverByPageForm
+   写 controller/DriverController#searchDriverByPage
+```java
+ <select id="searchDriverByPage" parameterType="Map" resultType="HashMap">
+     SELECT CAST(id AS CHAR) AS id,
+     IFNULL(`name`,"") AS `name`,
+     IFNULL(sex,"") AS sex,
+     IFNULL(pid,"") AS pid,
+     IFNULL(tel,"") AS tel,
+     IFNULL(contact_name,"") AS contactName,
+     IFNULL(contact_tel,"") AS contactTel,
+     IFNULL(real_auth,"") AS realAuth,
+     `status`,
+     DATE_FORMAT(create_time, '%Y-%m-%d') AS createTime
+     FROM tb_driver
+     WHERE 1=1
+     <if test="name!=null">
+         AND `name` = #{name}
+     </if>
+     <if test="tel!=null">
+         AND tel = #{tel}
+     </if>
+     <if test="pid!=null">
+         AND pid = #{pid}
+     </if>
+     <if test="sex!=null">
+         AND sex = #{sex}
+     </if>
+     <if test="realAuth!=null">
+         AND `real_auth` = #{realAuth}
+     </if>
+     <if test="status!=null">
+         AND `status` = #{status}
+     </if>
+     LIMIT #{start}, #{length}
+ </select>
+ <select id="searchDriverCount" parameterType="Map" resultType="long">
+     SELECT COUNT(*)
+     FROM tb_driver
+     WHERE 1=1
+     <if test="name!=null">
+         AND `name` = #{name}
+     </if>
+     <if test="tel!=null">
+         AND tel = #{tel}
+     </if>
+     <if test="pid!=null">
+         AND pid = #{pid}
+     </if>
+     <if test="sex!=null">
+         AND sex = #{sex}
+     </if>
+     <if test="realAuth!=null">
+         AND `real_auth` = #{realAuth}
+     </if>
+     <if test="status!=null">
+         AND `status` = #{status}
+     </if>
+ </select>
+
+public ArrayList<HashMap> searchDriverByPage(Map param);
+public long searchDriverCount(Map param);
+
+public PageUtils searchDriverByPage(Map param);
+
+@Override
+public PageUtils searchDriverByPage(Map param) {
+     long count = driverDao.searchDriverCount(param);
+     ArrayList<HashMap> list = null;
+     if (count == 0) {
+         list = new ArrayList<>();
+     } else {
+         list = driverDao.searchDriverByPage(param);
+     }
+     int start = (Integer) param.get("start");
+     int length = (Integer) param.get("length");
+     PageUtils pageUtils = new PageUtils(list, count, start, length);
+     return pageUtils;
+}
+
+@Data
+@Schema(description = "查询司机分页记录的表单")
+public class SearchDriverByPageForm {
+
+   @NotNull(message = "page不能为空")
+   @Min(value = 1, message = "page不能小于1")
+   @Schema(description = "页数")
+   private Integer page;
+
+   @NotNull(message = "length不能为空")
+   @Range(min = 10, max = 50, message = "length必须在10~50之间")
+   @Schema(description = "每页记录数")
+   private Integer length;
+
+   @Pattern(regexp = "^[\\u4e00-\\u9fa5]{2,10}$", message = "name内容不正确")
+   @Schema(description = "姓名")
+   private String name;
+
+   @Pattern(regexp = "^1\\d{10}$", message = "tel内容不正确")
+   @Schema(description = "电话")
+   private String tel;
+
+   @Pattern(regexp = "^[1-9]\\d{5}(18|19|([23]\\d))\\d{2}((0[1-9])|(10|11|12))(([0-2][1-9])|10|20|30|31)\\d{3}[0-9Xx]$", message = "pid内容不正确")
+   @Schema(description = "身份证")
+   private String pid;
+
+   @Pattern(regexp = "^男$|^女$", message = "sex内容不正确")
+   @Schema(description = "性别")
+   private String sex;
+
+   @Range(min = 1, max = 3, message = "realAuth范围不对")
+   @Schema(description = "实名认证")
+   private Byte realAuth;
+
+   @Range(min = 1, max = 3, message = "status范围不对")
+   @Schema(description = "状态")
+   private Byte status;
+}
+
+@PostMapping("/searchDriverByPage")
+@Operation(summary = "查询司机分页记录")
+public R searchDriverByPage(@RequestBody @Valid SearchDriverByPageForm form){
+     Map param = BeanUtil.beanToMap(form);
+     int page = form.getPage();
+     int length = form.getLength();
+     int start = (page-1)*length;
+     param.put("start", start);
+     PageUtils pageUtils = driverService.searchDriverByPage(param);
+     return R.ok().put("result", pageUtils);
+}
+```
+2. 写 hxds-mis-api/src/main/controller/form/SearchDriverByPageForm
+   写 feign/DrServiceApi#searchDriverByPage
+   写 service/DriverService#searchDriverByPage 及其实现类
+   写 controller/DriverController#searchDriverByPage
+   修改数据表 tb_user 的 username:admin,password:e523a41fc563203575d9b07be9c84872。运行 hxds-mis-vue，账号：admin,密码：abc123456 登陆
+```java
+@Data
+@Schema(description = "查询司机分页记录的表单")
+public class SearchDriverByPageForm {
+
+   @NotNull(message = "page不能为空")
+   @Min(value = 1, message = "page不能小于1")
+   @Schema(description = "页数")
+   private Integer page;
+
+   @NotNull(message = "length不能为空")
+   @Range(min = 10, max = 50, message = "length必须在10~50之间")
+   @Schema(description = "每页记录数")
+   private Integer length;
+
+   @Pattern(regexp = "^[\\u4e00-\\u9fa5]{2,10}$", message = "name内容不正确")
+   @Schema(description = "姓名")
+   private String name;
+
+   @Pattern(regexp = "^1\\d{10}$", message = "tel内容不正确")
+   @Schema(description = "电话")
+   private String tel;
+
+   @Pattern(regexp = "^[1-9]\\d{5}(18|19|([23]\\d))\\d{2}((0[1-9])|(10|11|12))(([0-2][1-9])|10|20|30|31)\\d{3}[0-9Xx]$", message = "pid内容不正确")
+   @Schema(description = "身份证")
+   private String pid;
+
+   @Pattern(regexp = "^男$|^女$", message = "sex内容不正确")
+   @Schema(description = "性别")
+   private String sex;
+
+   @Range(min = 1, max = 3, message = "realAuth范围不对")
+   @Schema(description = "实名认证")
+   private Byte realAuth;
+
+   @Range(min = 1, max = 3, message = "status范围不对")
+   @Schema(description = "状态")
+   private Byte status;
+}
+
+@PostMapping("/driver/searchDriverByPage")
+public R searchDriverByPage(SearchDriverByPageForm form);
+
+public PageUtils searchDriverByPage(SearchDriverByPageForm form);
+
+@Override
+public PageUtils searchDriverByPage(SearchDriverByPageForm form) {
+   R r = drServiceApi.searchDriverByPage(form);
+   PageUtils pageUtils = BeanUtil.toBean(r.get("result"), PageUtils.class);
+   return pageUtils;
+}
+
+@PostMapping("/searchDriverByPage")
+@SaCheckPermission(value = {"ROOT", "DRIVER:SELECT"}, mode = SaMode.OR)
+@Operation(summary = "查询司机分页记录")
+public R searchDriverByPage(@RequestBody @Valid SearchDriverByPageForm form) {
+   PageUtils pageUtils = driverService.searchDriverByPage(form);
+   return R.ok().put("result", pageUtils);
+}
+```
+3. 写 hxds-mis-vue/src/views/driver.vue
+   写 hxds-mis-vue/main.js 定义全局 URL 路径
+```vue
+  methods: {
+    loadDataList: function() {
+      let that = this;
+      that.dataListLoading = true;
+      let data = {
+        page: that.pageIndex,
+        length: that.pageSize,
+        name: that.dataForm.name == '' ? null : that.dataForm.name,
+        sex: that.dataForm.sex == '' ? null : that.dataForm.sex,
+        tel: that.dataForm.tel == '' ? null : that.dataForm.tel,
+        pid: that.dataForm.pid == '' ? null : that.dataForm.pid,
+        realAuth: that.dataForm.realAuth == '' ? null : that.dataForm.realAuth,
+        status: that.dataForm.status == '' ? null : that.dataForm.status
+      };
+      that.$http('driver/searchDriverByPage', 'POST', data, true, function(resp) {
+        let result = resp.result;
+        let list = result.list;
+        let status = {
+          '1': '正常',
+          '2': '禁用',
+          '3': '降低接单'
+        };
+        let realAuth = {
+          '1': '未认证',
+          '2': '已认证',
+          '3': '审核中'
+        };
+        for (let one of list) {
+          one.status = status[one.status + ''];
+          one.realAuth = realAuth[one.realAuth + ''];
+        }
+        that.dataList = list;
+        that.totalCount = Number(result.totalCount);
+        that.dataListLoading = false;
+      });
+    },
+    sizeChangeHandle: function(val) {
+      this.pageSize = val;
+      this.pageIndex = 1;
+      this.loadDataList();
+    },
+    currentChangeHandle: function(val) {
+      this.pageIndex = val;
+      this.loadDataList();
+    },
+    searchHandle: function() {
+      this.$refs['dataForm'].validate(valid => {
+        if (valid) {
+          this.$refs['dataForm'].clearValidate();
+          this.loadDataList();
+        } else {
+          return false;
+        }
+      });
+    },
+    expand: function(row, expandedRows){
+      let that=this
+      that.expands=[]
+      if(expandedRows.length>0){
+        if(row){
+          if(row.realAuth=="未认证"){
+            return
+          }
+          that.expands.push(row.id)
+          let data={
+            realAuth:row.realAuth=="已认证"?2:3,
+            driverId:row.id
+          }
+          that.$http("driver/searchDriverComprehensiveData","POST",data,false,function(resp){
+            let summaryMap=resp.result.summaryMap
+            that.content.year=summaryMap.year
+            that.content.birthday = summaryMap.birthday;
+            that.content.email = summaryMap.email;
+            that.content.mailAddress = summaryMap.mailAddress;
+            that.content.idcardAddress = summaryMap.idcardAddress;
+            that.content.idcardFront = summaryMap.idcardFront;
+            that.content.idcardFrontList = [summaryMap.idcardFront];
+            that.content.idcardBack = summaryMap.idcardBack;
+            that.content.idcardBackList = [summaryMap.idcardBack];
+            that.content.idcardHolding = summaryMap.idcardHolding;
+            that.content.idcardHoldingList = [summaryMap.idcardHolding];
+            that.content.drcardFront = summaryMap.drcardFront;
+            that.content.drcardFrontList = [summaryMap.drcardFront];
+            that.content.drcardBack = summaryMap.drcardBack;
+            that.content.drcardBackList = [summaryMap.drcardBack];
+            that.content.drcardHolding = summaryMap.drcardHolding;
+            that.content.drcardHoldingList = [summaryMap.drcardHolding];
+          })
+        }
+      }
+    },
+    showApproveModel:function(id){
+      this.approveModelVisible=true
+      this.driverId=id
+    },
+    approveHandle:function(bool){
+      let that=this
+      let data={
+        realAuth:(bool==true)?2:1,
+        driverId:that.driverId
+      }
+      that.$http('driver/updateDriverRealAuth','POST',data,true,function(resp){
+        if(resp.rows==1){
+          that.approveModelVisible=false
+          that.$message.success('数据更新成功');
+          that.expands=[]
+          that.loadDataList()
+        }
+      })
+    },
+    showRepealModel:function(id){
+      this.repealModelVisible=true
+      this.driverId=id
+    },
+    repealHandle:function(){
+      let that=this
+      let data={
+        realAuth:3,
+        driverId:that.driverId
+      }
+      that.$http('driver/updateDriverRealAuth','POST',data,true,function(resp){
+        if(resp.rows==1){
+          that.repealModelVisible=false
+          that.$message.success('撤销审批成功');
+          that.expands=[]
+          that.loadDataList()
+        }
+      })
+    }
+  },
+  created: function() {
+    this.loadDataList();
+  }
+
+
+let baseUrl = "http://127.0.0.1:8201/hxds-mis-api/"
+```

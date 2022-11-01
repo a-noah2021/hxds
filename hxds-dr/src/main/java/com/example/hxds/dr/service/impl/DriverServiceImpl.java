@@ -7,6 +7,7 @@ import cn.hutool.json.JSONUtil;
 import com.codingapi.txlcn.tc.annotation.LcnTransaction;
 import com.example.hxds.common.exception.HxdsException;
 import com.example.hxds.common.util.MicroAppUtil;
+import com.example.hxds.common.util.PageUtils;
 import com.example.hxds.dr.db.dao.DriverDao;
 import com.example.hxds.dr.db.dao.DriverSettingsDao;
 import com.example.hxds.dr.db.dao.WalletDao;
@@ -150,7 +151,6 @@ public class DriverServiceImpl implements DriverService {
      * 每天司机第一次接单时用当前微信用户登陆，同时判断是否人脸识别认证和当前手机号是否与注册手机号不一致 TODO:desc可能不对
      *
      * @param code
-     * @param phoneCode
      * @return
      */
     @Override
@@ -174,6 +174,21 @@ public class DriverServiceImpl implements DriverService {
         JSONObject summary = JSONUtil.parseObj(MapUtil.getStr(result, "summary")); //将摘要信息转换成JSON对象
         result.replace("summary", summary);
         return result;
+    }
+
+    @Override
+    public PageUtils searchDriverByPage(Map param) {
+        long count = driverDao.searchDriverCount(param);
+        ArrayList<HashMap> list = null;
+        if(count == 0){
+            list = new ArrayList<>();
+        }else{
+            list = driverDao.searchDriverByPage(param);
+        }
+        Integer start = (Integer) param.get("start");
+        Integer length = (Integer) param.get("length");
+        PageUtils pageUtils = new PageUtils(list, count, start, length);
+        return pageUtils;
     }
 
 }
