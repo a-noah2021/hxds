@@ -146,4 +146,44 @@
             AND `status` = #{status}
         </if>
     </select>
+    <select id="searchDriverAuth" parameterType="long" resultType="HashMap">
+        SELECT IFNULL(`name`, '')            AS `name`,
+               IFNULL(sex, '')               AS sex,
+               IFNULL(pid, '')               AS pid,
+               IFNULL(birthday, '')          AS birthday,
+               IFNULL(tel, '')               AS tel,
+               IFNULL(mail_address, '')      AS mailAddress,
+               IFNULL(contact_name, '')      AS contactName,
+               IFNULL(contact_tel, '')       AS contactTel,
+               IFNULL(email, '')             AS email,
+               IFNULL(real_auth, '')         AS realAuth,
+               IFNULL(idcard_address, '')    AS idcardAddress,
+               IFNULL(idcard_expiration, '') AS idcardExpiration,
+               IFNULL(idcard_front, '')      AS idcardFront,
+               IFNULL(idcard_back, '')       AS idcardBack,
+               IFNULL(idcard_holding, '')    AS idcardHolding,
+               IFNULL(drcard_type, '')       AS drcardType,
+               IFNULL(drcard_expiration, '') AS drcardExpiration,
+               IFNULL(drcard_issue_date, '') AS drcardIssueDate,
+               IFNULL(drcard_front, '')      AS drcardFront,
+               IFNULL(drcard_back, '')       AS drcardBack,
+               IFNULL(drcard_holding, '')    AS drcardHolding
+        FROM tb_driver
+        WHERE id = #{driverId}
+    </select>
+    <select id="searchDriverRealSummary" parameterType="long" resultType="HashMap">
+        SELECT timestampdiff(YEAR,drcard_issue_date, NOW()) AS `year`,
+               birthday,
+               email,
+               mail_address                                 AS mailAddress,
+               idcard_address                               AS idcardAddress,
+               idcard_front                                 AS idcardFront,
+               idcard_back                                  AS idcardBack,
+               idcard_holding                               AS idcardHolding,
+               drcard_front                                 AS drcardFront,
+               drcard_back                                  AS drcardBack,
+               drcard_holding                               AS drcardHolding
+        FROM tb_driver
+        WHERE id = #{driverId}
+    </select>
 </mapper>

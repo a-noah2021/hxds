@@ -2192,3 +2192,373 @@ public R searchDriverByPage(@RequestBody @Valid SearchDriverByPageForm form) {
 
 let baseUrl = "http://127.0.0.1:8201/hxds-mis-api/"
 ```
+### 司机微服务修改司机个人信息
+1. 写 hxds-dr/src/main/resource/mapper/DriverDao.xml#searchDriverAuth 及其对应接口
+   写 service/DriverService#searchDriverAuth 及其实现类
+   写 controller/form/SearchDriverAuthForm
+   写 controller/DriverController#searchDriverAuth
+```java
+<select id="searchDriverAuth" parameterType="long" resultType="HashMap">
+  SELECT IFNULL(`name`, '')            AS `name`,
+         IFNULL(sex, '')               AS sex,
+         IFNULL(pid, '')               AS pid,
+         IFNULL(birthday, '')          AS birthday,
+         IFNULL(tel, '')               AS tel,
+         IFNULL(mail_address, '')      AS mailAddress,
+         IFNULL(contact_name, '')      AS contactName,
+         IFNULL(contact_tel, '')       AS contactTel,
+         IFNULL(email, '')             AS email,
+         IFNULL(real_auth, '')         AS realAuth,
+         IFNULL(idcard_address, '')    AS idcardAddress,
+         IFNULL(idcard_expiration, '') AS idcardExpiration,
+         IFNULL(idcard_front, '')      AS idcardFront,
+         IFNULL(idcard_back, '')       AS idcardBack,
+         IFNULL(idcard_holding, '')    AS idcardHolding,
+         IFNULL(drcard_type, '')       AS drcardType,
+         IFNULL(drcard_expiration, '') AS drcardExpiration,
+         IFNULL(drcard_issue_date, '') AS drcardIssueDate,
+         IFNULL(drcard_front, '')      AS drcardFront,
+         IFNULL(drcard_back, '')       AS drcardBack,
+         IFNULL(drcard_holding, '')    AS drcardHolding
+  FROM tb_driver
+  WHERE id = #{driverId}
+</select>
+
+HashMap searchDriverAuth(long driverId);
+
+HashMap searchDriverAuth(long driverId);
+
+@Override
+public HashMap searchDriverAuth(long driverId) {
+     HashMap map = driverDao.searchDriverAuth(driverId);
+     return map;
+}
+
+@Data
+@Schema(description = "查询司机认证信息表单")
+public class SearchDriverAuthForm {
+
+   @NotNull(message = "driverId不能为空")
+   @Min(value = 1, message = "driverId不能小于1")
+   @Schema(description = "司机ID")
+   private Long driverId;
+   
+}
+
+@PostMapping("/searchDriverAuth")
+@Operation(summary = "查询司机认证信息")
+public R searchDriverAuth(@RequestBody @Valid SearchDriverAuthForm form){
+   HashMap result =driverService.searchDriverAuth(form.getDriverId());
+   return R.ok().put("result", result);
+}
+```
+2. 写 bff-driver/src/main/controller/form/SearchDriverAuthForm
+   写 feign/OdrServiceApi#searchDriverAuth
+   写 service/DriverService#searchDriverAuth 及其实现类
+   写 controller/DriverController#searchDriverAuth
+```java
+@Data
+@Schema(description = "查询司机认证信息表单")
+public class SearchDriverAuthForm {
+
+   @NotNull(message = "driverId不能为空")
+   @Min(value = 1, message = "driverId不能小于1")
+   @Schema(description = "司机ID")
+   private Long driverId;
+}
+
+@PostMapping("/driver/searchDriverAuth")
+R searchDriverAuth(SearchDriverAuthForm form);
+
+HashMap searchDriverAuth(SearchDriverAuthForm form);
+
+@Override
+public HashMap searchDriverAuth(SearchDriverAuthForm form) {
+   R r = drServiceApi.searchDriverAuth(form);
+   HashMap map = (HashMap) r.get("result");
+   String idcardFront = MapUtil.getStr(map, "idcardFront");
+   String idcardBack = MapUtil.getStr(map, "idcardBack");
+   String idcardHolding = MapUtil.getStr(map, "idcardHolding");
+   String drcardFront = MapUtil.getStr(map, "drcardFront");
+   String drcardBack = MapUtil.getStr(map, "drcardBack");
+   String drcardHolding = MapUtil.getStr(map, "drcardHolding");
+
+   String idcardFrontUrl = idcardFront.length() > 0 ? cosUtil.getPrivateFileUrl(idcardFront) : "";
+   String idcardBackUrl = idcardBack.length() > 0 ? cosUtil.getPrivateFileUrl(idcardBack) : "";
+   String idcardHoldingUrl = idcardHolding.length() > 0 ? cosUtil.getPrivateFileUrl(idcardHolding) : "";
+   String drcardFrontUrl = drcardFront.length() > 0 ? cosUtil.getPrivateFileUrl(drcardFront) : "";
+   String drcardBackUrl = drcardBack.length() > 0 ? cosUtil.getPrivateFileUrl(drcardBack) : "";
+   String drcardHoldingUrl = drcardHolding.length() > 0 ? cosUtil.getPrivateFileUrl(drcardHolding) : "";
+
+   map.put("idcardFrontUrl", idcardFrontUrl);
+   map.put("idcardBackUrl", idcardBackUrl);
+   map.put("idcardHoldingUrl", idcardHoldingUrl);
+   map.put("drcardFrontUrl", drcardFrontUrl);
+   map.put("drcardBackUrl", drcardBackUrl);
+   map.put("drcardHoldingUrl", drcardHoldingUrl);
+   return map;
+}
+
+@GetMapping("/searchDriverAuth")
+@Operation(summary = "查询司机认证信息")
+@SaCheckLogin
+public R searchDriverAuth(){
+   long driverId = StpUtil.getLoginIdAsLong();
+   SearchDriverAuthForm form = new SearchDriverAuthForm();
+   form.setDriverId(driverId);
+   HashMap map = driverService.searchDriverAuth(form);
+   return R.ok().put("result",map);
+}
+```
+3. 写 hxds-driver-wx/identify/filling/filling.vue#onLoad
+   注意 hxds-driver-wx/pages/mine/mine.vue 奢姿点击事件跳转到 account.vue 页面( main.js 里封装了跳转语句)
+   注意 hxds-driver-wx/pages/user/account/account.vue 奢姿点击事件跳转到 filling.vue 页面( main.js 里封装了跳转语句)
+   写 hxds-driver-wx/main.js 定义全局 URL 路径
+   启动5个子系统后进行真机调试，依次进入：个人中心--账号与安全--统一实名认证，当 real_auth 为3时说明认证信息在审核中，不可修改；为2时说明已认证可以修改
+```vue
+	onLoad: function(options) {
+	    let that = this;
+	    that.mode = options.mode;
+	    if (uni.getStorageSync('realAuth') == 1) {
+	        uni.showModal({
+	            title: '提示信息',
+	            content: '新注册的代驾司机请填写实名认证信息，并且上传相关证件照片',
+	            showCancel: false
+	        });
+	    } else {
+	        that.ajax(that.url.searchDriverAuth, 'GET', null, function(resp) {
+	            let json = resp.data.result;
+	            that.idcard.pid = json.pid;
+	            that.idcard.name = json.name;
+	            that.idcard.sex = json.sex;
+	            that.idcard.birthday = json.birthday;
+	            that.idcard.address = json.idcardAddress;
+	            that.idcard.shortAddress = json.idcardAddress.substr(0, 15) + (json.idcardAddress.length > 15 ? '...' : '');
+	            that.idcard.expiration = json.idcardExpiration;
+	            that.idcard.idcardFront = json.idcardFront;
+	            if (json.idcardFrontUrl.length > 0) {
+	                that.cardBackground[0] = json.idcardFrontUrl;
+	            }
+	            that.idcard.idcardBack = json.idcardBack;
+	            if (json.idcardBackUrl.length > 0) {
+	                that.cardBackground[1] = json.idcardBackUrl;
+	            }
+	            that.idcard.idcardHolding = json.idcardHolding;
+	            if (json.idcardHoldingUrl.length > 0) {
+	                that.cardBackground[2] = json.idcardHoldingUrl;
+	            }
+	            that.contact.tel = json.tel;
+	            that.contact.email = json.email;
+	            that.contact.shortEmail = json.email.substr(0, 25) + (json.email.length > 25 ? '...' : '');
+	            that.contact.mailAddress = json.mailAddress;
+	            that.contact.shortMailAddress = json.mailAddress.substr(0, 15) + (json.mailAddress.length > 15 ? '...' : '');
+	            that.contact.contactName = json.contactName;
+	            that.contact.contactTel = json.contactTel;
+	            that.drcard.carClass = json.drcardType;
+	            that.drcard.validTo = json.drcardExpiration;
+	            that.drcard.issueDate = json.drcardIssueDate;
+	            that.drcard.drcardFront = json.drcardFront;
+	            if (json.drcardFrontUrl.length > 0) {
+	                that.cardBackground[3] = json.drcardFrontUrl;
+	            }
+	            that.drcard.drcardBack = json.drcardBack;
+	            if (json.drcardBackUrl.length > 0) {
+	                that.cardBackground[4] = json.drcardBackUrl;
+	            }
+	            that.drcard.drcardHolding = json.drcardHolding;
+	            if (json.drcardHoldingUrl.length > 0) {
+	                that.cardBackground[5] = json.drcardHoldingUrl;
+	            }
+	            if (that.idcard.idcardFront.length > 0) {
+	                that.cosImg.push(that.idcard.idcardFront);
+	                that.currentImg['idcardFront'] = that.idcard.idcardFront;
+	            }
+	            if (that.idcard.idcardBack.length > 0) {
+	                that.cosImg.push(that.idcard.idcardBack);
+	                that.currentImg['idcardBack'] = that.idcard.idcardBack;
+	            }
+	            if (that.idcard.idcardHolding.length > 0) {
+	                that.cosImg.push(that.idcard.idcardHolding);
+	                that.currentImg['idcardHolding'] = that.idcard.idcardHolding;
+	            }
+	            if (that.drcard.drcardFront.length > 0) {
+	                that.cosImg.push(that.drcard.drcardFront);
+	                that.currentImg['drcardFront'] = that.drcard.drcardFront;
+	            }
+	            if (that.drcard.drcardBack.length > 0) {
+	                that.cosImg.push(that.drcard.drcardBack);
+	                that.currentImg['drcardBack'] = that.drcard.drcardBack;
+	            }
+	            if (that.drcard.drcardHolding.length > 0) {
+	                that.cosImg.push(that.drcard.drcardHolding);
+	                that.currentImg['drcardHolding'] = that.drcard.drcardHolding;
+	            }
+	        });
+	    }
+	}
+
+searchDriverAuth: `${baseUrl}/driver/searchDriverAuth`,
+```
+### 司机微服务查询司机实名认证申请
+1. 写 hxds-dr/src/main/resource/mapper/DriverDao.xml#searchDriverRealSummary 及其对应接口
+   写 service/DriverService#searchDriverRealSummary 及其实现类
+   写 controller/form/SearchDriverRealSummaryForm
+   写 controller/DriverController#searchDriverRealSummary
+【拓展】timestampdiff(YEAR, drcard_issue_date, NOW())) 查询当前年与 drcard_issue_date 差的年份
+```java
+ <select id="searchDriverRealSummary" parameterType="long" resultType="HashMap">
+     SELECT timestampdiff(YEAR,drcard_issue_date, NOW()) AS `year`,
+            birthday,
+            email,
+            mail_address                                 AS mailAddress,
+            idcard_address                               AS idcardAddress,
+            idcard_front                                 AS idcardFront,
+            idcard_back                                  AS idcardBack,
+            idcard_holding                               AS idcardHolding,
+            drcard_front                                 AS drcardFront,
+            drcard_back                                  AS drcardBack,
+            drcard_holding                               AS drcardHolding
+     FROM tb_driver
+     WHERE id = #{driverId}
+ </select>
+
+HashMap searchDriverRealSummary(long driverId);
+
+HashMap searchDriverRealSummary(long driverId);
+
+@Override
+public HashMap searchDriverRealSummary(long driverId) {
+     HashMap map = driverDao.searchDriverRealSummary(driverId);
+     return map;
+}
+
+@Data
+@Schema(description = "查询司机")
+public class SearchDriverRealSummaryForm {
+   @NotNull(message = "driverId不能为空")
+   @Min(value = 1, message = "driverId不能小于1")
+   @Schema(description = "司机ID")
+   private Long driverId;
+}
+
+@PostMapping("/searchDriverRealSummary")
+@Operation(summary = "查询司机实名信息摘要")
+public R searchDriverRealSummary(@RequestBody @Valid SearchDriverRealSummaryForm form){
+     HashMap map = driverService.searchDriverRealSummary(form.getDriverId());
+     return R.ok().put("result", map);
+}
+```
+2. 写 hxds-mis-api/src/main/controller/form/SearchDriverRealSummaryForm & SearchDriverComprehensiveDataForm
+   写 feign/OdrServiceApi#searchDriverRealSummary
+   写 service/DriverService#searchDriverComprehensiveData 及其实现类
+   写 controller/DriverController#searchDriverComprehensiveData
+   启动 tm、dr、mis、gateway 四个子系统然后获取最新 token 进行调试
+```java
+@Data
+@Schema(description = "查询司机")
+public class SearchDriverRealSummaryForm {
+    @NotNull(message = "driverId不能为空")
+    @Min(value = 1, message = "driverId不能小于1")
+    @Schema(description = "司机ID")
+    private Long driverId;
+}
+
+@Data
+@Schema(description = "查询司机综合数据的表单")
+public class SearchDriverComprehensiveDataForm {
+   @NotNull(message = "realAuth不能为空")
+   @Range(min = 1, max = 3, message = "realAuth范围不正确")
+   @Schema(description = "是否已经实名认证")
+   private Byte realAuth;
+
+   @NotNull(message = "driverId不能为空")
+   @Min(value = 1, message = "driverId不能小于1")
+   @Schema(description = "司机ID")
+   private Long driverId;
+}
+
+@PostMapping("/driver/searchDriverRealSummary")
+R searchDriverRealSummary(SearchDriverRealSummaryForm form);
+
+HashMap searchDriverComprehensiveData(byte realAuth, Long driverId);
+
+public HashMap searchDriverComprehensiveData(byte realAuth, Long driverId) {
+   HashMap map = new HashMap();
+   if (realAuth == 2 || realAuth == 3) {
+      SearchDriverRealSummaryForm form_1 = new SearchDriverRealSummaryForm();
+      form_1.setDriverId(driverId);
+      R r = drServiceApi.searchDriverRealSummary(form_1);
+      HashMap summaryMap = (HashMap) r.get("result");
+
+      String idcardFront = MapUtil.getStr(summaryMap, "idcardFront");
+      String idcardBack = MapUtil.getStr(summaryMap, "idcardBack");
+      String idcardHolding = MapUtil.getStr(summaryMap, "idcardHolding");
+      String drcardFront = MapUtil.getStr(summaryMap, "drcardFront");
+      String drcardBack = MapUtil.getStr(summaryMap, "drcardBack");
+      String drcardHolding = MapUtil.getStr(summaryMap, "drcardHolding");
+      idcardFront = idcardFront.length() > 0 ? cosUtil.getPrivateFileUrl(idcardFront) : "";
+      idcardBack = idcardBack.length() > 0 ? cosUtil.getPrivateFileUrl(idcardBack) : "";
+      idcardHolding = idcardHolding.length() > 0 ? cosUtil.getPrivateFileUrl(idcardHolding) : "";
+      drcardFront = drcardFront.length() > 0 ? cosUtil.getPrivateFileUrl(drcardFront) : "";
+      drcardBack = drcardBack.length() > 0 ? cosUtil.getPrivateFileUrl(drcardBack) : "";
+      drcardHolding = drcardHolding.length() > 0 ? cosUtil.getPrivateFileUrl(drcardHolding) : "";
+      summaryMap.replace("idcardFront", idcardFront);
+      summaryMap.replace("idcardBack", idcardBack);
+      summaryMap.replace("idcardHolding", idcardHolding);
+      summaryMap.replace("drcardFront", drcardFront);
+      summaryMap.replace("drcardBack", drcardBack);
+      summaryMap.replace("drcardHolding", drcardHolding);
+      map.put("summaryMap", summaryMap);
+
+      //TODO 这里以后还有很多要写的东西
+   }
+   return map;
+}
+
+@PostMapping("/searchDriverComprehensiveData")
+@SaCheckPermission(value = {"ROOT", "DRIVER:SELECT"}, mode = SaMode.OR)
+@Operation(summary = "查询司机综合数据")
+public R searchDriverComprehensiveData(@RequestBody @Valid SearchDriverComprehensiveDataForm form) {
+   HashMap map = driverService.searchDriverComprehensiveData(form.getRealAuth(), form.getDriverId());
+   return R.ok().put("result", map);
+}
+```
+3. 写 hxds-mis-vue/src/views/driver.vue#expand
+```vue
+ expand: function(row, expandedRows){
+   let that=this
+   that.expands=[]
+   if(expandedRows.length>0){
+     if(row){
+       if(row.realAuth=="未认证"){
+         return
+       }
+       that.expands.push(row.id)
+       let data={
+         realAuth:row.realAuth=="已认证"?2:3,
+         driverId:row.id
+       }
+       that.$http("driver/searchDriverComprehensiveData","POST",data,false,function(resp){
+         let summaryMap=resp.result.summaryMap
+         that.content.year=summaryMap.year
+         that.content.birthday = summaryMap.birthday;
+         that.content.email = summaryMap.email;
+         that.content.mailAddress = summaryMap.mailAddress;
+         that.content.idcardAddress = summaryMap.idcardAddress;
+         that.content.idcardFront = summaryMap.idcardFront;
+         that.content.idcardFrontList = [summaryMap.idcardFront];
+         that.content.idcardBack = summaryMap.idcardBack;
+         that.content.idcardBackList = [summaryMap.idcardBack];
+         that.content.idcardHolding = summaryMap.idcardHolding;
+         that.content.idcardHoldingList = [summaryMap.idcardHolding];
+         that.content.drcardFront = summaryMap.drcardFront;
+         that.content.drcardFrontList = [summaryMap.drcardFront];
+         that.content.drcardBack = summaryMap.drcardBack;
+         that.content.drcardBackList = [summaryMap.drcardBack];
+         that.content.drcardHolding = summaryMap.drcardHolding;
+         that.content.drcardHoldingList = [summaryMap.drcardHolding];
+       })
+     }
+   }
+ },
+```

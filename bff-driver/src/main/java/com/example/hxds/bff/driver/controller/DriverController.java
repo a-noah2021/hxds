@@ -8,10 +8,7 @@ import com.example.hxds.bff.driver.service.DriverService;
 import com.example.hxds.common.util.R;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 import javax.annotation.Resource;
 import javax.validation.Valid;
@@ -94,4 +91,17 @@ public class DriverController {
         HashMap result = driverService.searchWorkbenchData(StpUtil.getLoginIdAsLong());
         return R.ok().put("result", result);
     }
+
+    @GetMapping("/searchDriverAuth")
+    @Operation(summary = "查询司机认证信息")
+    @SaCheckLogin
+    public R searchDriverAuth(){
+        long driverId = StpUtil.getLoginIdAsLong();
+        SearchDriverAuthForm form = new SearchDriverAuthForm();
+        form.setDriverId(driverId);
+        HashMap map = driverService.searchDriverAuth(form);
+        return R.ok().put("result", map);
+    }
+
+
 }

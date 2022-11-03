@@ -39,6 +39,10 @@ public interface DriverDao {
 
     long searchDriverCount(Map param);
 
+    HashMap searchDriverAuth(long driverId);
+
+    HashMap searchDriverRealSummary(long driverId);
+
 
 }
 

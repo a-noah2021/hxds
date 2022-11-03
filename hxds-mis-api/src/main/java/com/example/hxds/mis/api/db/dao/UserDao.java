@@ -8,37 +8,37 @@ import java.util.Map;
 import java.util.Set;
 
 public interface UserDao {
-    public Set<String> searchUserPermissions(int userId);
+    Set<String> searchUserPermissions(int userId);
 
-    public HashMap searchById(int userId);
+    HashMap searchById(int userId);
 
-    public HashMap searchUserSummary(int userId);
+    HashMap searchUserSummary(int userId);
 
-    public HashMap searchUserInfo(int userId);
+    HashMap searchUserInfo(int userId);
 
-    public Integer searchDeptManagerId(int id);
+    Integer searchDeptManagerId(int id);
 
-    public Integer searchGmId();
+    Integer searchGmId();
 
-    public ArrayList<HashMap> searchAllUser();
+    ArrayList<HashMap> searchAllUser();
 
-    public Integer login(Map param);
+    Integer login(Map param);
 
-    public int updatePassword(Map param);
+    int updatePassword(Map param);
 
-    public ArrayList<HashMap> searchUserByPage(Map param);
+    ArrayList<HashMap> searchUserByPage(Map param);
 
-    public long searchUserCount(Map param);
+    long searchUserCount(Map param);
 
-    public int insert(UserEntity user);
+    int insert(UserEntity user);
 
-    public int update(Map param);
+    int update(Map param);
 
-    public int deleteUserByIds(Integer[] ids);
+    int deleteUserByIds(Integer[] ids);
 
-    public ArrayList<String> searchUserRoles(int userId);
+    ArrayList<String> searchUserRoles(int userId);
 
-    public HashMap searchNameAndDept(int userId);
+    HashMap searchNameAndDept(int userId);
 }
 
 
