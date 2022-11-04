@@ -6,6 +6,7 @@ import com.example.hxds.common.util.PageUtils;
 import com.example.hxds.common.util.R;
 import com.example.hxds.mis.api.controller.form.SearchDriverByPageForm;
 import com.example.hxds.mis.api.controller.form.SearchDriverComprehensiveDataForm;
+import com.example.hxds.mis.api.controller.form.UpdateDriverRealAuthForm;
 import com.example.hxds.mis.api.service.DriverService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -48,4 +49,11 @@ public class DriverController {
         return R.ok().put("result", map);
     }
 
+    @PostMapping("/updateDriverRealAuth")
+    @SaCheckPermission(value = {"ROOT", "DRIVER:UPDATE"}, mode = SaMode.OR)
+    @Operation(summary = "更新司机实名认证状态")
+    public R updateDriverRealAuth(@RequestBody @Valid UpdateDriverRealAuthForm form) {
+        int rows = driverService.updateDriverRealAuth(form);
+        return R.ok().put("rows", rows);
+    }
 }

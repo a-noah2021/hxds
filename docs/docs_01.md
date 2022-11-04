@@ -2562,3 +2562,134 @@ public R searchDriverComprehensiveData(@RequestBody @Valid SearchDriverComprehen
    }
  },
 ```
+### 司机微服务更新司机备案状态
+1. 写 hxds-dr/src/main/resource/mapper/DriverDao.xml#updateDriverRealAuth 及其对应接口
+   写 service/DriverService#updateDriverRealAuth 及其实现类
+   写 controller/form/UpdateDriverRealAuthForm
+   写 controller/DriverController#updateDriverRealAuth
+```java
+ <update id="updateDriverRealAuth" parameterType="Map">
+     UPDATE tb_driver
+     SET real_auth = #{realAuth}
+     WHERE id = #{driverId}
+ </update>
+
+int updateDriverRealAuth(Map param);
+
+int updateDriverRealAuth(Map param);
+
+@Override
+@LcnTransaction
+@Transactional
+public int updateDriverRealAuth(Map param) {
+     int rows = driverDao.updateDriverRealAuth(param);
+     return rows;
+}
+
+@Data
+@Schema(description = "更新司机实名认证状态的表单")
+public class UpdateDriverRealAuthForm {
+   @NotNull(message = "driverId不能为空")
+   @Min(value = 1, message = "driverId不能小于1")
+   @Schema(description = "司机ID")
+   private Long driverId;
+
+   @NotNull(message = "realAuth不能为空")
+   @Range(min = 1, max = 3, message = "realAuth范围不正确")
+   @Schema(description = "实名认证状态")
+   private Byte realAuth;
+}
+
+@PostMapping("/updateDriverRealAuth")
+@Operation(summary = "更新司机实名认证状态")
+public R updateDriverRealAuth(@RequestBody @Valid UpdateDriverRealAuthForm form){
+     int rows = driverService.updateDriverRealAuth(BeanUtil.beanToMap(form));
+     return R.ok().put("rows", rows);
+}
+```
+2. 写 hxds-mis-api/src/main/controller/form/UpdateDriverRealAuthForm
+   写 feign/OdrServiceApi#updateDriverRealAuth
+   写 service/DriverService#updateDriverRealAuth 及其实现类
+   写 controller/DriverController#updateDriverRealAuth
+   启动 tm、dr、mis、gateway 四个子系统然后获取最新 token 进行调试
+```java
+@Data
+@Schema(description = "更新司机实名认证状态的表单")
+public class UpdateDriverRealAuthForm {
+   @NotNull(message = "driverId不能为空")
+   @Min(value = 1, message = "driverId不能小于1")
+   @Schema(description = "司机ID")
+   private Long driverId;
+
+   @NotNull(message = "realAuth不能为空")
+   @Range(min = 1, max = 3, message = "realAuth范围不正确")
+   @Schema(description = "实名认证状态")
+   private Byte realAuth;
+}
+
+@PostMapping("/driver/updateDriverRealAuth")
+public R updateDriverRealAuth(UpdateDriverRealAuthForm form);
+
+int updateDriverRealAuth(UpdateDriverRealAuthForm form);
+
+@Override
+@Transactional
+@LcnTransaction
+public int updateDriverRealAuth(UpdateDriverRealAuthForm form) {
+   R r = drServiceApi.updateDriverRealAuth(form);
+   int rows = MapUtil.getInt(r, "rows");
+   //TODO 调用消息子系统发送消息
+   return rows;
+}
+
+@PostMapping("/updateDriverRealAuth")
+@SaCheckPermission(value = {"ROOT", "DRIVER:UPDATE"}, mode = SaMode.OR)
+@Operation(summary = "更新司机实名认证状态")
+public R updateDriverRealAuth(@RequestBody @Valid UpdateDriverRealAuthForm form) {
+   int rows = driverService.updateDriverRealAuth(form);
+   return R.ok().put("rows", rows);
+}
+```
+3. 写 hxds-mis-vue/src/views/driver.vue#approveHandle & repealHandle 即 审批认证/撤销认证
+```vue
+showApproveModel:function(id){
+   this.approveModelVisible=true
+   this.driverId=id
+},
+approveHandle:function(bool){
+   let that=this
+   let data={
+       realAuth:(bool==true)?2:1,
+       driverId:that.driverId
+   }
+   that.$http('driver/updateDriverRealAuth','POST',data,true,function(resp){
+       if(resp.rows==1){
+           that.approveModelVisible=false
+           that.$message.success('数据更新成功');
+           that.expands=[]
+           that.loadDataList()
+       }
+   })
+},
+showRepealModel:function(id){
+   this.repealModelVisible=true
+   this.driverId=id
+},
+repealHandle:function(){
+   let that=this
+   let data={
+       realAuth:3,
+       driverId:that.driverId
+   }
+   that.$http('driver/updateDriverRealAuth','POST',data,true,function(resp){
+       if(resp.rows==1){
+           that.repealModelVisible=false
+           that.$message.success('撤销审批成功');
+           that.expands=[]
+           that.loadDataList()
+       }
+   })
+}
+```
+## 乘客下单与司机抢单
+### 开通腾讯位置服务，封装腾讯地图服务

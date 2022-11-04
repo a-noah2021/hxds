@@ -93,6 +93,11 @@ public class DriverController {
         return R.ok().put("result", map);
     }
 
-
+    @PostMapping("/updateDriverRealAuth")
+    @Operation(summary = "更新司机实名认证状态")
+    public R updateDriverRealAuth(@RequestBody @Valid UpdateDriverRealAuthForm form){
+        int rows = driverService.updateDriverRealAuth(BeanUtil.beanToMap(form));
+        return R.ok().put("rows", rows);
+    }
 
 }

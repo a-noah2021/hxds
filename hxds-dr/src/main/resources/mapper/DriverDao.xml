@@ -186,4 +186,9 @@
         FROM tb_driver
         WHERE id = #{driverId}
     </select>
+    <update id="updateDriverRealAuth" parameterType="Map">
+        UPDATE tb_driver
+        SET real_auth = #{realAuth}
+        WHERE id = #{driverId}
+    </update>
 </mapper>

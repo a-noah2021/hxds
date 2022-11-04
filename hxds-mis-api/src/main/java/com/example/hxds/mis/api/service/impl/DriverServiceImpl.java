@@ -7,6 +7,7 @@ import com.example.hxds.common.util.PageUtils;
 import com.example.hxds.common.util.R;
 import com.example.hxds.mis.api.controller.form.SearchDriverByPageForm;
 import com.example.hxds.mis.api.controller.form.SearchDriverRealSummaryForm;
+import com.example.hxds.mis.api.controller.form.UpdateDriverRealAuthForm;
 import com.example.hxds.mis.api.feign.DrServiceApi;
 import com.example.hxds.mis.api.service.DriverService;
 import org.springframework.stereotype.Service;
@@ -67,5 +68,13 @@ public class DriverServiceImpl implements DriverService {
             //TODO 这里以后还有很多要写的东西
         }
         return map;
+    }
+
+    @Override
+    public int updateDriverRealAuth(UpdateDriverRealAuthForm form) {
+        R r = drServiceApi.updateDriverRealAuth(form);
+        int rows = MapUtil.getInt(r, "rows");
+        //TODO 调用消息子系统发送消息
+        return rows;
     }
 }

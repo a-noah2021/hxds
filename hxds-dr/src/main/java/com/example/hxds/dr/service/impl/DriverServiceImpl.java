@@ -203,4 +203,12 @@ public class DriverServiceImpl implements DriverService {
         return map;
     }
 
+    @Override
+    @LcnTransaction
+    @Transactional
+    public int updateDriverRealAuth(Map param) {
+        int rows = driverDao.updateDriverRealAuth(param);
+        return rows;
+    }
+
 }
