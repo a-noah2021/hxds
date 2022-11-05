@@ -2404,7 +2404,7 @@ searchDriverAuth: `${baseUrl}/driver/searchDriverAuth`,
    写 service/DriverService#searchDriverRealSummary 及其实现类
    写 controller/form/SearchDriverRealSummaryForm
    写 controller/DriverController#searchDriverRealSummary
-【拓展】timestampdiff(YEAR, drcard_issue_date, NOW())) 查询当前年与 drcard_issue_date 差的年份
+   【拓展】timestampdiff(YEAR, drcard_issue_date, NOW())) 查询当前年与 drcard_issue_date 差的年份
 ```java
  <select id="searchDriverRealSummary" parameterType="long" resultType="HashMap">
      SELECT timestampdiff(YEAR,drcard_issue_date, NOW()) AS `year`,
@@ -2693,3 +2693,8 @@ repealHandle:function(){
 ```
 ## 乘客下单与司机抢单
 ### 开通腾讯位置服务，封装腾讯地图服务
+
+进入[腾讯位置服务官网](https://lbs.qq.com/)，注册登录后创建应用、Key。创建 Key 时要选择 WebServiceAPI--白名单、微信小程序，并填写自己的小程序 APP ID。菜单的 开发文档 里有多端的接入教程。创建完成后将得到的 Key 填写进 hxds/common/src/main/resources/application-common.yml
+
+#### 封装预估里程和时间
+

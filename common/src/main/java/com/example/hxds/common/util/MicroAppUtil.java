@@ -8,6 +8,7 @@ import cn.hutool.json.JSONUtil;
 import com.example.hxds.common.exception.HxdsException;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
+
 import java.util.HashMap;
 
 @Component("MicroAppUtil")
@@ -52,6 +53,7 @@ public class MicroAppUtil {
         }
     }
 
+    // 此接口已废弃
     public String getTel(String phoneCode) {
         String accessToken = getAccessToken();
         String url = "https://api.weixin.qq.com/wxa/business/getuserphonenumber?access_token=" + accessToken;
@@ -62,7 +64,6 @@ public class MicroAppUtil {
         HttpResponse response = post.execute();
         JSONObject json = JSONUtil.parseObj(response.body());
         if (json.containsKey("phone_info")) {
-            //TODO: 司机端登陆抛异常
             String tel = json.getJSONObject("phone_info").getStr("phoneNumber");
 //            String tel = json.getJSONObject("phone_info").getStr("purePhoneNumber");
             return tel;
