@@ -1987,7 +1987,7 @@ public R searchDriverByPage(@RequestBody @Valid SearchDriverByPageForm form){
      return R.ok().put("result", pageUtils);
 }
 ```
-2. 写 hxds-mis-api/src/main/controller/form/SearchDriverByPageForm
+2. 写 hxds-mis-api/src/main/java/com/example/hxds/mis/api/controller/form/SearchDriverByPageForm
    写 feign/DrServiceApi#searchDriverByPage
    写 service/DriverService#searchDriverByPage 及其实现类
    写 controller/DriverController#searchDriverByPage
@@ -2448,7 +2448,7 @@ public R searchDriverRealSummary(@RequestBody @Valid SearchDriverRealSummaryForm
      return R.ok().put("result", map);
 }
 ```
-2. 写 hxds-mis-api/src/main/controller/form/SearchDriverRealSummaryForm & SearchDriverComprehensiveDataForm
+2. 写 hxds-mis-api/src/main/java/com/example/hxds/mis/api/controller/form/SearchDriverRealSummaryForm & SearchDriverComprehensiveDataForm
    写 feign/OdrServiceApi#searchDriverRealSummary
    写 service/DriverService#searchDriverComprehensiveData 及其实现类
    写 controller/DriverController#searchDriverComprehensiveData
@@ -2607,7 +2607,7 @@ public R updateDriverRealAuth(@RequestBody @Valid UpdateDriverRealAuthForm form)
      return R.ok().put("rows", rows);
 }
 ```
-2. 写 hxds-mis-api/src/main/controller/form/UpdateDriverRealAuthForm
+2. 写 hxds-mis-api/src/main/java/com/example/hxds/mis/api/controller/form/UpdateDriverRealAuthForm
    写 feign/OdrServiceApi#updateDriverRealAuth
    写 service/DriverService#updateDriverRealAuth 及其实现类
    写 controller/DriverController#updateDriverRealAuth
@@ -2694,7 +2694,335 @@ repealHandle:function(){
 ## 乘客下单与司机抢单
 ### 开通腾讯位置服务，封装腾讯地图服务
 
-进入[腾讯位置服务官网](https://lbs.qq.com/)，注册登录后创建应用、Key。创建 Key 时要选择 WebServiceAPI--白名单、微信小程序，并填写自己的小程序 APP ID。菜单的 开发文档 里有多端的接入教程。创建完成后将得到的 Key 填写进 hxds/common/src/main/resources/application-common.yml
+进入[腾讯位置服务官网](https://lbs.qq.com/)，注册登录后创建应用、Key。
+创建 Key 时要选择 WebServiceAPI--白名单、微信小程序，并填写自己的小程序 APP ID。菜单的 开发文档 里有多端的接入教程。
+创建完成后将得到的 Key 填写进 hxds/common/src/main/resources/application-common.yml
 
 #### 封装预估里程和时间
+1. 腾讯位置服务[距离矩阵文档](https://lbs.qq.com/service/webService/webServiceGuide/webServiceMatrix)
+   写 hxds-mps/src/main/java/com/example/hxds/mps/service/MapService#estimateOrderMileageAndMinute 及其实现类
+   写 controller/form/EstimateOrderMileageAndMinuteForm
+   写 controller/MapController#estimateOrderMileageAndMinute
+```java
+HashMap estimateOrderMileageAndMinute(String mode,String startPlaceLatitude,
+        String startPlaceLongitude,String endPlaceLatitude,String endPlaceLongitude);
 
+@Service
+public class MapServiceImpl implements MapService {
+
+   private String distanceUrl = "https://apis.map.qq.com/ws/distance/v1/matrix/";
+
+
+   private String directionUrl = "https://apis.map.qq.com/ws/direction/v1/driving/";
+
+   @Value("${tencent.map.key}")
+   private String key;
+
+   @Override
+   public HashMap estimateOrderMileageAndMinute(String mode,
+                                                String startPlaceLatitude,
+                                                String startPlaceLongitude,
+                                                String endPlaceLatitude,
+                                                String endPlaceLongitude) {
+      HttpRequest req = new HttpRequest(distanceUrl);
+      req.form("mode", mode);
+      req.form("from", startPlaceLatitude + "," + startPlaceLongitude);
+      req.form("to", endPlaceLatitude + "," + endPlaceLongitude);
+      req.form("key", key);
+      HttpResponse resp = req.execute();
+      JSONObject json = JSONUtil.parseObj(resp.body());
+      int status = json.getInt("status");
+      String message = json.getStr("message");
+      System.out.println(message);
+      if (status != 0) {
+         Console.log(message);
+         throw new HxdsException("预估里程异常：" + message);
+      }
+      JSONArray rows = json.getJSONObject("result").getJSONArray("rows");
+      JSONObject element = rows.get(0, JSONObject.class).getJSONArray("elements").get(0, JSONObject.class);
+      int distance = element.getInt("distance");
+      String mileage = new BigDecimal(distance).divide(new BigDecimal(1000)).toString();
+      int duration = element.getInt("duration");
+      String temp = new BigDecimal(duration).divide(new BigDecimal(60), 0, RoundingMode.CEILING).toString();
+      int minute = Integer.parseInt(temp);
+
+      HashMap map = new HashMap() {{
+         put("mileage", mileage);
+         put("minute", minute);
+      }};
+      return map;
+   }
+}
+
+@Data
+@Schema(description = "预估里程和时间的表单")
+public class EstimateOrderMileageAndMinuteForm {
+   @NotBlank(message = "mode不能为空")
+   @Pattern(regexp = "^driving$|^walking$|^bicycling$")
+   @Schema(description = "计算方式")
+   private String mode;
+
+   @NotBlank(message = "startPlaceLatitude不能为空")
+   @Pattern(regexp = "^(([1-8]\\d?)|([1-8]\\d))(\\.\\d{1,18})|90|0(\\.\\d{1,18})?$", message = "startPlaceLatitude内容不正确")
+   @Schema(description = "订单起点的纬度")
+   private String startPlaceLatitude;
+
+   @NotBlank(message = "startPlaceLongitude不能为空")
+   @Pattern(regexp = "^(([1-9]\\d?)|(1[0-7]\\d))(\\.\\d{1,18})|180|0(\\.\\d{1,18})?$", message = "startPlaceLongitude内容不正确")
+   @Schema(description = "订单起点的经度")
+   private String startPlaceLongitude;
+
+   @NotBlank(message = "endPlaceLatitude不能为空")
+   @Pattern(regexp = "^(([1-8]\\d?)|([1-8]\\d))(\\.\\d{1,18})|90|0(\\.\\d{1,18})?$", message = "endPlaceLatitude内容不正确")
+   @Schema(description = "订单终点的纬度")
+   private String endPlaceLatitude;
+
+   @NotBlank(message = "endPlaceLongitude不能为空")
+   @Pattern(regexp = "^(([1-9]\\d?)|(1[0-7]\\d))(\\.\\d{1,18})|180|0(\\.\\d{1,18})?$", message = "endPlaceLongitude内容不正确")
+   @Schema(description = "订单起点的经度")
+   private String endPlaceLongitude;
+}
+
+@RestController
+@RequestMapping("/map")
+@Tag(name = "MapController", description = "地图Web接口")
+public class MapController {
+   @Resource
+   private MapService mapService;
+
+   @PostMapping("/estimateOrderMileageAndMinute")
+   @Operation(summary = "估算里程和时间")
+   public R estimateOrderMileageAndMinute(@RequestBody @Valid EstimateOrderMileageAndMinuteForm form) {
+      HashMap map = mapService.estimateOrderMileageAndMinute(form.getMode(),
+              form.getStartPlaceLatitude(), form.getStartPlaceLongitude(),
+              form.getEndPlaceLatitude(), form.getEndPlaceLongitude());
+      return R.ok().put("result", map);
+   }
+}
+```
+2. 腾讯位置服务[路线规划文档](https://lbs.qq.com/service/webService/webServiceGuide/webServiceRoute)
+   写 hxds-mps/src/main/java/com/example/hxds/mps/service/MapService#calculateDriverLine 及其实现类
+   写 controller/form/CalculateDriverLineForm
+   写 controller/MapController#calculateDriverLine
+```java
+HashMap calculateDriveLine(String startPlaceLatitude,String startPlaceLongitude,
+                  String endPlaceLatitude,String endPlaceLongitude);
+
+public HashMap calculateDriveLine(String startPlaceLatitude,
+     String startPlaceLongitude,
+     String endPlaceLatitude,
+     String endPlaceLongitude) {
+     HttpRequest req = new HttpRequest(directionUrl);
+     req.form("from", startPlaceLatitude + "," + startPlaceLongitude);
+     req.form("to", endPlaceLatitude + "," + endPlaceLongitude);
+     req.form("key", key);
+   
+     HttpResponse resp = req.execute();
+     JSONObject json = JSONUtil.parseObj(resp.body());
+     int status = json.getInt("status");
+     if (status != 0) {
+     throw new HxdsException("执行异常");
+        }
+     JSONObject result = json.getJSONObject("result");
+     HashMap map = result.toBean(HashMap.class);
+     return map;
+}
+
+@Data
+@Schema(description = "计算行驶路线的表单")
+public class CalculateDriveLineForm {
+   @NotBlank(message = "startPlaceLatitude不能为空")
+   @Pattern(regexp = "^(([1-8]\\d?)|([1-8]\\d))(\\.\\d{1,18})|90|0(\\.\\d{1,18})?$", message = "startPlaceLatitude内容不正确")
+   @Schema(description = "订单起点的纬度")
+   private String startPlaceLatitude;
+
+   @NotBlank(message = "startPlaceLongitude不能为空")
+   @Pattern(regexp = "^(([1-9]\\d?)|(1[0-7]\\d))(\\.\\d{1,18})|180|0(\\.\\d{1,18})?$", message = "startPlaceLongitude内容不正确")
+   @Schema(description = "订单起点的经度")
+   private String startPlaceLongitude;
+
+   @NotBlank(message = "endPlaceLatitude不能为空")
+   @Pattern(regexp = "^(([1-8]\\d?)|([1-8]\\d))(\\.\\d{1,18})|90|0(\\.\\d{1,18})?$", message = "endPlaceLatitude内容不正确")
+   @Schema(description = "订单终点的纬度")
+   private String endPlaceLatitude;
+
+   @NotBlank(message = "endPlaceLongitude不能为空")
+   @Pattern(regexp = "^(([1-9]\\d?)|(1[0-7]\\d))(\\.\\d{1,18})|180|0(\\.\\d{1,18})?$", message = "endPlaceLongitude内容不正确")
+   @Schema(description = "订单起点的经度")
+   private String endPlaceLongitude;
+}
+
+@PostMapping("/calculateDriveLine")
+@Operation(summary = "计算行驶路线")
+public R calculateDriveLine(@RequestBody @Valid CalculateDriveLineForm form) {
+     HashMap map = mapService.calculateDriveLine(form.getStartPlaceLatitude(), form.getStartPlaceLongitude(),
+     form.getEndPlaceLatitude(), form.getEndPlaceLongitude());
+     return R.ok().put("result", map);
+}
+```
+3. 去腾讯地图[坐标拾取](https://lbs.qq.com/getPoint/)找两个点进行测试，比如
+```java
+/map/estimateOrderMileageAndMinute
+{
+   "mode": "driving",
+   "startPlaceLatitude": "40.007972",
+   "startPlaceLongitude": "116.551499",
+   "endPlaceLatitude": "39.992185",
+   "endPlaceLongitude": "116.484264"
+}
+```
+### 乘客端显示地图定位，地图选点设置起点和终点
+1. 配置腾讯位置密钥：在 hxds-customer-wx/main.js 文件中，定义腾讯位置服务的密钥，接入腾讯地图组件时需要用到
+   开启实时定位：把开启实时定位的代码写到 hxds-customer-wx/App.vue#onLaunch 函数里
+   捕获定位事件：写 hxds-customer-wx/pages/workbench/workbench.vue#onShow 捕获自定义事件
+   点击回位：写 hxds-customer-wx/pages/workbench/workbench.vue#returnLocationHandle 回归初始定位
+   选择起点和终点：写 hxds-customer-wx/pages/workbench/workbench.vue#chooseLocationHandle 实现地图选点
+   【拓展】小程序使用 startLocationUpdate 函数可以在使用过程中实时获取定位，挂到后台就不获取定位，相关文档 [传送门](https://developers.weixin.qq.com/miniprogram/dev/api/location/wx.startLocationUpdate.html)
+   而 startLocationUpdateBackground 和它正相反，这里我们不使用它就不详细介绍了
+   小程序启动后会运行 onLaunch 函数，之前用过的 onShow、onLoad 只针对的是小程序页面启动
+   把坐标转换成地址的操作叫"逆地址解析"，相关文档 [传送门](https://lbs.qq.com/miniProgram/jsSdk/jsSdkGuide/methodReverseGeocoder)
+```vue
+Vue.prototype.tencent = {
+   map: {
+      referer: "华夏代驾",
+      key: "FGRBZ-GS266-44VSO-ER7OG-IW5S7-ANB47"
+   }
+}
+
+onLaunch: function() {
+   //开启GPS后台刷新
+   wx.startLocationUpdate({
+      success(resp) {
+      console.log('开启定位成功');
+      },
+      fail(resp) {
+      console.log('开启定位失败');
+      }
+   });
+   //GPS定位变化就自动提交给后端
+   wx.onLocationChange(function(resp) {
+      let latitude = resp.latitude;
+      let longitude = resp.longitude;
+      let location = { latitude: latitude, longitude: longitude };
+      //触发自定义事件
+      uni.$emit('updateLocation', location);
+   });
+},
+
+<script>
+const chooseLocation = requirePlugin('chooseLocation');
+let QQMapWX = require('../../lib/qqmap-wx-jssdk.min.js');
+
+export default {
+   data() {
+      return {
+         from: {
+            address: '',
+            longitude: 0,
+            latitude: 0
+         },
+         to: {
+            address: '输入你的目的地',
+            longitude: 0,
+            latitude: 0
+         },
+         longitude: 116.397505,
+         latitude: 39.908675,
+         contentStyle: '',
+         windowHeight: 0,
+         map: null,
+         flag: null
+      };
+   },
+   methods: {
+      returnLocationHandle: function() {
+         this.map.moveToLocation();
+      },
+      chooseLocationHandle: function(flag) {
+         let that = this;
+         let key = that.tencent.map.key; //使用在腾讯位置服务申请的key
+         let referer = that.tencent.map.referer; //调用插件的app的名称
+         let latitude = that.latitude;
+         let longitude = that.longitude;
+         that.flag = flag;
+         let data = JSON.stringify({
+            latitude: latitude,
+            longitude: longitude
+         });
+         uni.navigateTo({
+            url: `plugin://chooseLocation/index?key=${key}&referer=${referer}&location=${data}`
+         });
+      },
+   },
+   onShow: function() {
+      let that = this;
+      that.map = uni.createMapContext('map');
+      let qqmapsdk = new QQMapWX({
+         key: that.tencent.map.key
+      });
+      //实时获取定位
+      uni.$on('updateLocation', function(location) {
+         //console.log(location);
+         //避免地图选点的内容被逆地址解析覆盖
+         if(that.flag!=null){
+            return
+         }
+         let latitude = location.latitude;
+         let longitude = location.longitude;
+         that.latitude = latitude;
+         that.longitude = longitude;
+         that.from.latitude = latitude;
+         that.from.longitude = longitude;
+         //把坐标解析成地址
+         qqmapsdk.reverseGeocoder({
+            location: {
+               latitude: latitude,
+               longitude: longitude
+            },
+            success: function(resp) {
+               //console.log(resp);
+               that.from.address = resp.result.address;
+            },
+            fail: function(error) {
+               console.log(error);
+            }
+         });
+      });
+      let location = chooseLocation.getLocation();
+      if (location != null) {
+         let place = location.name;
+         let latitude = location.latitude;
+         let longitude = location.longitude;
+         if (that.flag == 'from') {
+            that.from.address = place;
+            that.from.latitude = latitude;
+            that.from.longitude = longitude;
+         } else {
+            that.to.address = place;
+            that.to.latitude = latitude;
+            that.to.longitude = longitude;
+            uni.setStorageSync("from", that.from)
+            uni.setStorageSync("to", that.to)
+            uni.navigateTo({
+               url: `../create_order/create_order`
+            });
+         }
+      }
+   },
+   onHide: function() {
+      uni.$off('updateLocation');
+      chooseLocation.setLocation(null);
+   },
+   onLoad: function() {
+      let that = this;
+      let windowHeight = uni.getSystemInfoSync().windowHeight;
+      that.windowHeight = windowHeight;
+      that.contentStyle = `height:${that.windowHeight}px;`;
+   },
+   onUnload: function() {
+      chooseLocation.setLocation(null);
+   }
+};
+</script>
+```
+### 乘客端创建预览订单
