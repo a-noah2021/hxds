@@ -2698,7 +2698,7 @@ repealHandle:function(){
 创建 Key 时要选择 WebServiceAPI--白名单、微信小程序，并填写自己的小程序 APP ID。菜单的 开发文档 里有多端的接入教程。
 创建完成后将得到的 Key 填写进 hxds/common/src/main/resources/application-common.yml
 
-#### 封装预估里程和时间
+### 封装预估里程和时间
 1. 腾讯位置服务[距离矩阵文档](https://lbs.qq.com/service/webService/webServiceGuide/webServiceMatrix)
    写 hxds-mps/src/main/java/com/example/hxds/mps/service/MapService#estimateOrderMileageAndMinute 及其实现类
    写 controller/form/EstimateOrderMileageAndMinuteForm
@@ -2873,14 +2873,13 @@ public R calculateDriveLine(@RequestBody @Valid CalculateDriveLineForm form) {
 ```
 ### 乘客端显示地图定位，地图选点设置起点和终点
 1. 配置腾讯位置密钥：在 hxds-customer-wx/main.js 文件中，定义腾讯位置服务的密钥，接入腾讯地图组件时需要用到
-   开启实时定位：把开启实时定位的代码写到 hxds-customer-wx/App.vue#onLaunch 函数里
-   捕获定位事件：写 hxds-customer-wx/pages/workbench/workbench.vue#onShow 捕获自定义事件
-   点击回位：写 hxds-customer-wx/pages/workbench/workbench.vue#returnLocationHandle 回归初始定位
-   选择起点和终点：写 hxds-customer-wx/pages/workbench/workbench.vue#chooseLocationHandle 实现地图选点
-   【拓展】小程序使用 startLocationUpdate 函数可以在使用过程中实时获取定位，挂到后台就不获取定位，相关文档 [传送门](https://developers.weixin.qq.com/miniprogram/dev/api/location/wx.startLocationUpdate.html)
-   而 startLocationUpdateBackground 和它正相反，这里我们不使用它就不详细介绍了
-   小程序启动后会运行 onLaunch 函数，之前用过的 onShow、onLoad 只针对的是小程序页面启动
-   把坐标转换成地址的操作叫"逆地址解析"，相关文档 [传送门](https://lbs.qq.com/miniProgram/jsSdk/jsSdkGuide/methodReverseGeocoder)
+2. 开启实时定位：写 hxds-customer-wx/App.vue#onLaunch
+3. 捕获定位事件并携起/终点跳转 create_order 页面：写 hxds-customer-wx/pages/workbench/workbench.vue#onShow
+4. 点击回位：写 hxds-customer-wx/pages/workbench/workbench.vue#returnLocationHandle
+5. 选择起点和终点：写 hxds-customer-wx/pages/workbench/workbench.vue#chooseLocationHandle
+
+【拓展】小程序使用 startLocationUpdate 函数可以在使用过程中实时获取定位，挂到后台就不获取定位，相关文档 [传送门](https://developers.weixin.qq.com/miniprogram/dev/api/location/wx.startLocationUpdate.html)。而 startLocationUpdateBackground 和它正相反，这里我们不使用它就不详细介绍了小程序启动后会运行 onLaunch 函数，之前用过的 onShow、onLoad 只针对的是小程序页面启动把坐标转换成地址的操作叫"逆地址解析"，相关文档 [传送门](https://lbs.qq.com/miniProgram/jsSdk/jsSdkGuide/methodReverseGeocoder)
+
 ```vue
 Vue.prototype.tencent = {
    map: {
@@ -3001,6 +3000,7 @@ export default {
             that.to.address = place;
             that.to.latitude = latitude;
             that.to.longitude = longitude;
+            // 跳转到创建订单页面，这个属于下一小节的内容
             uni.setStorageSync("from", that.from)
             uni.setStorageSync("to", that.to)
             uni.navigateTo({
@@ -3015,6 +3015,7 @@ export default {
    },
    onLoad: function() {
       let that = this;
+      // 设置地图控件的高度适配屏幕高度
       let windowHeight = uni.getSystemInfoSync().windowHeight;
       that.windowHeight = windowHeight;
       that.contentStyle = `height:${that.windowHeight}px;`;
@@ -3026,3 +3027,100 @@ export default {
 </script>
 ```
 ### 乘客端创建预览订单
+
+1. 接收 URL 传递的参数：写 hxds-customer-wx/pages/create_order/create_order.vue#onLoad 
+2. 计算最佳线路，预估里程和时长：写 hxds-customer-wx/pages/create_order/create_order.vue#calculateLine 
+
+【拓展】vue 标签后面的属性：加冒号的说明后面的是一个变量或者表达式；没加冒号的后面就是对应的字符串字面量
+
+第二步的 API 文档 [传送门](https://lbs.qq.com/miniProgram/jsSdk/jsSdkGuide/methodDirection)
+
+```vue
+onLoad: function(options) {
+    let that = this;
+    //设置地图控件的高度适配屏幕高度
+    let windowHeight = uni.getSystemInfoSync().windowHeight;
+    that.windowHeight = windowHeight;
+    that.contentStyle = `height:${that.windowHeight}px;`;
+
+    that.from = uni.getStorageSync('from');
+    that.to = uni.getStorageSync('to');
+
+    qqmapsdk = new QQMapWX({
+        key: that.tencent.map.key
+    });
+    that.map = uni.createMapContext('map');
+
+    if (options.hasOwnProperty('showCar')) {
+        that.showCar = options.showCar;
+        that.carId = options.carId;
+        that.carPlate = options.carPlate;
+    }
+},
+
+calculateLine: function(ref) {
+    qqmapsdk.direction({
+        mode: 'driving',
+        from: {
+            latitude: ref.from.latitude,
+            longitude: ref.from.longitude
+        },
+        to: {
+            latitude: ref.to.latitude,
+            longitude: ref.to.longitude
+        },
+        success: function(resp) {
+            if (resp.status != 0) {
+                uni.showToast({
+                    icon: 'error',
+                    title: resp.message
+                });
+                return;
+            }
+            let route = resp.result.routes[0];
+            let distance = route.distance;
+            let duration = route.duration;
+            let polyline = route.polyline;
+            ref.distance = Math.ceil((distance / 1000) * 10) / 10;
+            ref.duration = duration;
+            let points = ref.formatPolyline(polyline);
+
+            ref.polyline = [{
+                points: points,
+                width: 6,
+                color: '#05B473',
+                arrowLine: true
+            }];
+            ref.markers = [{
+                id: 1,
+                latitude: ref.from.latitude,
+                longitude: ref.from.longitude,
+                width: 25,
+                height: 35,
+                anchor: {
+                    x: 0.5,
+                    y: 0.5
+                },
+                iconPath: 'https://mapapi.qq.com/web/lbs/javascriptGL/demo/img/start.png'
+            },
+            {
+                id: 2,
+                latitude: ref.to.latitude,
+                longitude: ref.to.longitude,
+                width: 25,
+                height: 35,
+                anchor: {
+                    x: 0.5,
+                    y: 0.5
+                },
+                iconPath: 'https://mapapi.qq.com/web/lbs/javascriptGL/demo/img/end.png'
+            }];
+        }
+    });
+},
+onShow: function() {
+    let that = this;
+    that.calculateLine(that);
+}
+```
+
