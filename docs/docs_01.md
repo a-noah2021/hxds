@@ -1163,9 +1163,11 @@ public R createDriverFaceModel(@RequestBody @Valid CreateDriverFaceModelForm for
    写 hxds-driver-wx/main.js 定义全局 URL 路径
    实现司机注册时必须的人脸识别认证。需要注意的一点是：腾讯云人脸识别-人员库的信息每人只能有一个，如果想重写注册不仅要删除 MySQL 还要删除人员库的数据
 
-【拓展】 1、小程序初始化完成后，页面首次加载触发 onLoad()，只会触发一次；而 onShow() 可以执行多次。
-				2、当小程序进入到后台(比如打电话去了)，先执行页面 onHide() 方法再执行应用 onHide() 方法。
-				3、当小程序从后台进入到前台，先执行应用 onShow() 方法再执行页面 onShow() 方法
+【拓展】 1、小程序初始化完成后，页面首次加载触发 onLoad，只会触发一次；而 onShow 可以执行多次。
+				2、当小程序进入到后台(比如打电话去了)，先执行页面 onHide 方法再执行应用 onHide 方法。
+				3、当小程序从后台进入到前台，先执行应用 onShow 方法再执行页面 onShow 方法
+
+![生命周期函数](https://s2.51cto.com/images/blog/202112/31150710_61ceac1e28f5e32514.png?x-oss-process=image/watermark,size_16,text_QDUxQ1RP5Y2a5a6i,color_FFFFFF,t_30,g_se,x_10,y_10,shadow_20,type_ZmFuZ3poZW5naGVpdGk=/format,webp/resize,m_fixed,w_1184)
 
 ```vue
 <!--face_camera.vue-->
@@ -2695,8 +2697,20 @@ repealHandle:function(){
 ### 开通腾讯位置服务，封装腾讯地图服务
 
 进入[腾讯位置服务官网](https://lbs.qq.com/)，注册登录后创建应用、Key。
-创建 Key 时要选择 WebServiceAPI--白名单、微信小程序，并填写自己的小程序 APP ID。菜单的 开发文档 里有多端的接入教程。
+创建 Key 时要选择 WebServiceAPI--白名单、微信小程序，并填写自己的小程序 APP ID，菜单的 开发文档 里有多端的接入教程。
 创建完成后将得到的 Key 填写进 hxds/common/src/main/resources/application-common.yml
+
+详细接入流程：
+
+1. 申请开发者密钥 ( key ) ：[申请密钥](https://lbs.qq.com/dev/console/application/mine)
+
+2. 开通webserviceAPI服务：控制台 -> 应用管理 -> [我的应用](https://lbs.qq.com/dev/console/key/manage) -> 添加key -> 勾选 WebServiceAPI -> 保存
+
+   ( 小程序SDK需要用到 webserviceAPI 的部分服务，所以使用该功能的KEY需要具备相应的权限 )
+
+3. 下载微信小程序 JavaScriptSDK，微信小程序 [JavaScriptSDK v1.1](https://mapapi.qq.com/web/miniprogram/JSSDK/qqmap-wx-jssdk1.1.zip)、[JavaScriptSDK v1.2](https://mapapi.qq.com/web/miniprogram/JSSDK/qqmap-wx-jssdk1.2.zip)
+
+4. 安全域名设置，在 [小程序管理后台](https://mp.weixin.qq.com/wxamp/home/guide) -> 开发 -> 开发管理 -> 开发设置 -> “服务器域名” 中设置 request 合法域名，添加 https://apis.map.qq.com
 
 ### 封装预估里程和时间
 1. 腾讯位置服务[距离矩阵文档](https://lbs.qq.com/service/webService/webServiceGuide/webServiceMatrix)
@@ -2874,9 +2888,10 @@ public R calculateDriveLine(@RequestBody @Valid CalculateDriveLineForm form) {
 ### 乘客端显示地图定位，地图选点设置起点和终点
 1. 配置腾讯位置密钥：在 hxds-customer-wx/main.js 文件中，定义腾讯位置服务的密钥，接入腾讯地图组件时需要用到
 2. 开启实时定位：写 hxds-customer-wx/App.vue#onLaunch
-3. 捕获定位事件并携起/终点跳转 create_order 页面：写 hxds-customer-wx/pages/workbench/workbench.vue#onShow
+3. 捕获定位事件并携起/终点参数跳转 create_order 页面：写 hxds-customer-wx/pages/workbench/workbench.vue#onShow
 4. 点击回位：写 hxds-customer-wx/pages/workbench/workbench.vue#returnLocationHandle
 5. 选择起点和终点：写 hxds-customer-wx/pages/workbench/workbench.vue#chooseLocationHandle
+6. 对于在真机调试运行失败的问题，解决方案：[分包Error: 分包大小超过限制,main package source](http://chenqichun.com/articleDetails/6151518d9e58dfeb349bed4d)
 
 【拓展】小程序使用 startLocationUpdate 函数可以在使用过程中实时获取定位，挂到后台就不获取定位，相关文档 [传送门](https://developers.weixin.qq.com/miniprogram/dev/api/location/wx.startLocationUpdate.html)。而 startLocationUpdateBackground 和它正相反，这里我们不使用它就不详细介绍了小程序启动后会运行 onLaunch 函数，之前用过的 onShow、onLoad 只针对的是小程序页面启动把坐标转换成地址的操作叫"逆地址解析"，相关文档 [传送门](https://lbs.qq.com/miniProgram/jsSdk/jsSdkGuide/methodReverseGeocoder)
 
@@ -3033,6 +3048,10 @@ export default {
 
 【拓展】vue 标签后面的属性：加冒号的说明后面的是一个变量或者表达式；没加冒号的后面就是对应的字符串字面量
 
+`uni.getSystemInfoSync().windowHeight;`：设置地图控件的高度适配屏幕高度
+
+`onLoad: function(options)`：页面加载时触发，一个页面只会调用一次，可以在 options 中获取打开当前页面 ( 上一个页面 ) 路径中的参数
+
 第二步的 API 文档 [传送门](https://lbs.qq.com/miniProgram/jsSdk/jsSdkGuide/methodDirection)
 
 ```vue
@@ -3051,11 +3070,12 @@ onLoad: function(options) {
     });
     that.map = uni.createMapContext('map');
 
-    if (options.hasOwnProperty('showCar')) {
+		<!--typora中vue的注释在视图层和JS都给统一了，正规JS应该用双斜杠//>
+    <!--if (options.hasOwnProperty('showCar')) {
         that.showCar = options.showCar;
         that.carId = options.carId;
         that.carPlate = options.carPlate;
-    }
+    }-->
 },
 
 calculateLine: function(ref) {
@@ -3118,9 +3138,255 @@ calculateLine: function(ref) {
         }
     });
 },
+
 onShow: function() {
     let that = this;
     that.calculateLine(that);
 }
 ```
 
+### 乘客端选择代驾车型和车牌
+
+1. 写 hxds-cst/src/main/resource/mapper/CustomerCarDao.xml#insert 及其对应接口
+   写 service/CustomerCarService#insertCustomerCar 及其实现类
+   写 controller/form/InsertCustomerCarForm
+   写 controller/CustomerCarController#insertCustomerCar
+
+2. 写 hxds-cst/src/main/resource/mapper/CustomerCarDao.xml#searchCustomerCarList 及其对应接口
+   写 service/CustomerCarService#searchCustomerCarList 及其实现类
+   写 controller/form/SearchCustomerCarListForm
+   写 controller/CustomerCarController#searchCustomerCarList
+
+3. 写 hxds-cst/src/main/resource/mapper/CustomerCarDao.xml#deleteCustomerCarById 及其对应接口
+   写 service/CustomerCarService#deleteCustomerCarById 及其实现类
+   写 controller/form/DeleteCustomerCarForm
+   写 controller/CustomerCarController#deleteCustomerCarById
+
+```java
+<insert id="insert" parameterType="com.example.hxds.cst.db.pojo.CustomerCarEntity">
+    INSERT INTO tb_customer_car
+    SET customer_id = #{customerId},
+        car_plate = #{carPlate},
+        car_type = #{carType}
+</insert>
+<select id="searchCustomerCarList" parameterType="long" resultType="HashMap">
+    SELECT CAST(id AS CHAR) AS id,
+           car_plate        AS carPlate,
+           car_type         AS carType
+    FROM tb_customer_car
+    WHERE customer_id = #{customerId}
+</select>
+<delete id="deleteCustomerCarById" parameterType="long">
+    DELETE
+    FROM tb_customer_car
+    WHERE id = #{id}
+</delete>
+  
+int insert(CustomerCarEntity entity);
+
+ArrayList<HashMap> searchCustomerCarList(long customerId);
+
+int deleteCustomerCarById(long id);
+
+
+void insertCustomerCar(CustomerCarEntity entity);
+
+ArrayList<HashMap> searchCustomerCarList(long customerId);
+
+int deleteCustomerCarById(long id);
+
+@Override
+@Transactional
+@LcnTransaction
+public void insertCustomerCar(CustomerCarEntity entity) {
+    customerCarDao.insert(entity);
+}
+
+@Override
+public ArrayList<HashMap> searchCustomerCarList(long customerId) {
+    ArrayList list = customerCarDao.searchCustomerCarList(customerId);
+    return list;
+}
+
+@Override
+@Transactional
+@LcnTransaction
+public int deleteCustomerCarById(long id) {
+    int rows = customerCarDao.deleteCustomerCarById(id);
+    return rows;
+}
+
+@Data
+@Schema(description = "添加客户车辆的表单")
+public class InsertCustomerCarForm {
+    @NotNull(message = "customerId不能为空")
+    @Min(value = 1, message = "customerId不能小于1")
+    @Schema(description = "客户ID")
+    private Long customerId;
+
+    @NotBlank(message = "carPlate不能为空")
+    @Pattern(regexp = "^([京津沪渝冀豫云辽黑湘皖鲁新苏浙赣鄂桂甘晋蒙陕吉闽贵粤青藏川宁琼使领A-Z]{1}[A-Z]{1}(([0-9]{5}[DF])|([DF]([A-HJ-NP-Z0-9])[0-9]{4})))|([京津沪渝冀豫云辽黑湘皖鲁新苏浙赣鄂桂甘晋蒙陕吉闽贵粤青藏川宁琼使领A-Z]{1}[A-Z]{1}[A-HJ-NP-Z0-9]{4}[A-HJ-NP-Z0-9挂学警港澳]{1})$",
+            message = "carPlate内容不正确")
+    @Schema(description = "车牌号")
+    private String carPlate;
+
+    @NotBlank(message = "carType不能为空")
+    @Pattern(regexp = "^[\\u4e00-\\u9fa5A-Za-z0-9\\-\\_\\s]{2,20}$", message = "carType内容不正确")
+    @Schema(description = "车型")
+    private String carType;
+}
+
+@Data
+@Schema(description = "查询客户车辆的表单")
+public class SearchCustomerCarListForm {
+    @NotNull(message = "customerId不能为空")
+    @Min(value = 1, message = "customerId不能小于1")
+    @Schema(description = "客户ID")
+    private Long customerId;
+}
+
+@Data
+@Schema(description = "删除客户车辆的表单")
+public class DeleteCustomerCarByIdForm {
+    @NotNull(message = "id不能为空")
+    @Min(value = 1, message = "id不能小于1")
+    @Schema(description = "车辆ID")
+    private Long id;
+}
+
+@PostMapping("/insertCustomerCar")
+@Operation(summary = "添加客户车辆")
+public R insertCustomerCar(@RequestBody @Valid InsertCustomerCarForm form) {
+    CustomerCarEntity entity = BeanUtil.toBean(form, CustomerCarEntity.class);
+    customerCarService.insertCustomerCar(entity);
+    return R.ok();
+}
+
+@PostMapping("/searchCustomerCarList")
+@Operation(summary = "查询客户车辆列表")
+public R searchCustomerCarList(@RequestBody @Valid SearchCustomerCarListForm form) {
+    ArrayList<HashMap> list = customerCarService.searchCustomerCarList(form.getCustomerId());
+    return R.ok().put("result", list);
+}
+
+@PostMapping("/deleteCustomerCarById")
+@Operation(summary = "删除客户车辆")
+public R deleteCustomerCarById(@RequestBody @Valid DeleteCustomerCarByIdForm form) {
+    int rows = customerCarService.deleteCustomerCarById(form.getId());
+    return R.ok().put("rows", rows);
+}
+```
+
+4. 写 bff-customer/src/main/controller/form/InsertCustomerCarForm
+   写 feign/CstServiceApi#insertCustomerCar
+   写 service/CustomerCarService#insertCustomerCar 及其实现类
+   写 controller/CustomerCarController#insertCustomerCar
+5. 写 bff-customer/src/main/controller/form/SearchCustomerCarListForm
+   写 feign/CstServiceApi#searchCustomerCarList
+   写 service/CustomerCarService#searchCustomerCarList 及其实现类
+   写 controller/CustomerCarController#searchCustomerCarList
+6. 写 bff-customer/src/main/controller/form/deleteCustomerCarById
+   写 feign/CstServiceApi#DeleteCustomerCarForm
+   写 service/CustomerCarService#deleteCustomerCarById 及其实现类
+   写 controller/CustomerCarController#deleteCustomerCarById
+
+```java
+@Data
+@Schema(description = "添加客户车辆的表单")
+public class InsertCustomerCarForm {
+    @Schema(description = "客户ID")
+    private Long customerId;
+
+    @NotBlank(message = "carPlate不能为空")
+    @Pattern(regexp = "^([京津沪渝冀豫云辽黑湘皖鲁新苏浙赣鄂桂甘晋蒙陕吉闽贵粤青藏川宁琼使领A-Z]{1}[A-Z]{1}(([0-9]{5}[DF])|([DF]([A-HJ-NP-Z0-9])[0-9]{4})))|([京津沪渝冀豫云辽黑湘皖鲁新苏浙赣鄂桂甘晋蒙陕吉闽贵粤青藏川宁琼使领A-Z]{1}[A-Z]{1}[A-HJ-NP-Z0-9]{4}[A-HJ-NP-Z0-9挂学警港澳]{1})$",
+            message = "carPlate内容不正确")
+    @Schema(description = "车牌号")
+    private String carPlate;
+
+    @NotBlank(message = "carType不能为空")
+    @Pattern(regexp = "^[\\u4e00-\\u9fa5A-Za-z0-9\\-\\_\\s]{2,20}$", message = "carType内容不正确")
+    @Schema(description = "车型")
+    private String carType;
+}
+
+@Data
+@Schema(description = "查询客户车辆的表单")
+public class SearchCustomerCarListForm {
+    @Schema(description = "客户ID")
+    private Long customerId;
+}
+
+@Data
+@Schema(description = "删除客户车辆的表单")
+public class DeleteCustomerCarByIdForm {
+    @NotNull(message = "id不能为空")
+    @Min(value = 1, message = "id不能小于1")
+    @Schema(description = "车辆ID")
+    private Long id;
+}
+
+@PostMapping("/customer/car/insertCustomerCar")
+R insertCustomerCar(InsertCustomerCarForm form);
+
+@PostMapping("/customer/car/searchCustomerCarList")
+R searchCustomerCarList(SearchCustomerCarListForm form);
+
+@PostMapping("/customer/car/deleteCustomerCarById")
+R deleteCustomerCarById(DeleteCustomerCarByIdForm form);
+
+void insertCustomerCar(InsertCustomerCarForm form);
+
+ArrayList<HashMap> searchCustomerCarList(SearchCustomerCarListForm form);
+
+int deleteCustomerCarById(DeleteCustomerCarByIdForm form);
+
+@Override
+@Transactional
+@LcnTransaction
+public void insertCustomerCar(InsertCustomerCarForm form) {
+    cstServiceApi.insertCustomerCar(form);
+}
+
+@Override
+public ArrayList<HashMap> searchCustomerCarList(SearchCustomerCarListForm form) {
+    R r = cstServiceApi.searchCustomerCarList(form);
+    ArrayList<HashMap> list = (ArrayList<HashMap>) r.get("result");
+    return list;
+}
+
+@Override
+@Transactional
+@LcnTransaction
+public int deleteCustomerCarById(DeleteCustomerCarByIdForm form) {
+    R r = cstServiceApi.deleteCustomerCarById(form);
+    int rows = MapUtil.getInt(r, "rows");
+    return rows;
+}
+
+@PostMapping("/insertCustomerCar")
+@Operation(summary = "添加客户车辆")
+public R insertCustomerCar(@RequestBody @Valid InsertCustomerCarForm form) {
+    long customerId = StpUtil.getLoginIdAsLong();
+    form.setCustomerId(customerId);
+    customerCarService.insertCustomerCar(form);
+    return R.ok();
+}
+
+@PostMapping("/searchCustomerCarList")
+@Operation(summary = "查询客户车辆列表")
+public R searchCustomerCarList(@RequestBody @Valid SearchCustomerCarListForm form) {
+    long customerId = StpUtil.getLoginIdAsLong();
+    form.setCustomerId(customerId);
+    ArrayList<HashMap> list = customerCarService.searchCustomerCarList(form);
+    return R.ok().put("result", list);
+}
+
+@PostMapping("/deleteCustomerCarById")
+@Operation(summary = "删除客户车辆")
+public R deleteCustomerCarById(@RequestBody @Valid DeleteCustomerCarByIdForm form) {
+    int rows = customerCarService.deleteCustomerCarById(form);
+    return R.ok().put("rows", rows);
+}
+```
+
+7. 启动 tm、cts、bff-customer 三个子系统并进行测试

@@ -22,15 +22,15 @@ spring:
       config:
         group: DEFAULT_GROUP
         file-extension: yaml
-        server-addr: 127.0.0.1:8848
+        server-addr: 43.143.134.158:8848
         prefix: ${spring.application.name}
-        namespace: hxds
+        namespace: bbe54516-dc51-49ca-bf17-6d11d14ea608
       #配置子系统在Nacos上的注册信息
       discovery:
-        namespace: hxds
+        namespace: bbe54516-dc51-49ca-bf17-6d11d14ea608
         username: nacos
         password: nacos
-        server-addr: 127.0.0.1:8848
+        server-addr: 43.143.134.158:8848
         heart-beat-interval: 1000
         heart-beat-timeout: 1000
         group: DEFAULT_GROUP
@@ -38,7 +38,7 @@ spring:
     type: com.alibaba.druid.pool.DruidDataSource
     druid:
       driver-class-name: com.mysql.cj.jdbc.Driver
-      url: jdbc:mysql://localhost:3307/hxds?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai&nullCatalogMeansCurrent=true
+      url: jdbc:mysql://82.156.200.100:3307/hxds?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai&nullCatalogMeansCurrent=true
       username: root
       password: abc123456
       initial-size: 4

@@ -4,4 +4,23 @@
         "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.example.hxds.cst.db.dao.CustomerCarDao">
 
+    <insert id="insert" parameterType="com.example.hxds.cst.db.pojo.CustomerCarEntity">
+        INSERT INTO tb_customer_car
+        SET customer_id = #{customerId},
+            car_plate = #{carPlate},
+            car_type = #{carType}
+    </insert>
+    <select id="searchCustomerCarList" parameterType="long" resultType="HashMap">
+        SELECT CAST(id AS CHAR) AS id,
+               car_plate        AS carPlate,
+               car_type         AS carType
+        FROM tb_customer_car
+        WHERE customer_id = #{customerId}
+    </select>
+    <delete id="deleteCustomerCarById" parameterType="long">
+        DELETE
+        FROM tb_customer_car
+        WHERE id = #{id}
+    </delete>
+
 </mapper>
