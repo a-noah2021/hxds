@@ -3389,4 +3389,130 @@ public R deleteCustomerCarById(@RequestBody @Valid DeleteCustomerCarByIdForm for
 }
 ```
 
-7. 启动 tm、cts、bff-customer 三个子系统并进行测试
+7. 在 cst、bff-cst 里面加入注册和登录的模块，这个之前讲过就略过，否则下一步无法进行测试
+7. 启动 tm、cst、bff-cst 三个子系统并进行测试
+
+8. 添加车型：写 hxds-customer-wx/pages/add_car/add_car.vue#carTypeHandle
+9. 添加车牌：写 hxds-customer-wx/pages/add_car/add_car.vue#carPlateHandle
+10. 保存信息：写 hxds-customer-wx/pages/add_car/add_car.vue#saveHandle
+
+```vue
+carTypeHandle: function () {
+  let that = this;
+  uni.showModal({
+    title: '输入车型',
+    editable: true,
+    placeholderText: '例如丰田卡罗拉',
+    success: function (resp) {
+      if (resp.confirm) {
+        let carType = resp.content;
+        if (that.checkValidCarType(carType, '车型')) {
+          that.carType = carType;
+        }
+      }
+    }
+  });
+},
+carPlateHandle: function () {
+  let that = this;
+  uni.showModal({
+    title: '输入车牌',
+    editable: true,
+    placeholderText: '你的车牌号',
+    success: function (resp) {
+      if (resp.confirm) {
+        let carPlate = resp.content;
+        if (that.checkValidCarPlate(carPlate, '车牌')) {
+          that.carPlate = carPlate;
+        }
+      }
+    }
+  });
+},
+saveHandle: function () {
+  let that = this;
+  if (that.checkValidCarType(that.carType, '车型') && that.checkValidCarPlate(that.carPlate, '车牌')) {
+    let data = {
+      carType: that.carType,
+      carPlate: that.carPlate
+    };
+    that.ajax(that.url.insertCustomerCar, 'POST', data, function (resp) {
+      that.$refs.uToast.show({
+        title: '添加成功',
+        type: 'success',
+        callback: function () {
+          uni.redirectTo({
+            url: '../car_list/car_list'
+          });
+        }
+      });
+    });
+  }
+},
+```
+
+11. 加载车辆列表：写 hxds-customer-wx/pages/car_list/car_list.vue#loadDataList
+12. 添加车辆：写 hxds-customer-wx/pages/car_list/car_list.vue#addHandle
+13. 删除车辆：写 hxds-customer-wx/pages/car_list/car_list.vue#removeHandle
+
+【拓展】@longpress: 长按事件，对应删除车辆
+
+```vue
+methods: {
+  loadDataList: function (ref) {
+    ref.list = [];
+    ref.ajax(ref.url.searchCustomerCarList, 'POST', {}, function (resp) {
+      let result = resp.data.result;
+      for (let one of result) {
+        ref.list.push({
+          id: one.id,
+          carType: one.carType,
+          carPlate: one.carPlate
+        });
+      }
+    });
+  },
+  addHandle: function () {
+    uni.redirectTo({
+      url: '../add_car/add_car'
+    });
+  },
+  removeHandle: function (id) {
+    let that = this;
+    uni.vibrateShort({});
+    uni.showModal({
+      title: '提示消息',
+      content: '是否删除这条车辆信息？',
+      success: function (resp) {
+        if (resp.confirm) {
+          //删除记录
+          let data = {
+            id: id
+          };
+          that.ajax(that.url.deleteCustomerCarById, 'POST', data, function (resp) {
+            if (resp.data.rows == 0) {
+              that.$refs.uToast.show({
+                title: '删除失败',
+                type: 'error'
+              });
+            } else {
+              that.loadDataList(that);
+            }
+          });
+        }
+      }
+    });
+  },
+  choseOneHandle: function (id, carPlate) {
+    uni.navigateTo({
+      url: `../create_order/create_order?showCar=true&carId=${id}&carPlate=${carPlate}`
+    });
+  }
+},
+onLoad: function () {
+  let that = this;
+  that.loadDataList(that);
+}
+```
+
+14. 启动 tm、cst、bff-cst、gateway 四个子系统并进行测试，其中 gateway 配置文件里面要加入 bff-cst 的部分

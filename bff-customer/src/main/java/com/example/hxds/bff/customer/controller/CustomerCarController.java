@@ -34,8 +34,8 @@ public class CustomerCarController {
     @PostMapping("/insertCustomerCar")
     @Operation(summary = "添加客户车辆")
     public R insertCustomerCar(@RequestBody @Valid InsertCustomerCarForm form) {
-//        long customerId = StpUtil.getLoginIdAsLong();
-//        form.setCustomerId(customerId);
+        long customerId = StpUtil.getLoginIdAsLong();
+        form.setCustomerId(customerId);
         customerCarService.insertCustomerCar(form);
         return R.ok();
     }
@@ -43,8 +43,8 @@ public class CustomerCarController {
     @PostMapping("/searchCustomerCarList")
     @Operation(summary = "查询客户车辆列表")
     public R searchCustomerCarList(@RequestBody @Valid SearchCustomerCarListForm form) {
-//        long customerId = StpUtil.getLoginIdAsLong();
-//        form.setCustomerId(customerId);
+        long customerId = StpUtil.getLoginIdAsLong();
+        form.setCustomerId(customerId);
         ArrayList<HashMap> list = customerCarService.searchCustomerCarList(form);
         return R.ok().put("result", list);
     }

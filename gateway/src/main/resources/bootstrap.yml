@@ -60,6 +60,12 @@ spring:
             - Path=/hxds-driver/**
           filters:
             - StripPrefix=1
+        - id: bff-customer
+          uri: lb://bff-customer
+          predicates:
+            - Path=/hxds-customer/**
+          filters:
+            - StripPrefix=1
         - id: hxds-mis-api
           uri: lb://hxds-mis-api
           predicates:

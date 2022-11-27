@@ -3,5 +3,34 @@
         PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.example.hxds.cst.db.dao.CustomerDao">
-
+    <insert id="registerNewCustomer" parameterType="Map">
+        INSERT INTO tb_customer
+        SET open_id = #{openId},
+            nickname = #{nickname},
+            sex = #{sex},
+            photo = #{photo},
+            tel = #{tel},
+            `status` = 1
+    </insert>
+    <select id="login" parameterType="String" resultType="String">
+        SELECT CAST(id AS CHAR) AS id
+        FROM tb_customer
+        WHERE `status` != 2 AND open_id = #{openId}
+    </select>
+    <select id="hasCustomer" parameterType="Map" resultType="long">
+        SELECT COUNT(id) AS ct
+        FROM tb_customer
+        WHERE 1=1
+        <if test="openId!=null">
+            AND open_id = #{openId}
+        </if>
+        <if test="customerId!=null">
+            AND id = #{customerId}
+        </if>
+    </select>
+    <select id="searchCustomerId" parameterType="String" resultType="String">
+        SELECT CAST(id AS CHAR) AS id
+        FROM tb_customer
+        WHERE open_id = #{openId}
+    </select>
 </mapper>
