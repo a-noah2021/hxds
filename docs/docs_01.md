@@ -3390,11 +3390,16 @@ public R deleteCustomerCarById(@RequestBody @Valid DeleteCustomerCarByIdForm for
 ```
 
 7. 在 cst、bff-cst 里面加入注册和登录的模块，这个之前讲过就略过，否则下一步无法进行测试
-7. 启动 tm、cst、bff-cst 三个子系统并进行测试
+8. 启动 tm、cst、bff-cst 三个子系统并进行测试
 
-8. 添加车型：写 hxds-customer-wx/pages/add_car/add_car.vue#carTypeHandle
-9. 添加车牌：写 hxds-customer-wx/pages/add_car/add_car.vue#carPlateHandle
-10. 保存信息：写 hxds-customer-wx/pages/add_car/add_car.vue#saveHandle
+​	【拓展】ShardingException: Can not update sharding key, logic table: [tb_customer_car]
+​		实现 navicat 直接更新 customer_id 时发现 update 的逻辑是分片的列必须在 where 条件里并且必须同更新的值相同。
+
+9. 添加车型：写 hxds-customer-wx/pages/add_car/add_car.vue#carTypeHandle
+
+10. 添加车牌：写 hxds-customer-wx/pages/add_car/add_car.vue#carPlateHandle
+
+11. 保存信息：写 hxds-customer-wx/pages/add_car/add_car.vue#saveHandle
 
 ```vue
 carTypeHandle: function () {
@@ -3451,9 +3456,11 @@ saveHandle: function () {
 },
 ```
 
-11. 加载车辆列表：写 hxds-customer-wx/pages/car_list/car_list.vue#loadDataList
-12. 添加车辆：写 hxds-customer-wx/pages/car_list/car_list.vue#addHandle
-13. 删除车辆：写 hxds-customer-wx/pages/car_list/car_list.vue#removeHandle
+12. 加载车辆列表：写 hxds-customer-wx/pages/car_list/car_list.vue#loadDataList
+
+13. 添加车辆：写 hxds-customer-wx/pages/car_list/car_list.vue#addHandle
+
+14. 删除车辆：写 hxds-customer-wx/pages/car_list/car_list.vue#removeHandle
 
 【拓展】@longpress: 长按事件，对应删除车辆
 
@@ -3515,4 +3522,4 @@ onLoad: function () {
 }
 ```
 
-14. 启动 tm、cst、bff-cst、gateway 四个子系统并进行测试，其中 gateway 配置文件里面要加入 bff-cst 的部分
+15. 启动 tm、cst、bff-cst、gateway 四个子系统并进行测试，其中 gateway 配置文件里面要加入 bff-cst 的部分
