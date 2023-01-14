@@ -367,7 +367,12 @@ bladex/sentinel-dashboard
 1. 写 bff-driver 里面的 feign#DrServiceApi#registerNewDriver 定义远程调用的 API
 2. 写 bff-driver 里面的 service#DriverService#registerNewDriver 返回给上层 UserId
 3. 写 bff-driver 里面的 controller#DriverController#registerNewDriver 经过 SaToken 登陆验证返回给前端 token
-这里介绍一下 SaToken 的常用 API
+  这里介绍一下 SaToken 的常用 API
+
+【拓展】关于鉴权这部分的链路：小程序获取微信临时凭证 code -> 后端根据 code 去微信接口获取 openId -> 将 openId 存入 tb_driver 并返回其主键 id -> 利用 id 登陆 SaToken 并返回会话值 ( UUID ) 给小程序 -> 小程序接收 token 以进行之后操作 ( 登陆、查询等 ) 的鉴权
+
+<img src="https://noah2021.cn/pics/wx-openid.jpg"  />
+
 ```java
 StpUtil.setLoginId(10001);              // 标记当前会话登录的账号id
 StpUtil.getLoginId();                   // 获取当前会话登录的账号id
@@ -468,6 +473,9 @@ Vue.prototype.url = {
    写 hxds-driver-wx/identity/filling/filling.vue#scanIdcardFront/scanIdcardBack ，实现 OCR 识别证件正/反面信息
    注意：在真机调试的时候还要买 [OCR识别次数](https://fuwu.weixin.qq.com/service/detail/000ce4cec24ca026d37900ed551415)，要不然会报下面的错误
    `{base_resp: {err_code: 101002, err_msg: "not enough market quota"}}`
+   uni.navigateTo(OBJECT):保留当前页面，跳转到应用内的某个页面，使用uni.navigateBack可以返回到原页面。 如果一直用navigateTo，当微信小程序使用时，当点击超过10层时，会让微信小程序像卡死一样，点是没有效果的，只有返回上一层，才可以再点一层。这里需要另外的处理方法
+   uni.redirectTo(OBJECT):关闭当前页面，跳转到应用内的某个页面。 这个随便点击次数，但是当苹果手机或者安卓手机左划时，就会直接退出小程序，而不是返回上一级，这个要注意
+   getCurrentPages():用于获取当前页面栈的实例，以数组形式按栈的顺序给出，第一个元素为首页，最后一个元素为当前页面。 注意： getCurrentPages()仅用于展示页面栈的情况，请勿修改页面栈，以免造成页面状态错误。
 ```vue
 Vue.prototype.uploadCos = function(url, path, module, fun) {
 	uni.uploadFile({
