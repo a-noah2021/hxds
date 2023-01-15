@@ -367,9 +367,11 @@ bladex/sentinel-dashboard
 1. 写 bff-driver 里面的 feign#DrServiceApi#registerNewDriver 定义远程调用的 API
 2. 写 bff-driver 里面的 service#DriverService#registerNewDriver 返回给上层 UserId
 3. 写 bff-driver 里面的 controller#DriverController#registerNewDriver 经过 SaToken 登陆验证返回给前端 token
-  这里介绍一下 SaToken 的常用 API
+    这里介绍一下 SaToken 的常用 API
 
 【拓展】关于鉴权这部分的链路：小程序获取微信临时凭证 code -> 后端根据 code 去微信接口获取 openId -> 将 openId 存入 tb_driver 并返回其主键 id -> 利用 id 登陆 SaToken 并返回会话值 ( UUID ) 给小程序 -> 小程序接收 token 以进行之后操作 ( 登陆、查询等 ) 的鉴权
+
+至于为啥返回的是主键 id 而不是 openId，是因为之后的司机信息查询大都由 id 作为筛选条件且主键在 SQL 层面读更快
 
 <img src="https://noah2021.cn/pics/wx-openid.jpg"  />
 
@@ -473,9 +475,15 @@ Vue.prototype.url = {
    写 hxds-driver-wx/identity/filling/filling.vue#scanIdcardFront/scanIdcardBack ，实现 OCR 识别证件正/反面信息
    注意：在真机调试的时候还要买 [OCR识别次数](https://fuwu.weixin.qq.com/service/detail/000ce4cec24ca026d37900ed551415)，要不然会报下面的错误
    `{base_resp: {err_code: 101002, err_msg: "not enough market quota"}}`
-   uni.navigateTo(OBJECT):保留当前页面，跳转到应用内的某个页面，使用uni.navigateBack可以返回到原页面。 如果一直用navigateTo，当微信小程序使用时，当点击超过10层时，会让微信小程序像卡死一样，点是没有效果的，只有返回上一层，才可以再点一层。这里需要另外的处理方法
-   uni.redirectTo(OBJECT):关闭当前页面，跳转到应用内的某个页面。 这个随便点击次数，但是当苹果手机或者安卓手机左划时，就会直接退出小程序，而不是返回上一级，这个要注意
-   getCurrentPages():用于获取当前页面栈的实例，以数组形式按栈的顺序给出，第一个元素为首页，最后一个元素为当前页面。 注意： getCurrentPages()仅用于展示页面栈的情况，请勿修改页面栈，以免造成页面状态错误。
+
+【拓展】
+
+1. uni.navigateTo( object ): 保留当前页面，跳转到应用内的某个页面，使用 uni.navigateBack 可以返回到原页面。 如果一直 navigateTo，当微信小程序使用时，当点击超过10层时，会让微信小程序像卡死一样，点是没有效果的，只有返回上一层，才可以再点一层。这里需要另外的处理方法
+2. uni.redirectTo( object ): 关闭当前页面，跳转到应用内的某个页面。 这个随便点击次数，但是当苹果手机或者安卓手机左划时，就会直接退出小程序，而不是返回上一级，这个要注意
+3. getCurrentPages(): 用于获取当前页面栈的实例，以数组形式按栈的顺序给出，第一个元素为首页，最后一个元素为当前页面。 注意: getCurrentPages() 仅用于展示页面栈的情况，请勿修改页面栈，以免造成页面状态错误
+
+uni.switchTab( object ): 跳转到 tabBar 页面，并关闭其他所有非 tabBar 页面
+
 ```vue
 Vue.prototype.uploadCos = function(url, path, module, fun) {
 	uni.uploadFile({
@@ -548,6 +556,15 @@ scanIdcardBack: function(resp) {
 
 6. 写 hxds-driver-wx/identity/identity_camera/identity_camera.vue#clickBtn/afresh，实现拍摄手持身份证的拍照点击事件和重拍点击事件
    写 hxds-driver-wx/identity/filling/filling.vue#takePhoto/uploadPhoto，实现拍摄/上传照片
+
+【拓展】
+
+```ja
+prevPage.$vm.updatePhoto(that.type,that.photoPath)// 调用上一个页面的updatePhoto函数，回传图片
+uni.navigateBack({ // 返回上一个页面
+		delta:1
+})
+```
 
 ```vue
 clickBtn:function(){
@@ -919,6 +936,15 @@ public R updateDriverAuth(@RequestBody @Valid UpdateDriverAuthForm form){
 
 ​	   写 hxds-driver-wx/main.js 定义全局 URL 路径
 
+【拓展】`that.$refs.uToast.show` 获取 `<u-toast ref="uToast" />`  元素并进行修改
+vm.$watch: 构建一个对Vue实例中数据仓库中变量 ( data，computed ) 的监控方法
+
+vm.$nextTick: 等同于 nextTick ，将执行函数体延迟到页面 DOM 更新完成后执行
+
+vm.$forceUpdate(): 迫使 Vue 实例重新渲染。注意它仅仅影响实例本身和插入插槽内容的子组件，而不是所有子组件
+
+vm.$refs: 返回一个对象，记录当前 Vue 实例模板中定义了 ref 属性的所有 DOM 元素或者其它 Vue 实例
+
 ```vue
 <!--filling.vue-->
 enterContent: function(title, key) {
@@ -1171,9 +1197,11 @@ public R createDriverFaceModel(@RequestBody @Valid CreateDriverFaceModelForm for
    写 hxds-driver-wx/main.js 定义全局 URL 路径
    实现司机注册时必须的人脸识别认证。需要注意的一点是：腾讯云人脸识别-人员库的信息每人只能有一个，如果想重写注册不仅要删除 MySQL 还要删除人员库的数据
 
-【拓展】 1、小程序初始化完成后，页面首次加载触发 onLoad，只会触发一次；而 onShow 可以执行多次。
-				2、当小程序进入到后台(比如打电话去了)，先执行页面 onHide 方法再执行应用 onHide 方法。
-				3、当小程序从后台进入到前台，先执行应用 onShow 方法再执行页面 onShow 方法
+【拓展】
+
+1. 小程序初始化完成后，页面首次加载触发 onLoad，只会触发一次；而 onShow 可以执行多次
+2. 当小程序进入到后台 ( 比如打电话去了 )，先执行页面 onHide 方法再执行应用 onHide ( App.vue，下同 ) 方法
+3. 当小程序从后台进入到前台，先执行应用 onShow 方法再执行页面 onShow 方法
 
 ![生命周期函数](https://s2.51cto.com/images/blog/202112/31150710_61ceac1e28f5e32514.png?x-oss-process=image/watermark,size_16,text_QDUxQ1RP5Y2a5a6i,color_FFFFFF,t_30,g_se,x_10,y_10,shadow_20,type_ZmFuZ3poZW5naGVpdGk=/format,webp/resize,m_fixed,w_1184)
 
@@ -1295,7 +1323,13 @@ verificateDriverFace: `${baseUrl}/driver/recognition/verificateDriverFace`,
    写 service/DriverService#login 及其实现类
    写 controller/form/LoginForm
    写 controller/DriverController#login
-   【拓展】在 MySQL 中数字的查询速度要快于字符串的查询速度
+
+【拓展】
+
+1. 在 MySQL 中数字的查询速度要快于字符串的查询速度
+
+2. 关于鉴权这部分的链路：小程序获取微信临时凭证 code -> 后端根据 code 去微信接口获取 openId -> 将 openId 存入 tb_driver 并返回其主键 id -> 利用 id 登陆 SaToken 并返回会话值 ( UUID ) 给小程序 -> 小程序接收 token 以进行之后操作 ( 登陆、查询等 ) 的鉴权
+
 ```java
 <select id="login" parameterType="String" resultType="HashMap">
   SELECT CAST(id AS CHAR) AS id,
@@ -1467,7 +1501,59 @@ login: function() {
 
 login: `${baseUrl}/driver/login`,
 ```
+### 司机退出小程序
+
+首先后端 bff-driver 要销毁 Redis 缓存的 Token，这样即便移动端提交的 Token 是正确的，SaToken 也不会核验通过。然后是移动端这里，用户点击退出登陆之后，要删除 Storage 上面保存的 Token，然后跳转到登陆页面
+
+1. 写 bff-driver/src/main/controller/DriverController#logout
+
+```java
+@PostMapping("/logout")
+@Operation(summary = "退出系统")
+@SaCheckLogin
+public R logout() {
+    StpUtil.logout();
+    return R.ok();
+}
+```
+
+2. 写 hxds-driver-wx/pages/mine/mine.vue
+
+```javascript
+    logoutHandle: function() {
+        let that = this;
+        uni.vibrateShort({});
+        uni.showModal({
+            title: '提示信息',
+            content: '确认退出系统？',
+            success: function(resp) {
+                if (resp.confirm) {
+                    that.ajax(that.url.logout, 'GET', null,
+                    function(resp) {
+                        uni.removeStorageSync('realAuth');
+                        uni.removeStorageSync('token');
+                        uni.showToast({
+                            title: '已经退出系统',
+                            success: function() {
+                                setTimeout(function() {
+                                    uni.redirectTo({
+                                        url: '../login/login'
+                                    });
+                                },
+                                1500);
+                            }
+                        });
+                    });
+                }
+            }
+        });
+    },
+<!--main.js-->
+logout: `${baseUrl}/driver/logout`,
+```
+
 ### 司机微服务查询司机个人汇总信息
+
 1. 写 hxds-dr/src/main/resource/mapper/DriverDao.xml#searchDriverBaseInfo 及其对应接口
    写 service/DriverService#searchDriverBaseInfo 及其实现类
    写 controller/form/SearchDriverBaseInfoForm
@@ -1524,9 +1610,7 @@ public R searchDriverBaseInfo(@RequestBody @Valid SearchDriverBaseInfoForm form)
    写 feign/DrServiceApi#searchDriverBaseInfo
    写 service/DriverService#searchDriverBaseInfo 及其实现类
    写 controller/DriverController#searchDriverBaseInfo
-   通过后端远程 feign 调用实现查询司机基础信息
-   在[Swagger-dr](http://localhost:8001/swagger-ui/index.html?configUrl=/doc-api.html/swagger-config#/DriverController/searchDriverBaseInfo)和
-   [Swagger-bff](http://localhost:8101/swagger-ui/index.html?configUrl=/doc-api.html/swagger-config)测试 searchDriverBaseInfo 接口
+   通过后端远程 feign 调用实现查询司机基础信息，在 [Swagger-dr](http://localhost:8001/swagger-ui/index.html?configUrl=/doc-api.html/swagger-config#/DriverController/searchDriverBaseInfo) 和 [Swagger-bff](http://localhost:8101/swagger-ui/index.html?configUrl=/doc-api.html/swagger-config) 测试 searchDriverBaseInfo 接口
 ```java
 @Data
 @Schema(description = "查询司机基本信息的表单")
@@ -1560,7 +1644,7 @@ public R searchDriverBaseInfo(){
 ```
 3. 写 hxds-driver-wx/pages/mine/mine.vue
    写 hxds-driver-wx/main.js 定义全局 URL 路径
-```vue
+```javascript
 methods: {
     logoutHandle: function() {
         let that = this;
@@ -1591,7 +1675,7 @@ methods: {
         });
     },
     serviceHandle: function() {
-        uni.vibrateShort({});
+        uni.vibrateShort({}); // 手机进行一个短时间的震动(15ms)
         uni.makePhoneCall({
             phoneNumber: '10086'
         });
@@ -1670,7 +1754,7 @@ onShow: function() {
         that.appeal = result.summary.appeal;
     });
 },
-
+<!--main.js-->
 searchDriverBaseInfo: `${baseUrl}/driver/searchDriverBaseInfo`,
 ```
 ### 司机微服务查询首页信息
@@ -2321,8 +2405,8 @@ public R searchDriverAuth(){
 }
 ```
 3. 写 hxds-driver-wx/identify/filling/filling.vue#onLoad
-   注意 hxds-driver-wx/pages/mine/mine.vue 奢姿点击事件跳转到 account.vue 页面( main.js 里封装了跳转语句)
-   注意 hxds-driver-wx/pages/user/account/account.vue 奢姿点击事件跳转到 filling.vue 页面( main.js 里封装了跳转语句)
+   注意 hxds-driver-wx/pages/mine/mine.vue 设置点击事件跳转到 account.vue 页面 ( main.js 里封装了 toPage 跳转语句 )
+   注意 hxds-driver-wx/pages/user/account/account.vue 设置点击事件跳转到 filling.vue 页面 ( main.js 里封装了 toPage 跳转语句 )
    写 hxds-driver-wx/main.js 定义全局 URL 路径
    启动5个子系统后进行真机调试，依次进入：个人中心--账号与安全--统一实名认证，当 real_auth 为3时说明认证信息在审核中，不可修改；为2时说明已认证可以修改
 ```vue
@@ -2701,7 +2785,12 @@ repealHandle:function(){
    })
 }
 ```
+### 乘客微服务的用户注册登陆
+
+略，和司机端类似，不过少了实名认证和面部录入反而更简单。记得要同时写 hxds、hxds-customer-wx 两个项目哦！
+
 ## 乘客下单与司机抢单
+
 ### 开通腾讯位置服务，封装腾讯地图服务
 
 进入[腾讯位置服务官网](https://lbs.qq.com/)，注册登录后创建应用、Key。
@@ -3517,11 +3606,6 @@ methods: {
         }
       }
     });
-  },
-  choseOneHandle: function (id, carPlate) {
-    uni.navigateTo({
-      url: `../create_order/create_order?showCar=true&carId=${id}&carPlate=${carPlate}`
-    });
   }
 },
 onLoad: function () {
@@ -3530,4 +3614,31 @@ onLoad: function () {
 }
 ```
 
-15. 启动 tm、cst、bff-cst、gateway 四个子系统并进行测试，其中 gateway 配置文件里面要加入 bff-cst 的部分
+15. 选择车辆：
+
+​		写 hxds-customer-wx/pages/create_order/create_order.vue#chooseCarHandle
+
+​		写 hxds-customer-wx/pages/car_list/car_list.vue#choseOneHandle
+
+​		补充 hxds-customer-wx/pages/create_order/create_order.vue#onLoad
+
+```javascript
+chooseCarHandle: function(){
+  uni.navigateTo({
+    url: ../car_list/car_list;
+  })
+}
+choseOneHandle: function (id, carPlate) {
+  uni.navigateTo({
+    url: `../create_order/create_order?showCar=true&carId=${id}&carPlate=${carPlate}`
+  });
+}
+if(options.hasOwnProperty('showCar')){
+  that.showCar = options.showCar;
+  that.carId = options.carId;
+  that.carPlate = options.carPlate;
+}
+```
+16. 启动 tm、cst、bff-cst、gateway 四个子系统并进行测试，其中 gateway 配置文件里面要加入 bff-cst 的部分
+### 订单微服务中创建代驾订单保存到MySQL集群
+1. mark

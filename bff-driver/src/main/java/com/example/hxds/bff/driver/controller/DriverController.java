@@ -73,6 +73,14 @@ public class DriverController {
         return R.ok();
     }
 
+    @PostMapping("/logout")
+    @Operation(summary = "退出系统")
+    @SaCheckLogin
+    public R logout() {
+        StpUtil.logout();
+        return R.ok();
+    }
+
     @PostMapping("/searchDriverBaseInfo")
     @Operation(summary = "查询司机基本信息")
     @SaCheckLogin
