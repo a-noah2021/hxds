@@ -50,7 +50,7 @@ spring:
       test-on-return: false
   redis:
     database: 5
-    host: localhost
+    host: 82.156.200.100
     port: 6379
     password: abc123456
     jedis:

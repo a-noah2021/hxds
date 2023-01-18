@@ -12,7 +12,7 @@ spring:
     #引用application-common.yml文件
     include: common
   application:
-    name: hxds-dr
+    name: hxds-workflow
   cloud:
     inetutils:
       #子系统注册到Nacos上的IP地址
