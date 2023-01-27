@@ -16,12 +16,18 @@ tencent:
   map:
     key: FGRBZ-GS266-44VSO-ER7OG-IW5S7-ANB47
 
+#wx:
+#  app-id: wx8a663873c20f264c # 你的微信小程序APPID
+#  app-secret: 86c15039625267180afde3d2060e8891 # 你的微信小程序密钥
+#  mch-id: 1473426802 # 商户号（课程QQ群共享文件中获取）
+#  key: T6m9iK73b0kn9g5v426MKfHQH7X8rKwb # 商户密钥（课程QQ群共享文件中获取）
+#  cert-path: # 商户数字证书文件路径（课程QQ群共享文件中获取）
 wx:
-  app-id: wx8a663873c20f264c # 你的微信小程序APPID
-  app-secret: 86c15039625267180afde3d2060e8891 # 你的微信小程序密钥
-  mch-id: 1473426802 # 商户号（课程QQ群共享文件中获取）
-  key: T6m9iK73b0kn9g5v426MKfHQH7X8rKwb # 商户密钥（课程QQ群共享文件中获取）
-  cert-path: # 商户数字证书文件路径（课程QQ群共享文件中获取）
+  app-id: wx4cb8e9621950da45
+  app-secret: 9d80f4125c50e1cf8bc6031c9319b2df
+  mch-id: 1526972031
+  key: qv9Kihy5TOJxGySzFO8pd4wCMg3tn6YK
+  cert-path: apiclient_cert.p12
 
 minio:
   endpoint: http://43.143.134.158:9000 # http://你本地电脑或者云主机IP:9000

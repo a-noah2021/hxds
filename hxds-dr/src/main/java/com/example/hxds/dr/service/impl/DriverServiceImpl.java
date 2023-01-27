@@ -148,7 +148,7 @@ public class DriverServiceImpl implements DriverService {
     }
 
     /**
-     * 每天司机第一次接单时用当前微信用户登陆，同时判断是否人脸识别认证和当前手机号是否与注册手机号不一致 TODO:desc可能不对
+     * 每天司机第一次接单时用当前微信用户登陆，同时判断是否人脸识别认证和当前手机号是否与注册手机号不一致
      *
      * @param code
      * @return
@@ -161,8 +161,8 @@ public class DriverServiceImpl implements DriverService {
         if (result != null && result.containsKey("archive")) {
             int temp = MapUtil.getInt(result, "archive");
             boolean archive = (temp == 1) ? true : false;
-            // HashMap.replace(K key, V oldValue, V newValue) 如果 oldValue 不存，则替换 key 对应的值，返回 key 对应的旧值
-            // 如果存在 oldValue，替换成功返回 true，如果 key 不存在，则返回 null。
+            // HashMap.replace(K key, V oldValue, V newValue) 如果不存oldValue，则替换 key 对应的值，返回 key 对应的旧值(可能为null)
+            // 如果存oldValue，key对应的旧值相等且替换成功返回 true，如果key不存在或key对应的旧值不相等，则返回 false。
             result.replace("archive", archive);
         }
         return result;

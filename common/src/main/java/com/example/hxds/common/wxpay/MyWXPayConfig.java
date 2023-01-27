@@ -22,8 +22,6 @@ public class MyWXPayConfig extends WXPayConfig {
 
     private byte[] certData;
 
-    //TODO：未配置商户证书
-//    @PostConstruct
     public void init() throws Exception {
         File file = new File(certPath);
         FileInputStream in = new FileInputStream(file);

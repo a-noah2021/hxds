@@ -33,10 +33,10 @@ public class OrderController {
 
     @PostMapping("/createNewOrder")
     @Operation(summary = "创建新订单")
-//    @SaCheckLogin
+    @SaCheckLogin
     public R createNewOrder(@RequestBody @Valid CreateNewOrderForm form) {
-//        long customerId = StpUtil.getLoginIdAsLong();
-//        form.setCustomerId(customerId);
+        long customerId = StpUtil.getLoginIdAsLong();
+        form.setCustomerId(customerId);
         HashMap result = orderService.createNewOrder(form);
         return R.ok().put(RESULT_MAP_KEY, result);
     }

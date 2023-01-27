@@ -1,6 +1,8 @@
 package com.example.hxds.bff.customer.feign;
 
 import com.example.hxds.bff.customer.controller.form.EstimateOrderMileageAndMinuteForm;
+import com.example.hxds.bff.customer.controller.form.RemoveLocationCacheForm;
+import com.example.hxds.bff.customer.controller.form.UpdateLocationCacheForm;
 import com.example.hxds.common.util.R;
 import org.springframework.cloud.openfeign.FeignClient;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -15,4 +17,10 @@ import org.springframework.web.bind.annotation.PostMapping;
 public interface MpsServiceApi {
     @PostMapping("/map/estimateOrderMileageAndMinute")
     R estimateOrderMileageAndMinute(EstimateOrderMileageAndMinuteForm form);
+
+    @PostMapping("/driver/location/removeLocationCache")
+    R removeLocationCache(RemoveLocationCacheForm form);
+
+    @PostMapping("/driver/location/updateLocationCache")
+    R updateLocationCache(UpdateLocationCacheForm form);
 }

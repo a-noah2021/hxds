@@ -369,8 +369,12 @@ bladex/sentinel-dashboard
 3. 写 bff-driver 里面的 controller#DriverController#registerNewDriver 经过 SaToken 登陆验证返回给前端 token
     这里介绍一下 SaToken 的常用 API
 
-【拓展】关于鉴权这部分的链路：小程序获取微信临时凭证 code -> 后端根据 code 去微信接口获取 openId -> 将 openId 存入 tb_driver 并返回其主键 id -> 利用 id 登陆 SaToken 并返回会话值 ( UUID ) 给小程序 -> 小程序接收 token 以进行之后操作 ( 登陆、查询等 ) 的鉴权
-
+【拓展】关于鉴权这部分的链路：小程序获取微信临时凭证 code -> 后端根据 code 去微信接口获取 openId -> 将 openId 存入 tb_driver 并返回其主键 id -> 利用 id 登陆 SaToken 并返回会话值 ( UUID ) 给小程序 -> 小程序接收 token 以进行之后操作 ( eg:查询 ) 的鉴权
+code ( 五分钟有效期 ): 用户授权后，微信服务器返回临时凭证，用于换取 access_token
+openId: 小程序针对不同的用户在不同的小程序下都有唯一的一个 openId
+unionid: 微信下有好多产品，最常见的是公众号和小程序，在申请公众号和小程序的时候需要绑定的主体（也就是公司信息，绑定公司），
+如果统一主体（公司）下有好多小程序和公众号，那么我们就可以在微信开放平台上，绑定同一主体，这样我们就可以通过微信提供的unionid，
+锁定同一个用户，这样就 打通所有的小程序和公众号的账号系统。
 至于为啥返回的是主键 id 而不是 openId，是因为之后的司机信息查询大都由 id 作为筛选条件且主键在 SQL 层面读更快
 
 <img src="https://noah2021.cn/pics/wx-openid.jpg"  />
@@ -1328,7 +1332,7 @@ verificateDriverFace: `${baseUrl}/driver/recognition/verificateDriverFace`,
 
 1. 在 MySQL 中数字的查询速度要快于字符串的查询速度
 
-2. 关于鉴权这部分的链路：小程序获取微信临时凭证 code -> 后端根据 code 去微信接口获取 openId -> 将 openId 存入 tb_driver 并返回其主键 id -> 利用 id 登陆 SaToken 并返回会话值 ( UUID ) 给小程序 -> 小程序接收 token 以进行之后操作 ( 登陆、查询等 ) 的鉴权
+2. 关于鉴权这部分的链路：小程序获取微信临时凭证 code -> 后端根据 code 去微信接口获取 openId -> 将 openId 存入 tb_driver 并返回其主键 id -> 利用 id 登陆 SaToken 并返回会话值 ( UUID ) 给小程序 -> 小程序接收 token 以进行之后操作 ( eg:查询 ) 的鉴权
 
 ```java
 <select id="login" parameterType="String" resultType="HashMap">
@@ -4028,10 +4032,14 @@ public R insertOrder(@RequestBody @Valid InsertOrderForm form) {
 }
 ```
 7. 写 bff-customer/src/main/controller/form/InsertOrderForm
+   写 feign/OdrServiceApi#insertOrder
    补全 service/OrderServiceImpl#createNewOrder
-   写 controller/createNewOrder
+   写 controller/OrderController#createNewOrder
    实现下单链路的整体逻辑收口
 ```java
+ @PostMapping("/order/insertOrder")
+ R insertOrder(InsertOrderForm form);
+
  @PostMapping("/createNewOrder")
  @Operation(summary = "创建新订单")
  @SaCheckLogin
@@ -4044,4 +4052,193 @@ public R insertOrder(@RequestBody @Valid InsertOrderForm form) {
 ```
 8. 运行hxds-tm、hxds-odr、hxds-rule、hxds-mps、bff-customer五个子系统，然后用FastRequest插件测试Web方法
 ### 位置微服务缓存司机实时定位
-1. mark
+缓存司机信息用的 Key 是 `driver_online#driverId`，对应的 Value 是 `接单距离# 订单里程范围 #定向接单的坐标`，超时时间为1分钟。当系统接到订单之后，到 Redis 上面根据 driverId 查找缓存，找到了就是在线，找不到就是不在线
+
+1. 写 hxds-mps/src/main/service/DriverLocationService#updateLocationCache、removeLocationCache及其实现类
+   写 controller/form/UpdateLocationCacheForm、RemoveLocationCacheForm
+   写 controller/DriverLocationController
+   通过GEO实现对司机实时定位的修改和删除
+```java
+void updateLocationCache(Map param);
+
+void removeLocationCache(long driverId);
+
+@Override
+public void updateLocationCache(Map param) {
+     long driverId = MapUtil.getLong(param, "driverId");
+     String latitude = MapUtil.getStr(param, "latitude");
+     String longitude = MapUtil.getStr(param, "longitude");
+     //接单范围
+     int rangeDistance = MapUtil.getInt(param, "rangeDistance");
+     //订单里程范围
+     int orderDistance = MapUtil.getInt(param, "orderDistance");
+     Point point = new Point(Convert.toDouble(longitude), Convert.toDouble(latitude));
+     redisTemplate.opsForGeo().add("driver_location", point, driverId + "");
+     //定向接单地址的经度
+     String orientateLongitude = null;
+     if (param.get("orientateLongitude") != null) {
+         orientateLongitude = MapUtil.getStr(param, "orientateLongitude");
+     }
+     //定向接单地址的纬度
+     String orientateLatitude = null;
+     if (param.get("orientateLatitude") != null) {
+         orientateLatitude = MapUtil.getStr(param, "orientateLatitude");
+     }
+     //定向接单经纬度的字符串
+     String orientation = "none";
+     if (orientateLongitude != null && orientateLatitude != null) {  
+         orientation = orientateLatitude + "," + orientateLongitude;
+     }
+     String temp = rangeDistance + "#" + orderDistance + "#" + orientation;
+     redisTemplate.opsForValue().set("driver_online#" + driverId, temp, 60, TimeUnit.SECONDS);
+}
+
+@Override
+public void removeLocationCache(long driverId) {
+     redisTemplate.opsForGeo().remove("driver_location", driverId + "");
+     redisTemplate.delete("driver_online#" + driverId);
+}
+
+@Data
+@Schema(description = "更新司机GPS坐标缓存的表单")
+public class UpdateLocationCacheForm {
+
+   @NotNull(message = "driverId不能为空")
+   @Min(value = 1, message = "driverId不能小于1")
+   @Schema(description = "司机ID")
+   private Long driverId;
+
+   @NotBlank(message = "latitude不能为空")
+   @Pattern(regexp = "^(([1-8]\\d?)|([1-8]\\d))(\\.\\d{1,18})|90|0(\\.\\d{1,18})?$", message = "latitude内容不正确")
+   @Schema(description = "纬度")
+   private String latitude;
+
+   @NotBlank(message = "longitude不能为空")
+   @Pattern(regexp = "^(([1-9]\\d?)|(1[0-7]\\d))(\\.\\d{1,18})|180|0(\\.\\d{1,18})?$", message = "longitude内容不正确")
+   @Schema(description = "经度")
+   private String longitude;
+
+   @NotNull(message = "rangeDistance不能为空")
+   @Range(min = 1, max = 5, message = "rangeDistance范围错误")
+   @Schema(description = "接收几公里内的订单")
+   private Integer rangeDistance;
+
+   @NotNull(message = "orderDistance不能为空")
+   @Schema(description = "接收代驾里程几公里以上的订单")
+   @Range(min = 0, max = 30, message = "orderDistance范围错误")
+   private Integer orderDistance;
+
+   @Pattern(regexp = "^(([1-9]\\d?)|(1[0-7]\\d))(\\.\\d{1,18})|180|0(\\.\\d{1,18})?$", message = "orientateLongitude内容不正确")
+   @Schema(description = "定向接单的经度")
+   private String orientateLongitude;
+
+   @Pattern(regexp = "^(([1-8]\\d?)|([1-8]\\d))(\\.\\d{1,18})|90|0(\\.\\d{1,18})?$", message = "orientateLatitude内容不正确")
+   @Schema(description = "定向接单的纬度")
+   private String orientateLatitude;
+}
+
+@Data
+@Schema(description = "删除司机定位缓存的表单")
+public class RemoveLocationCacheForm {
+   @NotNull(message = "driverId不能为空")
+   @Min(value = 1, message = "driverId不能小于1")
+   @Schema(description = "司机ID")
+   private Long driverId;
+}
+
+@PostMapping("/updateLocationCache")
+@Operation(summary = "更新司机GPS定位缓存")
+public R updateLocationCache(@RequestBody @Valid UpdateLocationCacheForm form) {
+   Map param = BeanUtil.beanToMap(form);
+   driverLocationService.updateLocationCache(param);
+   return R.ok();
+}
+
+@PostMapping("/removeLocationCache")
+@Operation(summary = "删除司机GPS定位缓存")
+public R removeLocationCache(@RequestBody @Valid RemoveLocationCacheForm form) {
+   driverLocationService.removeLocationCache(form.getDriverId());
+   return R.ok();
+}
+```
+2. 运行hxds-tm、hxds-mps两个子系统，然后用FastRequest插件测试Web方法
+3. 写 bff-driver/src/main/controller/form/UpdateLocationCacheForm、RemoveLocationCacheForm
+   写 feign/MpsServiceApi#updateLocationCache、removeLocationCache
+   写 service/DriverLocationService#updateLocationCache、removeLocationCache 及其实现类
+   写 controller/DriverLocationController#updateLocationCache、removeLocationCache
+```java
+@Data
+@Schema(description = "更新司机GPS坐标缓存的表单")
+public class UpdateLocationCacheForm {
+
+   @Schema(description = "司机ID")
+   private Long driverId;
+
+   @NotBlank(message = "latitude不能为空")
+   @Pattern(regexp = "^(([1-8]\\d?)|([1-8]\\d))(\\.\\d{1,18})|90|0(\\.\\d{1,18})?$", message = "latitude内容不正确")
+   @Schema(description = "纬度")
+   private String latitude;
+
+   @NotBlank(message = "longitude不能为空")
+   @Pattern(regexp = "^(([1-9]\\d?)|(1[0-7]\\d))(\\.\\d{1,18})|180|0(\\.\\d{1,18})?$", message = "longitude内容不正确")
+   @Schema(description = "经度")
+   private String longitude;
+
+   @NotNull(message = "rangeDistance不能为空")
+   @Range(min = 1, max = 5, message = "rangeDistance范围错误")
+   @Schema(description = "接收几公里内的订单")
+   private Integer rangeDistance;
+
+   @NotNull(message = "orderDistance不能为空")
+   @Schema(description = "接收代驾里程几公里以上的订单")
+   @Range(min = 0, max = 30, message = "orderDistance范围错误")
+   private Integer orderDistance;
+
+   @Pattern(regexp = "^(([1-9]\\d?)|(1[0-7]\\d))(\\.\\d{1,18})|180|0(\\.\\d{1,18})?$", message = "orientateLongitude内容不正确")
+   @Schema(description = "定向接单的经度")
+   private String orientateLongitude;
+
+   @Pattern(regexp = "^(([1-8]\\d?)|([1-8]\\d))(\\.\\d{1,18})|90|0(\\.\\d{1,18})?$", message = "orientateLatitude内容不正确")
+   @Schema(description = "定向接单的纬度")
+   private String orientateLatitude;
+}
+@Data
+@Schema(description = "删除司机定位缓存的表单")
+public class RemoveLocationCacheForm {
+
+   @Schema(description = "司机ID")
+   private Long driverId;
+   
+}
+
+@PostMapping("/driver/location/removeLocationCache")
+R removeLocationCache(RemoveLocationCacheForm form);
+
+@PostMapping("/driver/location/updateLocationCache")
+R updateLocationCache(UpdateLocationCacheForm form);
+
+void updateLocationCache(UpdateLocationCacheForm form);
+
+void removeLocationCache(RemoveLocationCacheForm form);
+
+@Override
+public void updateLocationCache(UpdateLocationCacheForm form) {
+   mpsServiceApi.updateLocationCache(form);
+}
+
+@Override
+public void removeLocationCache(RemoveLocationCacheForm form) {
+   mpsServiceApi.removeLocationCache(form);
+}
+
+@PostMapping("/updateLocationCache")
+@Operation(summary = "更新司机缓存GPS定位")
+@SaCheckLogin
+public R updateLocationCache(@RequestBody @Valid UpdateLocationCacheForm form) {
+   long driverId = StpUtil.getLoginIdAsLong();
+   form.setDriverId(driverId);
+   driverLocationService.updateLocationCache(form);
+   return R.ok();
+}
+```
+4. 先删除Redis中的缓存信息，然后运行hxds-tm、hxds-mps、bff-driver子系统启动成功，最后用FastRequest插件测试Web方法
