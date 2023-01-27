@@ -4242,3 +4242,179 @@ public R updateLocationCache(@RequestBody @Valid UpdateLocationCacheForm form) {
 }
 ```
 4. 先删除Redis中的缓存信息，然后运行hxds-tm、hxds-mps、bff-driver子系统启动成功，最后用FastRequest插件测试Web方法
+5. 写 hxds-driver-wx/App.vue#onLaunch，先开启实时GPS定位，然后用Ajax提交GPS定位给后端Java程序
+```javascript
+ onLaunch: function() {
+     let gps = [];
+     wx.setKeepScreenOn({
+         keepScreenOn: true
+     });
+     //TODO 每隔3分钟触发自定义事件，接受系统消息
+     wx.startLocationUpdate({
+         success(resp) {
+             console.log('开启定位成功');
+         },
+         fail(resp) {
+             console.log('开启定位失败');
+             uni.$emit('updateLocation', null);
+         }
+     });
+
+     wx.onLocationChange(function(resp) {
+         let latitude = resp.latitude;
+         let longitude = resp.longitude;
+         let speed = resp.speed;
+
+         let location = {
+             latitude: latitude,
+             longitude: longitude
+         };
+         let workStatus = uni.getStorageSync('workStatus');
+         let baseUrl = 'http://电脑IP:8080/hxds-driver';
+         if (workStatus == '开始接单') {
+             // TODO 只在每分钟的前10秒上报定位信息，减小服务器压力
+             // let current = new Date();
+             // if (current.getSeconds() > 10) {
+             // 	return;
+             // }
+             let settings = uni.getStorageSync('settings');
+             settings = {
+                 orderDistance: 0,
+                 rangeDistance: 5,
+                 orientation: ''
+             };
+             let orderDistance = settings.orderDistance;
+             let rangeDistance = settings.rangeDistance;
+             let orientation = settings.orientation;
+             uni.request({
+                 url: `${baseUrl}/driver/location/updateLocationCache`,
+                 method: 'POST',
+                 header: {
+                     token: uni.getStorageSync('token')
+                 },
+                 data: {
+                     latitude: latitude,
+                     longitude: longitude,
+                     orderDistance: orderDistance,
+                     rangeDistance: rangeDistance,
+                     orientateLongitude: orientation != '' ? orientation.longitude : null,
+                     orientateLatitude: orientation != '' ? orientation.latitude : null
+                 },
+                 success: function(resp) {
+                     if (resp.statusCode == 401) {
+                         uni.redirectTo({
+                             url: 'pages/login/login'
+                         });
+                     } else if (resp.statusCode == 200 && resp.data.code == 200) {
+                         let data = resp.data;
+                         if (data.hasOwnProperty('token')) {
+                             let token = data.token;
+                             uni.setStorageSync('token', token);
+                         }
+                         console.log('定位更新成功');
+                     } else {
+                         console.error('更新GPS定位信息失败', resp.data);
+                     }
+                 },
+                 fail: function(error) {
+                     console.error('更新GPS定位信息失败', error);
+                 }
+             });
+         } 
+         else if(workStatus == '接客户'){
+             let executeOrder = uni.getStorageSync('executeOrder');
+             let orderId=executeOrder.id
+             let data={
+                 orderId:orderId,
+                 latitude: latitude,
+                 longitude: longitude
+             }
+             uni.request({
+                 url: `${baseUrl}/driver/location/updateOrderLocationCache`,
+                 method:"POST",
+                 header:{
+                     token:uni.getStorageSync("token")
+                 },
+                 data:data,
+                 success:function(resp){
+                     if (resp.statusCode == 401) {
+                         uni.redirectTo({
+                             url: 'pages/login/login'
+                         });
+                     } else if (resp.statusCode == 200 && resp.data.code == 200) {
+                         let data = resp.data;
+                         if (data.hasOwnProperty('token')) {
+                             let token = data.token;
+                             uni.setStorageSync('token', token);
+                         }
+                         console.log('订单定位更新成功');
+                     } else {
+                         console.error('订单定位更新失败', resp.data);
+                     }
+                 },
+                 fail:function(error){
+                     console.error('订单定位更新失败', error);
+                 }
+             })
+         }
+         else if (workStatus == '开始代驾') {
+             //每凑够20个定位就上传一次，减少服务器的压力
+             let executeOrder=uni.getStorageSync("executeOrder")
+             if(executeOrder!=null){
+                 gps.push({
+                     orderId: executeOrder.id,
+                     customerId: executeOrder.customerId,
+                     latitude: latitude,
+                     longitude: longitude,
+                     speed: speed
+                 })
+                 if(gps.length==5){
+                     uni.request({
+                         url:`${baseUrl}/order/gps/insertOrderGps`,
+                         method: 'POST',
+                         header: {
+                             token: uni.getStorageSync('token')
+                         },
+                         data: {
+                             list: gps
+                         },
+                         success: function(resp) {
+                             if (resp.statusCode == 401) {
+                                 uni.redirectTo({
+                                     url: '/pages/login/login'
+                                 });
+                             }
+                             else if (resp.statusCode == 200 && resp.data.code == 200) {
+                                 let data = resp.data;
+                                 console.log("上传GPS成功");
+                             } 
+                             else {
+                                 console.error('保存GPS定位失败', resp.data);
+                             }
+                             gps.length = 0;
+                         },
+                         fail: function(error) {
+                             console.error('保存GPS定位失败', error);
+                         }
+                     })
+                 }
+             }
+         }
+         uni.$emit('updateLocation', location);
+     });
+ },
+```
+6. 先把Redis中缓存的定位信息删除掉，然后把hxds-tm、hxds-mps、hxds-odr、bff-driver、gateway子系统启动成功，
+   然后必须登陆司机端小程序，我们等待半分钟，看看Redis上面是否缓存了司机的定位
+### 地图微服务用GEO查找附近适合接单的司机
+司机端的小程序可以实时上传定位坐标，并且Redis中保存了司机的GEO缓存和上线缓存。回到创建订单这个业务主线上来，创建订单的过程中，
+要查找附近适合接单的司机。如果有这样的司机，代驾系统才会创建订单，否则就拒绝创建订单。
+1. 写 hxds-mps/src/main/java/service/DriverLocationService#searchBefittingDriverAboutOrder 及其实现类
+   写 controller/form/SearchBefittingDriverAboutOrderForm
+   写 controller/DriverLocationController#searchBefittingDriverAboutOrder
+   计算方圆几公里以内的司机，我们就得用上Redis的GEO计算
+```java
+
+```
+2. 启动hxds-tm、hxds-dr、hxds-mps、hxds-odr、bff-driver、gateway这些子系统都启动了，然后在司机小程序上面登陆，保持实时上传司机的GPS定位，
+   最后用FastRequest插件测试Web方法。
