@@ -15,12 +15,8 @@ import org.springframework.web.bind.annotation.PostMapping;
  **/
 @FeignClient(value = "hxds-mps")
 public interface MpsServiceApi {
+
     @PostMapping("/map/estimateOrderMileageAndMinute")
     R estimateOrderMileageAndMinute(EstimateOrderMileageAndMinuteForm form);
 
-    @PostMapping("/driver/location/removeLocationCache")
-    R removeLocationCache(RemoveLocationCacheForm form);
-
-    @PostMapping("/driver/location/updateLocationCache")
-    R updateLocationCache(UpdateLocationCacheForm form);
 }

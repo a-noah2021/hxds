@@ -1,9 +1,9 @@
-package com.example.hxds.bff.customer.service.impl;
+package com.example.hxds.bff.driver.service.impl;
 
-import com.example.hxds.bff.customer.controller.form.RemoveLocationCacheForm;
-import com.example.hxds.bff.customer.controller.form.UpdateLocationCacheForm;
-import com.example.hxds.bff.customer.feign.MpsServiceApi;
-import com.example.hxds.bff.customer.service.DriverLocationService;
+import com.example.hxds.bff.driver.controller.form.RemoveLocationCacheForm;
+import com.example.hxds.bff.driver.controller.form.UpdateLocationCacheForm;
+import com.example.hxds.bff.driver.feign.MpsServiceApi;
+import com.example.hxds.bff.driver.service.DriverLocationService;
 import org.springframework.stereotype.Service;
 
 import javax.annotation.Resource;

@@ -4052,7 +4052,9 @@ public R insertOrder(@RequestBody @Valid InsertOrderForm form) {
 ```
 8. 运行hxds-tm、hxds-odr、hxds-rule、hxds-mps、bff-customer五个子系统，然后用FastRequest插件测试Web方法
 ### 位置微服务缓存司机实时定位
-缓存司机信息用的 Key 是 `driver_online#driverId`，对应的 Value 是 `接单距离# 订单里程范围 #定向接单的坐标`，超时时间为1分钟。当系统接到订单之后，到 Redis 上面根据 driverId 查找缓存，找到了就是在线，找不到就是不在线
+缓存司机信息用的 Key 是 `driver_online#driverId`，对应的 Value 是 `接单距离#订单里程范围#定向接单的坐标`，超时时间为1分钟。当系统接到订单之后，到 Redis 上面根据 driverId 查找缓存，找到了就是在线，找不到就是不在线
+
+缓存司机位置信息用的 Key 是 `driver_location`，对应的 lati、longi 是司机位置，Member 是 `driverId`，
 
 1. 写 hxds-mps/src/main/service/DriverLocationService#updateLocationCache、removeLocationCache及其实现类
    写 controller/form/UpdateLocationCacheForm、RemoveLocationCacheForm
@@ -4247,6 +4249,7 @@ public R updateLocationCache(@RequestBody @Valid UpdateLocationCacheForm form) {
  onLaunch: function() {
      let gps = [];
      wx.setKeepScreenOn({
+         // 保持屏幕常亮
          keepScreenOn: true
      });
      //TODO 每隔3分钟触发自定义事件，接受系统消息
@@ -4404,7 +4407,7 @@ public R updateLocationCache(@RequestBody @Valid UpdateLocationCacheForm form) {
      });
  },
 ```
-6. 先把Redis中缓存的定位信息删除掉，然后把hxds-tm、hxds-mps、hxds-odr、bff-driver、gateway子系统启动成功，
+6. 先把Redis中缓存的定位信息删除掉，然后把hxds-tm、hxds-mps、hxds-dr、hxds-odr、bff-driver、gateway子系统启动成功，
    然后必须登陆司机端小程序，我们等待半分钟，看看Redis上面是否缓存了司机的定位
 ### 地图微服务用GEO查找附近适合接单的司机
 司机端的小程序可以实时上传定位坐标，并且Redis中保存了司机的GEO缓存和上线缓存。回到创建订单这个业务主线上来，创建订单的过程中，

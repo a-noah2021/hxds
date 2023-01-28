@@ -1,9 +1,9 @@
-package com.example.hxds.bff.customer.controller;
+package com.example.hxds.bff.driver.controller;
 
 import cn.dev33.satoken.annotation.SaCheckLogin;
 import cn.dev33.satoken.stp.StpUtil;
-import com.example.hxds.bff.customer.controller.form.UpdateLocationCacheForm;
-import com.example.hxds.bff.customer.service.DriverLocationService;
+import com.example.hxds.bff.driver.controller.form.UpdateLocationCacheForm;
+import com.example.hxds.bff.driver.service.DriverLocationService;
 import com.example.hxds.common.util.R;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;

@@ -5,6 +5,7 @@ import cn.hutool.core.map.MapUtil;
 import com.example.hxds.mps.service.DriverLocationService;
 import org.springframework.data.geo.Point;
 import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.stereotype.Service;
 
 import javax.annotation.Resource;
 import java.util.Map;
@@ -16,6 +17,7 @@ import java.util.concurrent.TimeUnit;
  * @author: noah2021
  * @date: 2023-01-27 23:16
  **/
+@Service
 public class DriverLocationServiceImpl implements DriverLocationService {
 
     @Resource
