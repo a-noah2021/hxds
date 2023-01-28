@@ -18,6 +18,8 @@ target/
 *.iws
 *.iml
 *.ipr
+hxds-rule/hxds-rule-0.0.1-SNAPSHOT.jar
+hxds-workflow/hxds-workflow-0.0.1-SNAPSHOT.jar
 
 ### NetBeans ###
 /nbproject/private/
