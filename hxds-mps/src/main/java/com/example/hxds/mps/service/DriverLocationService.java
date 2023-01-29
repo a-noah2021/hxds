@@ -1,5 +1,6 @@
 package com.example.hxds.mps.service;
 
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -14,4 +15,7 @@ public interface DriverLocationService {
 
     void removeLocationCache(long driverId);
 
+    List searchBefittingDriverAboutOrder(double startPlaceLatitude,
+                     double startPlaceLongitude, double endPlaceLatitude,
+                     double endPlaceLongitude, double mileage);
 }

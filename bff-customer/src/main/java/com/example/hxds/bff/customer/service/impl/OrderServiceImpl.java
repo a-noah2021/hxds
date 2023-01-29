@@ -4,10 +4,7 @@ import cn.hutool.core.date.DateTime;
 import cn.hutool.core.map.MapUtil;
 import cn.hutool.core.util.IdUtil;
 import com.codingapi.txlcn.tc.annotation.LcnTransaction;
-import com.example.hxds.bff.customer.controller.form.CreateNewOrderForm;
-import com.example.hxds.bff.customer.controller.form.EstimateOrderChargeForm;
-import com.example.hxds.bff.customer.controller.form.EstimateOrderMileageAndMinuteForm;
-import com.example.hxds.bff.customer.controller.form.InsertOrderForm;
+import com.example.hxds.bff.customer.controller.form.*;
 import com.example.hxds.bff.customer.feign.CstServiceApi;
 import com.example.hxds.bff.customer.feign.MpsServiceApi;
 import com.example.hxds.bff.customer.feign.OdrServiceApi;
@@ -21,8 +18,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import javax.annotation.Resource;
-import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.util.ArrayList;
 import java.util.HashMap;
 
@@ -108,8 +103,7 @@ public class OrderServiceImpl implements OrderService {
         String exceedMinutePrice = MapUtil.getStr(map, EXCEED_MINUTE_PRICE_MAP_KEY);
         short baseReturnMileage = MapUtil.getShort(map, BASE_RETURN_MILEAGE_MAP_KEY);
         String exceedReturnPrice = MapUtil.getStr(map, EXCEED_RETURN_MILEAGE_MAP_KEY);
-        // TODO:搜索适合接单的司机
-        /*SearchBefittingDriverAboutOrderForm form_3 = new SearchBefittingDriverAboutOrderForm();
+        SearchBefittingDriverAboutOrderForm form_3 = new SearchBefittingDriverAboutOrderForm();
         form_3.setStartPlaceLatitude(startPlaceLatitude);
         form_3.setStartPlaceLongitude(startPlaceLongitude);
         form_3.setEndPlaceLatitude(endPlaceLatitude);
@@ -117,13 +111,13 @@ public class OrderServiceImpl implements OrderService {
         form_3.setMileage(mileage);
 
         r = mpsServiceApi.searchBefittingDriverAboutOrder(form_3);
-        ArrayList<HashMap> list = (ArrayList<HashMap>) r.get("result");*/
+        ArrayList<HashMap> list = (ArrayList<HashMap>) r.get("result");
         HashMap result = new HashMap() {{
             put(COUNT_MAP_KEY, 0);
         }};
 
         // 如果存在适合接单的司机就创建订单，否则就不创建订单
-//        if (list.size() > 0) {
+        if (list.size() > 0) {
             InsertOrderForm form_4 = new InsertOrderForm();
             //UUID字符串，充当订单号，微信支付时候会用上
             form_4.setUuid(IdUtil.simpleUUID());
@@ -174,11 +168,11 @@ public class OrderServiceImpl implements OrderService {
             form_5.setMinute(minute);
             form_5.setFavourFee(favourFee);
 
-            snmServiceApi.sendNewOrderMessageAsync(form_5);
+            snmServiceApi.sendNewOrderMessageAsync(form_5);*/
 
             result.put(ORDER_ID_MAP_KEY, orderId);
-            result.replace(COUNT_MAP_KEY, list.size());*/
-//        }
+            result.replace(COUNT_MAP_KEY, list.size());
+        }
         return result;
     }
 }

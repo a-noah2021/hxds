@@ -3729,7 +3729,7 @@ public interface RuleServiceApi {
 }
 ```
 5. 写 bff-customer/src/main/controller/form/CreateNewOrderForm
-   写 service/OrderService 及其实现类
+   写 service/OrderService#createNewOrder 及其实现类
    实现对里程、时间与费用的重新预估
 ```java
 @Data
@@ -4033,13 +4033,39 @@ public R insertOrder(@RequestBody @Valid InsertOrderForm form) {
 ```
 7. 写 bff-customer/src/main/controller/form/InsertOrderForm
    写 feign/OdrServiceApi#insertOrder
-   补全 service/OrderServiceImpl#createNewOrder
+   补充 service/OrderServiceImpl#createNewOrder 中创建订单部分
    写 controller/OrderController#createNewOrder
    实现下单链路的整体逻辑收口
 ```java
  @PostMapping("/order/insertOrder")
  R insertOrder(InsertOrderForm form);
 
+InsertOrderForm form_4 = new InsertOrderForm();
+//UUID字符串，充当订单号，微信支付时候会用上
+form_4.setUuid(IdUtil.simpleUUID());
+form_4.setCustomerId(customerId);
+form_4.setStartPlace(startPlace);
+form_4.setStartPlaceLatitude(startPlaceLatitude);
+form_4.setStartPlaceLongitude(startPlaceLongitude);
+form_4.setEndPlace(endPlace);
+form_4.setEndPlaceLatitude(endPlaceLatitude);
+form_4.setEndPlaceLongitude(endPlaceLongitude);
+form_4.setExpectsMileage(mileage);
+form_4.setExpectsFee(expectsFee);
+form_4.setFavourFee(favourFee);
+form_4.setDate(new DateTime().toDateStr());
+form_4.setChargeRuleId(Long.parseLong(chargeRuleId));
+form_4.setCarPlate(form.getCarPlate());
+form_4.setCarType(form.getCarType());
+form_4.setBaseMileage(baseMileage);
+form_4.setBaseMileagePrice(baseMileagePrice);
+form_4.setExceedMileagePrice(exceedMileagePrice);
+form_4.setBaseMinute(baseMinute);
+form_4.setExceedMinutePrice(exceedMinutePrice);
+form_4.setBaseReturnMileage(baseReturnMileage);
+form_4.setExceedReturnPrice(exceedReturnPrice);
+r = odrServiceApi.insertOrder(form_4);
+         
  @PostMapping("/createNewOrder")
  @Operation(summary = "创建新订单")
  @SaCheckLogin
@@ -4052,9 +4078,9 @@ public R insertOrder(@RequestBody @Valid InsertOrderForm form) {
 ```
 8. 运行hxds-tm、hxds-odr、hxds-rule、hxds-mps、bff-customer五个子系统，然后用FastRequest插件测试Web方法
 ### 位置微服务缓存司机实时定位
-缓存司机信息用的 Key 是 `driver_online#driverId`，对应的 Value 是 `接单距离#订单里程范围#定向接单的坐标`，超时时间为1分钟。当系统接到订单之后，到 Redis 上面根据 driverId 查找缓存，找到了就是在线，找不到就是不在线
-
-缓存司机位置信息用的 Key 是 `driver_location`，对应的 lati、longi 是司机位置，Member 是 `driverId`，
+缓存司机在线信息用的 Key 是 `driver_online#driverId`，对应的 Value 是 `接单范围#订单里程范围#定向接单的坐标`，超时时间为1分钟。当系统接到订单之后，到 Redis 上面根据 driverId 查找缓存，找到了就是在线，找不到就是不在线
+接单范围即是对司机到起点坐标的距离进行限制，订单里程范围即是对起点坐标与终点坐标之间的距离进行限制
+缓存司机位置信息用的 Key 是 `driver_location`，对应的 lati, longi 是司机位置，Member 是 `driverId`，
 
 1. 写 hxds-mps/src/main/service/DriverLocationService#updateLocationCache、removeLocationCache及其实现类
    写 controller/form/UpdateLocationCacheForm、RemoveLocationCacheForm
@@ -4416,8 +4442,254 @@ public R updateLocationCache(@RequestBody @Valid UpdateLocationCacheForm form) {
    写 controller/form/SearchBefittingDriverAboutOrderForm
    写 controller/DriverLocationController#searchBefittingDriverAboutOrder
    计算方圆几公里以内的司机，我们就得用上Redis的GEO计算
+   【拓展】WGS84（World Geodetic System 1984）：是 GPS 全球定位系统建立的坐标系统，通过GPS定位拿到的原始经纬度。
+   GCJ-02（国家测量局02号标准）：GCJ-02 是由中国国家测绘局（G表示Guojia国家，C表示Cehui测绘，J表示Ju局）制订的地理信息系统的坐标系统，是在WGS84经纬度的基础上执行加密算法而成。因为GPS得到的经纬度直接在 GCJ-02 坐标系下会定位到错误的地点，有种到了火星的感觉，因此在坊间也将 GCJ-02 戏称为火星坐标系。国内的高德地图就是用的 GCJ-02 坐标系
+   BD-09（Baidu, BD）：是百度地图使用的地理坐标系，其在GCJ-02上多增加了一次变换，用来保护用户隐私。从百度产品中得到的坐标都是BD-09坐标系
 ```java
+ArrayList searchBefittingDriverAboutOrder(double startPlaceLatitude,
+        double startPlaceLongitude, double endPlaceLatitude,
+        double endPlaceLongitude, double mileage);
 
+    @Override
+    public List searchBefittingDriverAboutOrder(double startPlaceLatitude, double startPlaceLongitude,
+                                                double endPlaceLatitude, double endPlaceLongitude, double mileage) {
+        // 获取方圆5公里的范围
+        Point point = new Point(startPlaceLongitude, startPlaceLatitude);
+        RedisGeoCommands.DistanceUnit metric = RedisGeoCommands.DistanceUnit.KILOMETERS;
+        Distance distance = new Distance(5, metric);
+        Circle circle = new Circle(point, distance);
+
+        // includeDistance 包含距离 includeCoordinates 包含坐标 sortAscending 正序排序
+        RedisGeoCommands.GeoRadiusCommandArgs args = RedisGeoCommands.GeoRadiusCommandArgs.newGeoRadiusArgs().includeDistance()
+                .includeCoordinates().sortAscending();
+        // 返回键包含的位置元素当中，与中心的距离不超过给定最大距离的所有位置元素
+        GeoResults radius = redisTemplate.opsForGeo().radius("driver_location", circle, args);
+
+        // 筛选在这个范围内附近适合接单(满足接单范围&订单里程范围&定向接单)的司机且在线的的司机
+        ArrayList list = Lists.newArrayList();
+        if(!Objects.isNull(radius)){
+            Iterator<GeoResult<RedisGeoCommands.GeoLocation<String>>> iterator = radius.iterator();
+            while(iterator.hasNext()){
+                // content就是符合条件的driver_location对应的GEO数据，里面存的Member就是driverId
+                // result: distance(距起点坐标的距离)、content     content: point(经纬度)、name(Member)
+                GeoResult<RedisGeoCommands.GeoLocation<String>> result = iterator.next();
+                RedisGeoCommands.GeoLocation<String> content = result.getContent();
+                String driverId = content.getName();
+                // 司机和起点坐标之间的距离
+                double dist = result.getDistance().getValue();
+                if(!redisTemplate.hasKey("driver_online#" + driverId)){
+                    continue;
+                }
+                Object obj = redisTemplate.opsForValue().get("driver_online#" + driverId);
+                if(Objects.isNull(obj)){
+                    continue;
+                }
+                String value = obj.toString();
+                String[] temp = value.split("#");
+                int rangeDistance = Integer.parseInt(temp[0]);
+                int orderDistance = Integer.parseInt(temp[1]);
+                String orientation = temp[2];
+
+                // 判断是否满足接单范围
+                boolean bool_1 = (dist <= rangeDistance);
+                // 判断是否满足订单里程范围，由于是起点坐标方圆五里，所以还需要对mileage进行判断
+                // 这里有两方面考虑：1、orderDistance过小，对mileage限制防止跑超限；2、orderDistance过大，防止有的司机想拉远程却派发短程单
+                boolean bool_2 = false;
+                if (orderDistance == 0) {
+                    bool_2 = true;
+                } else if (orderDistance == 5 && mileage > 0 && mileage <= 5) {
+                    bool_2 = true;
+                } else if (orderDistance == 10 && mileage > 5 && mileage <= 10) {
+                    bool_2 = true;
+                } else if (orderDistance == 15 && mileage > 10 && mileage <= 15) {
+                    bool_2 = true;
+                } else if (orderDistance == 30 && mileage > 15 && mileage <= 30) {
+                    bool_2 = true;
+                }
+                // 判断定向接单是否符合：定向接单即是只接根据司机设置的point为中心一定范围内的单
+                boolean bool_3 = false;
+                if (!orientation.equals("none")) {
+                    double orientationLatitude = Double.parseDouble(orientation.split(",")[0]);
+                    double orientationLongitude = Double.parseDouble(orientation.split(",")[1]);
+                    //把定向点的火星坐标转换成GPS坐标
+                    double[] location = CoordinateTransform.transformGCJ02ToWGS84(orientationLongitude, orientationLatitude);
+                    GlobalCoordinates point_1 = new GlobalCoordinates(location[1], location[0]);
+                    //把订单终点的火星坐标转换成GPS坐标
+                    location = CoordinateTransform.transformGCJ02ToWGS84(endPlaceLongitude, endPlaceLatitude);
+                    GlobalCoordinates point_2 = new GlobalCoordinates(location[1], location[0]);
+                    //这里不需要Redis的GEO计算，直接用封装函数计算两个GPS坐标之间的距离
+                    GeodeticCurve geoCurve = new GeodeticCalculator()
+                            .calculateGeodeticCurve(Ellipsoid.WGS84, point_1, point_2);
+                    if (geoCurve.getEllipsoidalDistance() <= 3000) {
+                        bool_3 = true;
+                    }
+                } else {
+                    bool_3 = true;
+                }
+                if (bool_1 && bool_2 && bool_3) {
+                    HashMap map = new HashMap() {{
+                        put("driverId", driverId);
+                        put("distance", dist);
+                    }};
+                    list.add(map);
+                }
+            }
+        }
+        return list;
+    }
+
+@Data
+@Schema(description = "查询符合某个订单接单的司机列表的表单")
+public class SearchBefittingDriverAboutOrderForm {
+   @NotBlank(message = "startPlaceLatitude不能为空")
+   @Pattern(regexp = "^(([1-8]\\d?)|([1-8]\\d))(\\.\\d{1,18})|90|0(\\.\\d{1,18})?$", message = "startPlaceLatitude内容不正确")
+   @Schema(description = "订单起点的纬度")
+   private String startPlaceLatitude;
+
+   @NotBlank(message = "startPlaceLongitude不能为空")
+   @Pattern(regexp = "^(([1-9]\\d?)|(1[0-7]\\d))(\\.\\d{1,18})|180|0(\\.\\d{1,18})?$", message = "startPlaceLongitude内容不正确")
+   @Schema(description = "订单起点的经度")
+   private String startPlaceLongitude;
+
+   @NotBlank(message = "endPlaceLatitude不能为空")
+   @Pattern(regexp = "^(([1-8]\\d?)|([1-8]\\d))(\\.\\d{1,18})|90|0(\\.\\d{1,18})?$", message = "endPlaceLatitude内容不正确")
+   @Schema(description = "订单终点的纬度")
+   private String endPlaceLatitude;
+
+   @NotBlank(message = "endPlaceLongitude不能为空")
+   @Pattern(regexp = "^(([1-9]\\d?)|(1[0-7]\\d))(\\.\\d{1,18})|180|0(\\.\\d{1,18})?$", message = "endPlaceLongitude内容不正确")
+   @Schema(description = "订单起点的经度")
+   private String endPlaceLongitude;
+
+   @NotBlank(message = "mileage不能为空")
+   @Pattern(regexp = "^[1-9]\\d*\\.\\d+$|^0\\.\\d*[1-9]\\d*$|^[1-9]\\d*$", message = "mileage内容不正确")
+   @Schema(description = "预估里程")
+   private String mileage;
+}
+
+@PostMapping("/searchBefittingDriverAboutOrder")
+@Operation(summary = "查询符合某个订单接单的司机列表")
+public R searchBefittingDriverAboutOrder(@RequestBody @Valid SearchBefittingDriverAboutOrderForm form) {
+   double startPlaceLatitude = Double.parseDouble(form.getStartPlaceLatitude());
+   double startPlaceLongitude = Double.parseDouble(form.getStartPlaceLongitude());
+   double endPlaceLatitude = Double.parseDouble(form.getEndPlaceLatitude());
+   double endPlaceLongitude = Double.parseDouble(form.getEndPlaceLongitude());
+   double mileage = Double.parseDouble(form.getMileage());
+   ArrayList list = driverLocationService.searchBefittingDriverAboutOrder(startPlaceLatitude, startPlaceLongitude,
+           endPlaceLatitude, endPlaceLongitude, mileage);
+   return R.ok().put("result", list);
+}
 ```
-2. 启动hxds-tm、hxds-dr、hxds-mps、hxds-odr、bff-driver、gateway这些子系统都启动了，然后在司机小程序上面登陆，保持实时上传司机的GPS定位，
+2. 写 bff-customer/src/main/controller/form/SearchBefittingDriverAboutOrderForm
+   写 feign/MpsServiceApi#searchBefittingDriverAboutOrder
+   继续补全 service/OrderServiceImpl#createNewOrder 实现查找符合条件的司机
+```java
+@Data
+@Schema(description = "查询符合某个订单接单的司机列表的表单")
+public class SearchBefittingDriverAboutOrderForm {
+    @NotBlank(message = "startPlaceLatitude不能为空")
+    @Pattern(regexp = "^(([1-8]\\d?)|([1-8]\\d))(\\.\\d{1,18})|90|0(\\.\\d{1,18})?$", message = "startPlaceLatitude内容不正确")
+    @Schema(description = "订单起点的纬度")
+    private String startPlaceLatitude;
+
+    @NotBlank(message = "startPlaceLongitude不能为空")
+    @Pattern(regexp = "^(([1-9]\\d?)|(1[0-7]\\d))(\\.\\d{1,18})|180|0(\\.\\d{1,18})?$", message = "startPlaceLongitude内容不正确")
+    @Schema(description = "订单起点的经度")
+    private String startPlaceLongitude;
+
+    @NotBlank(message = "endPlaceLatitude不能为空")
+    @Pattern(regexp = "^(([1-8]\\d?)|([1-8]\\d))(\\.\\d{1,18})|90|0(\\.\\d{1,18})?$", message = "endPlaceLatitude内容不正确")
+    @Schema(description = "订单终点的纬度")
+    private String endPlaceLatitude;
+
+    @NotBlank(message = "endPlaceLongitude不能为空")
+    @Pattern(regexp = "^(([1-9]\\d?)|(1[0-7]\\d))(\\.\\d{1,18})|180|0(\\.\\d{1,18})?$", message = "endPlaceLongitude内容不正确")
+    @Schema(description = "订单起点的经度")
+    private String endPlaceLongitude;
+
+    @NotBlank(message = "mileage不能为空")
+    @Pattern(regexp = "^[1-9]\\d*\\.\\d+$|^0\\.\\d*[1-9]\\d*$|^[1-9]\\d*$", message = "mileage内容不正确")
+    @Schema(description = "预估里程")
+    private String mileage;
+}
+
+@PostMapping("/driver/location/searchBefittingDriverAboutOrder")
+R searchBefittingDriverAboutOrder(SearchBefittingDriverAboutOrderForm form);
+
+SearchBefittingDriverAboutOrderForm form_3 = new SearchBefittingDriverAboutOrderForm();
+form_3.setStartPlaceLatitude(startPlaceLatitude);
+form_3.setStartPlaceLongitude(startPlaceLongitude);
+form_3.setEndPlaceLatitude(endPlaceLatitude);
+form_3.setEndPlaceLongitude(endPlaceLongitude);
+form_3.setMileage(mileage);
+r = mpsServiceApi.searchBefittingDriverAboutOrder(form_3);
+ArrayList<HashMap> list = (ArrayList<HashMap>) r.get("result");
+```
+3. 补充 hxds-customer-wx/pages/car_list/car_list.vue#choseOneHandle 传递 carType 到 create_order
+   补充 hxds-customer-wx/pages/create_order/create_order.vue#chooseCarHandle 接收 carType
+   写 hxds-customer-wx/pages/create_order/create_order.vue#createOrderHandle 实现小程序下单逻辑
+```javascript
+ choseOneHandle: function (id, carPlate, carType) {
+   uni.navigateTo({
+     url: `../create_order/create_order?showCar=true&carId=${id}&carPlate=${carPlate}&carType=${carType}`
+   });
+ }
+
+if(options.hasOwnProperty('showCar')){
+   that.showCar = options.showCar;
+   that.carId = options.carId;
+   that.carPlate = options.carPlate;
+   this.carType = options.carType;
+}
+
+createOrderHandle: function() {
+   let that = this;
+   if (that.carType == null || that.carPlate == null) {
+      uni.showToast({
+         icon: 'error',
+         title: '没有设置代驾车辆'
+      });
+      return;
+   }
+   uni.showLoading({
+      title: '下单中请稍后'
+   });
+   setTimeout(function() {
+      uni.hideLoading();
+   }, 60000);
+   let data = {
+      startPlace: that.from.address,
+      startPlaceLatitude: that.from.latitude,
+      startPlaceLongitude: that.from.longitude,
+      endPlace: that.to.address,
+      endPlaceLatitude: that.to.latitude,
+      endPlaceLongitude: that.to.longitude,
+      favourFee: '0.0',
+      carPlate: that.carPlate,
+      carType: that.carType
+   };
+   that.ajax(that.url.createNewOrder, 'POST', data, function(resp) {
+      uni.hideLoading();
+      if (resp.data.result.count > 0) {
+         uni.showToast({
+            icon: 'success',
+            title: '订单创建成功'
+         });
+         setTimeout(function() {
+            that.orderId = resp.data.result.orderId;
+            that.showPopup = true;
+            //此处应该是15*60，但是测试中我们等不了15分钟,每隔5分钟发送一次查询接单情况的请求
+            /*that.timestamp = 60;
+            that.$refs.uCountDown.start();*/
+         }, 2000);
+      } else {
+         uni.showToast({
+            icon: 'none',
+            title: '没有适合接单的司机'
+         });
+      }
+   });
+},
+```
+3. 启动hxds-tm、hxds-dr、hxds-mps、hxds-cst、hxds-rule、hxds-odr、bff-driver、bff-costomer、gateway这些子系统都启动了，然后在司机小程序上面登陆，保持实时上传司机的GPS定位，
    最后用FastRequest插件测试Web方法。
