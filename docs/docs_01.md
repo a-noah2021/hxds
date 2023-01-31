@@ -285,7 +285,7 @@ docker run -it -d --name minio -m 400m \
 bitnami/minio:latest
 ```
 
-4. 登陆 Minio [控制台](http://43.143.134.158:9001/login)，账号是：root，密码是：abc123456，进入即可查看具体状况
+4. 登陆 Minio [控制台](http://host_ip:9001/login)，账号是：root，密码是：abc123456，进入即可查看具体状况
 
 ## 安装其他中间件
 
@@ -297,16 +297,16 @@ bitnami/minio:latest
 docker load < RabbitMQ.tar,gz
 ```
 
-2. 创建并启动 RabbitMQ 容器
+2. 创建并启动 RabbitMQ 容器，其中5672是server端口，15672控制台端口
 
 ```shell
 docker run -it -d --name mq \
 --net mynet --ip 172.18.0.11 \
--p 5672:5672 -m 200m \
+-p 5672:5672 -p 15672:15672 -m 200m \
 -e TZ=Asia/Shanghai --privileged=true \
 rabbitmq
 ```
-
+3. 进入容器内部后，执行`rabbitmq-plugins enable rabbitmq_management`，即可进入[RabbitMQ后台系统](http://host_ip:15672/#/)
 ### 安装Nacos
 
 1. 下载并导入 Nacos 镜像文件
@@ -343,7 +343,7 @@ docker run -it -d --name sentinel \
 bladex/sentinel-dashboard
 ```
 
-3. 登陆 Sentinel [控制台](http://43.143.134.158:8858/#/dashboard)，账密都是：sentinel，进入即可查看具体状况
+3. 登陆 Sentinel [控制台](http://host_ip:8858/#/dashboard)，账密都是：sentinel，进入即可查看具体状况
 
 ### 配置腾讯云COS
 

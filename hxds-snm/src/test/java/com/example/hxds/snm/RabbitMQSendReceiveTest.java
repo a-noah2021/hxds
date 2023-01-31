@@ -22,8 +22,8 @@ public class RabbitMQSendReceiveTest {
     private NewOrderMassageTask task;
 
     @Test
-    public void send(){
-        NewOrderMessage message=new NewOrderMessage();
+    public void send() {
+        NewOrderMessage message = new NewOrderMessage();
         message.setUserId("9527");
         message.setFrom("沈阳北站");
         message.setTo("沈阳站");
@@ -33,18 +33,19 @@ public class RabbitMQSendReceiveTest {
         message.setMinute("18");
         message.setFavourFee("0.0");
 
-        ArrayList list=new ArrayList<>(){{
+        ArrayList list = new ArrayList<>() {{
             add(message);
         }};
         task.sendNewOrderMessageAsync(list);
     }
 
     @Test
-    public void recieve(){
+    public void recieve() {
         List<NewOrderMessage> list = task.receiveNewOrderMessage(9527);
-        list.forEach(one->{
+        list.forEach(one -> {
             System.out.println(one.getFrom());
             System.out.println(one.getTo());
         });
+        System.out.println("success");
     }
 }

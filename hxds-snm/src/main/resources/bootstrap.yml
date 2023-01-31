@@ -36,9 +36,9 @@ spring:
         group: DEFAULT_GROUP
   data:
     mongodb:
-      host: 43.143.134.158
+      host: 82.156.200.100
       port: 27017
-      database: hxds
+      database: emos
       authentication-database: admin
       username: admin
       password: abc123456
