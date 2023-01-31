@@ -22,12 +22,12 @@ spring:
       config:
         group: DEFAULT_GROUP
         file-extension: yaml
-        server-addr: 127.0.0.1:8848
+        server-addr: 43.143.134.158:8848
         prefix: ${spring.application.name}
-        namespace: hxds
+        namespace: bbe54516-dc51-49ca-bf17-6d11d14ea608
       #配置子系统在Nacos上的注册信息
       discovery:
-        namespace: hxds
+        namespace: bbe54516-dc51-49ca-bf17-6d11d14ea608
         username: nacos
         password: nacos
         server-addr: 43.143.134.158:8848
@@ -52,7 +52,7 @@ spring:
       max-request-size: 20MB
 
 rabbitmq:
-  host: localhost
+  host: 43.143.134.158
   port: 5672
   username: guest
   password: guest
