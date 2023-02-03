@@ -151,6 +151,7 @@ public class NewOrderMassageTask {
      * 1. 获取Connection、Channel
      * 2. 定义交换机，根据 routingKey 路由消息
      * 3. 删除队列
+     *
      * @param userId
      */
     public void deleteNewOrderQueue(long userId) {
@@ -160,7 +161,7 @@ public class NewOrderMassageTask {
                 Connection connection = factory.newConnection();
                 Channel channel = connection.createChannel();
         ) {
-            channel.exchangeDeclare(exchangeName,BuiltinExchangeType.DIRECT);
+            channel.exchangeDeclare(exchangeName, BuiltinExchangeType.DIRECT);
             channel.queueDelete(queueName);
             log.debug(userId + "的新订单消息队列成功删除");
         } catch (Exception e) {
@@ -170,7 +171,7 @@ public class NewOrderMassageTask {
     }
 
     @Async
-    public void deleteNewOrderQueueAsync(long userId){
+    public void deleteNewOrderQueueAsync(long userId) {
         this.deleteNewOrderQueue(userId);
     }
 
@@ -178,16 +179,17 @@ public class NewOrderMassageTask {
      * 1. 获取Connection、Channel
      * 2. 定义交换机，根据 routingKey 路由消息
      * 3. 清空队列
+     *
      * @param userId
      */
-    public void clearNewOrderQueue(long userId){
+    public void clearNewOrderQueue(long userId) {
         String exchangeName = "new_order_private"; //交换机名字
         String queueName = "queue_" + userId; //队列名字
         try (
                 Connection connection = factory.newConnection();
                 Channel channel = connection.createChannel();
         ) {
-            channel.exchangeDeclare(exchangeName,BuiltinExchangeType.DIRECT);
+            channel.exchangeDeclare(exchangeName, BuiltinExchangeType.DIRECT);
             channel.queuePurge(queueName);
             log.debug(userId + "的新订单消息队列清空删除");
         } catch (Exception e) {
@@ -197,7 +199,7 @@ public class NewOrderMassageTask {
     }
 
     @Async
-    public void clearNewOrderQueueAsync(long userId){
+    public void clearNewOrderQueueAsync(long userId) {
         this.clearNewOrderQueue(userId);
     }
 }
