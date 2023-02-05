@@ -302,7 +302,7 @@ docker load < RabbitMQ.tar,gz
 ```shell
 docker run -it -d --name mq \
 --net mynet --ip 172.18.0.11 \
--p 5672:5672 -p 15672:15672 -m 200m \
+-p 5672:5672 -p 15672:15672 -m 500m \
 -e TZ=Asia/Shanghai --privileged=true \
 rabbitmq
 ```
@@ -4990,4 +4990,356 @@ public class NewOrderMessageController {
     }
 }
 ```
-3. 写 
+3. 写 bff-customer/src/main/java/com/example/hxds/bff/customer/controller/form/SendNewOrderMessageForm.java、ReceiveBillMessageForm.java
+   写 bff-customer/src/main/java/com/example/hxds/bff/customer/feign/SnmServiceApi.java#sendNewOrderMessageAsync、receiveBillMessage
+   补充 bff-customer/src/main/java/com/example/hxds/bff/customer/service/impl/OrderServiceImpl.java#createNewOrder
+```java
+@Data
+@Schema(description = "发送新订单消息的表单")
+public class SendNewOrderMessageForm {
+
+    @NotEmpty(message = "driversContent不能为空")
+    @Schema(description = "司机的相关信息（司机ID#接单距离）")
+    private String[] driversContent;
+
+    @NotNull(message = "orderId不能为空")
+    @Min(value = 1, message = "orderId不能小于1")
+    @Schema(description = "订单ID")
+    private Long orderId;
+
+    @NotBlank(message = "from内容不正确")
+    @Pattern(regexp = "[\\(\\)0-9A-Z#\\-_\\u4e00-\\u9fa5]{2,50}", message = "from内容不正确")
+    @Schema(description = "订单起点")
+    private String from;
+
+    @NotBlank(message = "to内容不正确")
+    @Pattern(regexp = "[\\(\\)0-9A-Z#\\-_\\u4e00-\\u9fa5]{2,50}", message = "to内容不正确")
+    @Schema(description = "订单终点")
+    private String to;
+
+    @NotBlank(message = "expectsFee不能为空")
+    @Pattern(regexp = "^[1-9]\\d*\\.\\d{1,2}$|^0\\.\\d{1,2}$|^[1-9]\\d*$", message = "expectsFee内容不正确")
+    @Schema(description = "预估价格")
+    private String expectsFee;
+
+    @NotBlank(message = "mileage不能为空")
+    @Pattern(regexp = "^[1-9]\\d*\\.\\d+$|^0\\.\\d*[1-9]\\d*$|^[1-9]\\d*$", message = "mileage内容不正确")
+    @Schema(description = "预估里程")
+    private String mileage;
+
+    @NotNull(message = "minute")
+    @Min(value = 1, message = "minute不能小于1")
+    @Schema(description = "预估时长")
+    private Integer minute;
+
+    @NotBlank(message = "favourFee不能为空")
+    @Pattern(regexp = "^[1-9]\\d*\\.\\d{1,2}$|^0\\.\\d{1,2}$|^[1-9]\\d*$", message = "favourFee内容不正确")
+    @Schema(description = "顾客好处费")
+    private String favourFee;
+}
+
+@Data
+@Schema(description = "接收新订单消息的表单")
+public class ReceiveBillMessageForm {
+
+   @Schema(description = "用户ID")
+   private Long userId;
+
+   @Schema(description = "用户身份")
+   private String identity;
+}
+
+@FeignClient(value = "hxds-snm")
+public interface SnmServiceApi {
+
+   @PostMapping("/message/order/new/sendNewOrderMessageAsync")
+   R sendNewOrderMessageAsync(SendNewOrderMessageForm form);
+
+   @PostMapping("/message/receiveBillMessage")
+   R receiveBillMessage(ReceiveBillMessageForm form);
+}
+
+   // 发送通知给符合条件的司机抢单
+SendNewOrderMessageForm form_5 = new SendNewOrderMessageForm();
+String[] driverContent = new String[list.size()];
+for (int i = 0; i < list.size(); i++) {
+   HashMap one = list.get(i);
+   String driverId = MapUtil.getStr(one, "driverId");
+   String distance = MapUtil.getStr(one, "distance");
+   distance = new BigDecimal(distance).setScale(1, RoundingMode.CEILING).toString();
+   driverContent[i] = driverId + "#" + distance;
+}
+form_5.setDriversContent(driverContent);
+form_5.setDriversContent(driverContent);
+form_5.setOrderId(Long.parseLong(orderId));
+form_5.setFrom(startPlace);
+form_5.setTo(endPlace);
+form_5.setExpectsFee(expectsFee);
+//里程转化成保留小数点后一位
+mileage = new BigDecimal(mileage).setScale(1, RoundingMode.CEILING).toString();
+form_5.setMileage(mileage);
+form_5.setMinute(minute);
+form_5.setFavourFee(favourFee);
+snmServiceApi.sendNewOrderMessageAsync(form_5);
+```
+4. 把 hxds-tm、hxds-dr、hxds-cst、hxds-mps、bff-customer、bff-driver、hxds-odr、hxds-rule、hxds-snm、gateway 这些子系统都运行起来。
+   用FastRequest插件提交司机实时定位，然后手机端运行乘客端小程序进行下单，如果下单没有问题，说明抢单消息已经发送给适合接单的司机了。
+### 司机子系统开始与停止接单
+1. 之前写过 bff-driver/src/main/controller/form/RemoveLocationCacheForm，略
+   之前写过 bff-driver/src/main/java/com/example/hxds/bff/driver/feign/MpsService#removeLocationCache，略
+   之前写过 bff-driver/src/main/service/DriverLocationService#removeLocationCache 及其实现类，略。实现清空司机定位/上线缓存
+   写 bff-driver/src/main/java/com/example/hxds/bff/driver/controller/form/ClearNewOrderQueueForm.java
+   写 bff-driver/src/main/java/com/example/hxds/bff/driver/feign/SnmServiceApi.java#clearNewOrderQueue
+   写 bff-driver/src/main/java/com/example/hxds/bff/driver/service/NewOrderMessageService.java 及其实现类,实现清空消息队列
+   写 bff-driver/src/main/java/com/example/hxds/bff/driver/controller/DriverController.java#startWork、stopWork
+```java
+@Data
+@Schema(description = "清空新订单消息队列的表单")
+public class ClearNewOrderQueueForm {
+
+   @Schema(description = "用户ID")
+   private Long userId;
+   
+}
+
+@PostMapping("/message/order/new/clearNewOrderQueue")
+public R clearNewOrderQueue(ClearNewOrderQueueForm form);
+
+void clearNewOrderQueue(ClearNewOrderQueueForm form);
+
+@Override
+public void clearNewOrderQueue(ClearNewOrderQueueForm form) {
+   snmServiceApi.clearNewOrderQueue(form);
+}
+
+@PostMapping("/startWork")
+@Operation(summary = "开始接单")
+@SaCheckLogin
+public R startWork() {
+   long driverId = StpUtil.getLoginIdAsLong();
+   RemoveLocationCacheForm removeCacheForm = new RemoveLocationCacheForm();
+   removeCacheForm.setDriverId(driverId);
+   driverLocationService.removeLocationCache(removeCacheForm);
+   ClearNewOrderQueueForm clearQueueForm = new ClearNewOrderQueueForm();
+   clearQueueForm.setUserId(driverId);
+   newOrderMessageService.clearNewOrderQueue(clearQueueForm);
+   return R.ok();
+}
+@PostMapping("/stopWork")
+@Operation(summary = "停止接单")
+@SaCheckLogin
+public R stopWork() {
+   long driverId = StpUtil.getLoginIdAsLong();
+   RemoveLocationCacheForm removeCacheForm = new RemoveLocationCacheForm();
+   removeCacheForm.setDriverId(driverId);
+   driverLocationService.removeLocationCache(removeCacheForm);
+   ClearNewOrderQueueForm clearQueueForm = new ClearNewOrderQueueForm();
+   clearQueueForm.setUserId(driverId);
+   newOrderMessageService.clearNewOrderQueue(clearQueueForm);
+   return R.ok();
+}
+```
+2. 把 hxds-tm、hxds-dr、hxds-odr、hxds-mps、hxds-snm、bff-driver 子系统运行起来，然后测试 Web 方法
+3. 写 hxds-driver-wx/pages/workbench/workbench.vue#onLoad 填充地图控件
+   写 hxds-driver-wx/pages/workbench/workbench.vue#onShow 修改地图控件为实时位置
+   写 hxds-driver-wx/pages/workbench/workbench.vue#onHide 关闭实时定位
+   写 hxds-driver-wx/pages/workbench/workbench.vue#returnLocationHandle 实现地图复位
+   写 hxds-driver-wx/pages/workbench/main.js 定义全局变量
+   写 hxds-driver-wx/pages/workbench/workbench.vue#startWorkHandle 实现开始接单
+   写 hxds-driver-wx/pages/workbench/workbench.vue#stopWorkHandle 实现停止接单
+   【拓展】[uni.$off](https://uniapp.dcloud.net.cn/tutorial/page.html#%E9%A1%B5%E9%9D%A2%E9%80%9A%E8%AE%AF)
+```javascript
+onLoad: function() {
+  let that = this;
+  if(!that.reviewAuth){
+      let windowHeight = uni.getSystemInfoSync().windowHeight;
+      that.windowHeight = windowHeight;
+  }
+  // TODO 查询正在执行的订单
+  
+  // 初始化地图
+  that.map = uni.createMapContext('map');
+},
+
+// 实时获取定位
+uni.$on('updateLocation', function(location) {
+   // console.log(location)
+   if(location != null){
+      that.service.locationIcon = '../../static/workbench/service-icon-1.png';
+      that.service.locationText = '定位正常';
+      that.service.locationStyle = 'color:#46B68F';
+      that.latitude = location.latitude;
+      that.longitude = location.longitude;
+   }else{
+      that.service.locationIcon = '../../static/workbench/service-icon-5.png';
+      that.service.locationText = '定位失败';
+      that.service.locationStyle = 'color:#FF4D4D';
+   }
+});
+let workStatus = uni.getStorageSync('workStatus');
+// TODO：判断工作状态，是否实时轮训接单
+
+// 初始化控件高度
+if(['接客户', '到达代驾点', '开始代驾'].includes(workStatus)){
+   that.contentStyle = `width: 750rpx;height:${that.windowHeight - 200 - 0}px;`;
+} else {
+   that.contentStyle = `width: 750rpx;height:${that.windowHeight - 200 - 70}px;`;
+}
+
+onHide: function() {
+   uni.$off('updateLocation');
+}
+
+returnLocationHandle: function(){
+   this.map.moveToLocation();
+}
+
+startWork: `${baseUrl}/driver/startWork`;
+stopWork: `${baseUrl}/driver/stopWork`;
+
+startWorkHandle: function() {
+   let that = this;
+   /*
+    * TODO 检查司机是否可以接单
+    * 1.没有被禁止接单
+    * 2.没有未缴纳的罚款
+    * 3.当天已经做了人脸验证
+    */
+   //设置司机当天通过身份验证
+   uni.setStorageSync('verification', { result: true, date: dayjs().format('YYYY-MM-DD') });
+
+   uni.showModal({
+      title: '提示消息',
+      content: '你要开始接收代驾订单信息？',
+      success: function(resp) {
+         if (resp.confirm) {
+            uni.vibrateShort({});
+            let audio = uni.createInnerAudioContext();
+            that.audio = audio;
+            audio.src = '/static/voice/voice_1.mp3';
+            audio.play();
+            that.$refs.uToast.show({
+               title: '开始接单了',
+               type: 'success',
+               callback: function() {
+                  that.ajax(that.url.startWork, 'POST', null, function(resp) {});
+                  uni.setStorageSync('workStatus', '开始接单');
+                  that.workStatus = '开始接单';
+                  /*//初始化新订单和列表变量
+                  that.newOrder = null;
+                  that.newOrderList.length = 0;
+                  that.executeOrder = {};
+                  //创建接收新订单消息的定时器，每隔5秒钟接收一次新订单消息
+                  if (that.reciveNewOrderTimer == null) {
+                     that.reciveNewOrderTimer = that.createTimer(that);
+                  }*/
+               }
+            });
+         }
+      }
+   });
+},
+stopWorkHandle: function() {
+   let that = this;
+   uni.showModal({
+      title: '提示消息',
+      content: '你要停止接收代驾订单信息？',
+      success: function(resp) {
+         if (resp.confirm) {
+            uni.vibrateShort({});
+            if (that.audio != null) {
+               that.audio.stop();
+            }
+            let audio = uni.createInnerAudioContext();
+            that.audio = audio;
+            audio.src = '/static/voice/voice_2.mp3';
+            audio.play();
+            that.$refs.uToast.show({
+               title: '停止接单了',
+               type: 'default',
+               callback: function() {
+                  that.ajax(that.url.stopWork, 'POST', null, function(resp) {});
+                  that.workStatus = '停止接单';
+                  uni.setStorageSync('workStatus', '停止接单');
+                  /*//初始化新订单和列表变量
+                  that.newOrder = null;
+                  that.newOrderList.length = 0;
+                  that.executeOrder = {};
+                  //销毁接收新订单消息的定时器
+                  clearInterval(that.reciveNewOrderTimer);
+                  that.reciveNewOrderTimer = null;
+                  that.playFlag = false;*/
+               }
+            });
+         }
+      }
+   });
+},
+```
+### 司机端RR方式接收新订单，语音引擎智能播报
+现在已经能开启司机接单模式了，司机端小程序发起轮询请求查询订单信息，需要先把后端代码给实现了，然后才能在移动端用语音播报出来
+1. 写 bff-driver/src/main/java/com/example/hxds/bff/driver/controller/form/ReceiveNewOrderMessageForm.java
+   写 bff-driver/src/main/java/com/example/hxds/bff/driver/feign/SnmServiceApi.java
+   写 bff-driver/src/main/java/com/example/hxds/bff/driver/service/NewOrderMessageService 及其实现类
+```java
+@Data
+@Schema(description = "接收新订单消息的表单")
+public class ReceiveNewOrderMessageForm {
+    @Schema(description = "用户ID")
+    private Long userId;
+}
+
+@PostMapping("/message/order/new/receiveNewOrderMessage")
+R receiveNewOrderMessage(ReceiveNewOrderMessageForm form);
+
+List receiveNewOrderMessage(ReceiveNewOrderMessageForm form);
+
+@Override
+public List receiveNewOrderMessage(ReceiveNewOrderMessageForm form) {
+   R r = snmServiceApi.receiveNewOrderMessage(form);
+   List list = (List) r.get("result");
+   return list;
+}
+```
+2. 写 hxds-driver-wx/pages/workbench/workbench.vue#createTimer
+   轮询接收新订单，这种情况限于开始接单后，从工作台页面进入到其他页面，然后又退回到工作台页面
+   补充 hxds-driver-wx/pages/workbench/workbench.vue#onShow
+   司机开始接单之后，我们要调用createTimer()函数，开始轮询新订单。停止接单之后，我们要销毁定时器，不在轮询新订单
+   补充 hxds-driver-wx/pages/workbench/workbench.vue#startWorkHandle，上面写过把注释去掉即可
+   补充 hxds-driver-wx/pages/workbench/workbench.vue#stopWorkHandle，上面写过把注释去掉即可
+```javascript
+// 在工作台页面，先把创建轮询定时器的代码给封装起来。因为是自定义函数，所以需要外部传入VUE对象
+createTimer: function(ref) {
+   let timer = setInterval(function() {
+      ref.ajax(
+              ref.url.receiveNewOrderMessage,
+              'POST',
+              null,
+              function(resp) {
+                 let result = resp.data.result;
+                 if (result.length > 0) {
+                    // console.log(result);
+                    // 用新订单数组和原有订单数组拼接成新数组，新订单就放在数组开头
+                    ref.newOrderList = result.concat(ref.newOrderList);
+                    // 如果当前没有播放订单，就显示新订单
+                    if (ref.playFlag == false) {
+                       // TODO:调用封装函数
+                       // ref.showNewOrder(ref);
+                    }
+                 }
+              },
+              false
+      );
+   }, 5000);
+   return timer;
+},
+
+// 判断工作状态，是否实时轮训接单
+that.reciveNewOrderTimer = that.createTimer(that);
+```
+3. 把 hxds-tm、hxds-dr、hxds-cst、hxds-mps、bff-customer、bff-driver、hxds-odr、hxds-rule、hxds-snm、gateway 这些子系统都运行起来。
+   然后在手机端运行司机端小程序，开始接单之后，我们利用Web接口向bff-customer子系统发出创建订单的请求
+   
+4. 新订单显示在工作台页面，然后用语音引擎播报新订单的详情。司机端小程序项目引用了微信官方的同声传译插件，既可以把文本转换成语音，也可以把语音转换成文字。
+这里我们用前者功能，把新订单播报出来。大家可以参看官方提供的[详细文档](https://mp.weixin.qq.com/wxopen/plugindevdoc?appid=wx069ba97219f66d99&token=1202914355&lang=zh_CN)
+   写 hxds-driver-wx/pages/workbench/workbench.vue#showNewOrder 实现显示和语音播报订单的代码量非常大

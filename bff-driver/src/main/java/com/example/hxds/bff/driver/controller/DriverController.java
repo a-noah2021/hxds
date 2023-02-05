@@ -4,7 +4,9 @@ import cn.dev33.satoken.annotation.SaCheckLogin;
 import cn.dev33.satoken.stp.StpUtil;
 import cn.hutool.core.map.MapUtil;
 import com.example.hxds.bff.driver.controller.form.*;
+import com.example.hxds.bff.driver.service.DriverLocationService;
 import com.example.hxds.bff.driver.service.DriverService;
+import com.example.hxds.bff.driver.service.NewOrderMessageService;
 import com.example.hxds.common.util.R;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -13,6 +15,7 @@ import org.springframework.web.bind.annotation.*;
 import javax.annotation.Resource;
 import javax.validation.Valid;
 import java.util.HashMap;
+import java.util.List;
 
 /**
  * @program: hxds
@@ -27,6 +30,12 @@ public class DriverController {
 
     @Resource
     private DriverService driverService;
+
+    @Resource
+    private DriverLocationService driverLocationService;
+
+    @Resource
+    private NewOrderMessageService newOrderMessageService;
 
     @PostMapping("/registerNewDriver")
     @Operation(summary = "新司机注册")
@@ -84,18 +93,18 @@ public class DriverController {
     @PostMapping("/searchDriverBaseInfo")
     @Operation(summary = "查询司机基本信息")
     @SaCheckLogin
-    public R searchDriverBaseInfo(){
-        long driverId=StpUtil.getLoginIdAsLong();
-        SearchDriverBaseInfoForm form=new SearchDriverBaseInfoForm();
+    public R searchDriverBaseInfo() {
+        long driverId = StpUtil.getLoginIdAsLong();
+        SearchDriverBaseInfoForm form = new SearchDriverBaseInfoForm();
         form.setDriverId(driverId);
         HashMap map = driverService.searchDriverBaseInfo(form);
-        return R.ok().put("result",map);
+        return R.ok().put("result", map);
     }
 
     @PostMapping("/searchWorkbenchData")
     @Operation(summary = "查找司机工作台数据")
     @SaCheckLogin
-    public R searchWorkbenchData(){
+    public R searchWorkbenchData() {
         HashMap result = driverService.searchWorkbenchData(StpUtil.getLoginIdAsLong());
         return R.ok().put("result", result);
     }
@@ -103,7 +112,7 @@ public class DriverController {
     @GetMapping("/searchDriverAuth")
     @Operation(summary = "查询司机认证信息")
     @SaCheckLogin
-    public R searchDriverAuth(){
+    public R searchDriverAuth() {
         long driverId = StpUtil.getLoginIdAsLong();
         SearchDriverAuthForm form = new SearchDriverAuthForm();
         form.setDriverId(driverId);
@@ -111,5 +120,42 @@ public class DriverController {
         return R.ok().put("result", map);
     }
 
+    @PostMapping("/startWork")
+    @Operation(summary = "开始接单")
+    @SaCheckLogin
+    public R startWork() {
+        long driverId = StpUtil.getLoginIdAsLong();
+        RemoveLocationCacheForm removeCacheForm = new RemoveLocationCacheForm();
+        removeCacheForm.setDriverId(driverId);
+        driverLocationService.removeLocationCache(removeCacheForm);
+        ClearNewOrderQueueForm clearQueueForm = new ClearNewOrderQueueForm();
+        clearQueueForm.setUserId(driverId);
+        newOrderMessageService.clearNewOrderQueue(clearQueueForm);
+        return R.ok();
+    }
 
+    @PostMapping("/stopWork")
+    @Operation(summary = "停止接单")
+    @SaCheckLogin
+    public R stopWork() {
+        long driverId = StpUtil.getLoginIdAsLong();
+        RemoveLocationCacheForm removeCacheForm = new RemoveLocationCacheForm();
+        removeCacheForm.setDriverId(driverId);
+        driverLocationService.removeLocationCache(removeCacheForm);
+        ClearNewOrderQueueForm clearQueueForm = new ClearNewOrderQueueForm();
+        clearQueueForm.setUserId(driverId);
+        newOrderMessageService.clearNewOrderQueue(clearQueueForm);
+        return R.ok();
+    }
+
+    @PostMapping("/receiveNewOrderMessage")
+    @Operation(summary = "同步接收新订单消息")
+    @SaCheckLogin
+    public R receiveNewOrderMessage() {
+        long driverId = StpUtil.getLoginIdAsLong();
+        final ReceiveNewOrderMessageForm form = new ReceiveNewOrderMessageForm();
+        form.setUserId(form.getUserId());
+        List list = newOrderMessageService.receiveNewOrderMessage(form);
+        return R.ok().put("result", list);
+    }
 }

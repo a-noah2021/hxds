@@ -5,10 +5,7 @@ import cn.hutool.core.map.MapUtil;
 import cn.hutool.core.util.IdUtil;
 import com.codingapi.txlcn.tc.annotation.LcnTransaction;
 import com.example.hxds.bff.customer.controller.form.*;
-import com.example.hxds.bff.customer.feign.CstServiceApi;
-import com.example.hxds.bff.customer.feign.MpsServiceApi;
-import com.example.hxds.bff.customer.feign.OdrServiceApi;
-import com.example.hxds.bff.customer.feign.RuleServiceApi;
+import com.example.hxds.bff.customer.feign.*;
 import com.example.hxds.bff.customer.service.OrderService;
 import com.example.hxds.common.util.R;
 import com.example.hxds.common.wxpay.MyWXPayConfig;
@@ -18,6 +15,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import javax.annotation.Resource;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.ArrayList;
 import java.util.HashMap;
 
@@ -57,6 +56,9 @@ public class OrderServiceImpl implements OrderService {
 
     @Resource
     private OdrServiceApi odrServiceApi;
+
+    @Resource
+    private SnmServiceApi snmServiceApi;
 
     @Resource
     private CstServiceApi cstServiceApi;
@@ -147,7 +149,7 @@ public class OrderServiceImpl implements OrderService {
             String orderId = MapUtil.getStr(r, RESULT_MAP_KEY);
 
             // 发送通知给符合条件的司机抢单
-            /*SendNewOrderMessageForm form_5 = new SendNewOrderMessageForm();
+            SendNewOrderMessageForm form_5 = new SendNewOrderMessageForm();
             String[] driverContent = new String[list.size()];
             for (int i = 0; i < list.size(); i++) {
                 HashMap one = list.get(i);
@@ -168,7 +170,7 @@ public class OrderServiceImpl implements OrderService {
             form_5.setMinute(minute);
             form_5.setFavourFee(favourFee);
 
-            snmServiceApi.sendNewOrderMessageAsync(form_5);*/
+            snmServiceApi.sendNewOrderMessageAsync(form_5);
 
             result.put(ORDER_ID_MAP_KEY, orderId);
             result.replace(COUNT_MAP_KEY, list.size());
