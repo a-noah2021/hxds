@@ -77,7 +77,7 @@ public class NewOrderMassageTask {
     }
 
     @Async
-    public void sendNewOrderMessageAsync(ArrayList<NewOrderMessage> list) {
+    public void sendNewOrderMessageAsync(List<NewOrderMessage> list) {
         this.sendNewOrderMessage(list);
     }
 
