@@ -16,4 +16,6 @@ public interface OrderService {
     HashMap searchDriverTodayBusinessData(long driverId);
 
     String insertOrder(OrderEntity orderEntity, OrderBillEntity orderBillEntity);
+
+    String acceptNewOrder(long driverId, long orderId);
 }

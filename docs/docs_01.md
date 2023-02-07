@@ -399,8 +399,8 @@ StpUtil.switchTo(10044);                // 将当前会话身份临时切换为�
 ### 小程序获取用户微信信息
 
 1. 修改 main.js 里面的 IP 地址，不要 localhost 或者 127.0.0.1 (127.0.0.1如果用微信开发工具测试可以端，只是真机调试不行，这时用 NatApp 内网穿透可以解决这个问题)
-2. 在 hxds-driver-wx/pages/login/login.vue 实现司机注册的逻辑
-3. 在 hxds-driver-wx/pages/register/register.vue 实现司机注册的逻辑
+2. 写 hxds-driver-wx/pages/login/login.vue 实现司机注册的逻辑
+3. 写 hxds-driver-wx/pages/register/register.vue 实现司机注册的逻辑
 
 测试：依次启动 hxds-tm、bff-driver、hxds-dr、gateway 项目然后至少等待一分钟 ( 否则会出现503 )，再运行小程序测试司机注册
 其中启动 hxds-tm 节点后可以进入其[后台管理系统](http://localhost:7970/admin/index.html#/)，密码在 tx-lcn.manager.admin-key=abc123456 上配置
@@ -5354,7 +5354,7 @@ that.reciveNewOrderTimer = that.createTimer(that);
    然后在手机端运行司机端小程序，开始接单之后，我们利用 Web 接口向 bff-customer 子系统发出创建订单的请求
    
 4. 新订单显示在工作台页面，然后用语音引擎播报新订单的详情。司机端小程序项目引用了微信官方的同声传译插件，既可以把文本转换成语音，也可以把语音转换成文字。
-这里我们用前者功能，把新订单播报出来。大家可以参看官方提供的[详细文档](https://mp.weixin.qq.com/wxopen/plugindevdoc?appid=wx069ba97219f66d99&token=1202914355&lang=zh_CN)
+   这里我们用前者功能，把新订单播报出来。大家可以参看官方提供的[详细文档](https://mp.weixin.qq.com/wxopen/plugindevdoc?appid=wx069ba97219f66d99&token=1202914355&lang=zh_CN)
    写 hxds-driver-wx/pages/workbench/workbench.vue#showNewOrder 实现显示和语音播报订单
    补充 hxds-driver-wx/pages/workbench/workbench.vue#createTimer
 ```javascript
@@ -5482,3 +5482,203 @@ showNewOrder: function(ref) {
 ref.showNewOrder(ref);
 ```
 5. 执行第3步再次进行自测
+### 订单微服务的智能抢单
+1. 写 hxds-odr/src/main/resources/mapper/OrderDao.xml#acceptNewOrder 及其对应接口
+   写 hxds-odr/src/main/java/com/example/hxds/odr/service/impl/OrderService.java#acceptNewOrder 及其实现类
+   写 hxds-odr/src/main/java/com/example/hxds/odr/controller/form/AcceptNewOrderForm.java
+   写 hxds-odr/src/main/java/com/example/hxds/odr/controller/OrderController.java#acceptNewOrder
+【拓展】tb_order#status:1等待接单，2已接单，3司机已到达，4开始代驾，5结束代驾，6未付款，7已付款，8订单已结束，9顾客撤单，10司机撤单，11事故关闭，12其他
+```java
+int acceptNewOrder(Map param);
+
+<update id="acceptNewOrder" parameterType="Map">
+        UPDATE tb_order
+        SET driver_id   = #{driverId},
+        accept_time = NOW(),
+        `status`    = 2
+        WHERE id = #{orderId}
+</update>
+
+String acceptNewOrder(long driverId, long orderId);
+
+@Override
+@Transactional
+@LcnTransaction
+public String acceptNewOrder(long driverId, long orderId) {
+    if (!redisTemplate.hasKey("order#" + orderId)) {
+        return "抢单失败";
+    }
+    // 执行redis事务
+    redisTemplate.execute(new SessionCallback() {
+        @Override
+        public Object execute(RedisOperations operations) throws DataAccessException {
+            // 获取新订单记录的version
+            operations.watch("order#" + orderId);
+            // 本地缓存redis操作
+            operations.multi();
+            // 把新订单缓存的Value设置成抢单司机的id
+            operations.opsForValue().set("order#" + orderId, driverId);
+            // 执行redis事务，如果事务提交失败会自动抛出异常
+            return operations.exec();
+        }
+    });
+    // 抢单成功后，删除redis中的新订单，避免让其他司机参与抢单
+    redisTemplate.delete("order#" + orderId);
+    // 更新订单操作，添加上抢单司机id和接单时间
+    HashMap param = new HashMap() {{
+        put("orderId", orderId);
+        put("driverId", driverId);
+    }};
+    int rows = orderDao.acceptNewOrder(param);
+    if (rows != 1) {
+        throw new HxdsException("接单失败，无法更新订单记录");
+    }
+    return "抢单成功";
+}
+
+@Data
+@Schema(description = "司机接单的表单")
+public class AcceptNewOrderForm {
+   @NotNull(message = "driverId不能为空")
+   @Min(value = 1, message = "driverId不能小于1")
+   @Schema(description = "司机ID")
+   private Long driverId;
+
+   @NotNull(message = "orderId不能为空")
+   @Min(value = 1, message = "orderId不能小于1")
+   @Schema(description = "订单ID")
+   private Long orderId;
+}
+
+@PostMapping("/acceptNewOrder")
+@Operation(summary = "司机接单")
+public R acceptNewOrder(@RequestBody @Valid AcceptNewOrderForm form) {
+   String result = orderService.acceptNewOrder(form.getDriverId(), form.getOrderId());
+   return R.ok().put("result", result);
+}
+```
+2. 写 bff-driver/src/main/java/com/example/hxds/bff/driver/controller/form/AcceptNewOrderForm.java
+   写 bff-driver/src/main/java/com/example/hxds/bff/driver/feign/OdrServiceApi.java#acceptNewOrder
+   写 bff-driver/src/main/java/com/example/hxds/bff/driver/service/OrderService.java#acceptNewOrder 及其实现类
+   写 bff-driver/src/main/java/com/example/hxds/bff/driver/controller/OrderController.java
+```java
+@Data
+@Schema(description = "司机接单的表单")
+public class AcceptNewOrderForm {
+
+   @Schema(description = "司机ID")
+   private Long driverId;
+
+   @NotNull(message = "orderId不能为空")
+   @Min(value = 1, message = "orderId不能小于1")
+   @Schema(description = "订单ID")
+   private Long orderId;
+
+}
+
+@PostMapping("/order/acceptNewOrder")
+R acceptNewOrder(AcceptNewOrderForm form);
+
+@PostMapping("/order/acceptNewOrder")
+R acceptNewOrder(AcceptNewOrderForm form);
+
+@Override
+public String acceptNewOrder(AcceptNewOrderForm form) {
+   R r = odrServiceApi.acceptNewOrder(form);
+   String result = MapUtil.getStr(r, "result");
+   return result;
+}
+
+@PostMapping("/acceptNewOrder")
+@SaCheckLogin
+@Operation(summary = "司机接单")
+public R acceptNewOrder(@RequestBody @Valid AcceptNewOrderForm form) {
+   long driverId = StpUtil.getLoginIdAsLong();
+   form.setDriverId(driverId);
+   String result = orderService.acceptNewOrder(form);
+   return R.ok().put("result", result);
+}
+```
+3. 补充 hxds-driver-wx/main.js 声明全局URL
+   写 hxds-driver-wx/pages/workbench/workbench.vue#acceptHandle 实现手动抢单
+```javascript
+acceptNewOrder: `${baseUrl}/driver/acceptNewOrder`,
+
+acceptHandle: function() {
+   let that = this;
+   if (!that.canAcceptOrder || that.accepting) {
+      return;
+   }
+   that.accepting = true;
+   uni.vibrateShort({});
+   that.ajax(that.url.acceptNewOrder, 'POST', { orderId: that.newOrder.orderId }, function(resp) {
+      let audio = uni.createInnerAudioContext();
+      let result = resp.data.result;
+      //手动抢单成功
+      if (result == '接单成功') {
+         uni.showToast({
+            title: '接单成功'
+         });
+         that.audio = audio;
+         audio.src = '/static/voice/voice_3.mp3';
+         audio.play();
+         audio.onEnded(function() {
+            //停止接单
+            that.audio = null;
+            that.ajax(that.url.stopWork, 'POST', null, function(resp) {});
+            //初始化新订单和列表变量
+            that.executeOrder.id = that.newOrder.orderId;
+            that.newOrder = null;
+            that.newOrderList.length = 0;
+            clearInterval(that.reciveNewOrderTimer);
+            that.reciveNewOrderTimer = null;
+            that.playFlag = false;
+            that.accepting = false;
+            that.canAcceptOrder = false;
+            //隐藏了工作台页面底部操作条之后，需要重新计算订单执行View的高度
+            that.contentStyle = `width: 750rpx;height:${that.windowHeight - 200 - 0}px;`;
+            //加载订单执行数据
+            that.loadExecuteOrder(that);
+         });
+      } else {
+         that.audio = audio;
+         audio.src = '/static/voice/voice_4.mp3';
+         audio.play();
+         that.playFlag = false;
+         setTimeout(function() {
+            that.accepting = false;
+            that.canAcceptOrder = false;
+            if (that.newOrderList.length > 0) {
+               that.showNewOrder(that); //递归调用
+            } else {
+               that.newOrder = null;
+            }
+         }, 3000);
+      }
+   });
+},
+```
+### 订单微服务加载执行订单
+1. 写 hxds-odr/src/main/java/com/example/hxds/odr/db/dao/OrderDao.java#searchDriverExecuteOrder 及其对应接口
+   写 hxds-odr/src/main/java/com/example/hxds/odr/service/impl/OrderService.java#searchDriverExecuteOrder 及其实现类
+   写 hxds-odr/src/main/java/com/example/hxds/odr/controller/form/SearchDriverExecuteOrderForm.java
+   写 hxds-odr/src/main/java/com/example/hxds/odr/controller/OrderController.java#searchDriverExecuteOrder
+```java
+HashMap searchDriverExecuteOrder(Map param);
+
+<select id="searchDriverExecuteOrder" parameterType="Map" resultType="HashMap">
+   SELECT CAST(id AS CHAR)                              AS id,
+      customer_id                                   AS customerId,
+      start_place                                   AS startPlace,
+      start_place_location                          AS startPlaceLocation,
+      end_place                                     AS endPlace,
+      end_place_location                            AS endPlaceLocation,
+      CAST(favour_fee AS CHAR)                      AS favourFee,
+      car_plate                                     AS carPlate,
+      car_type                                      AS carType,
+      DATE_FORMAT(create_time, '%Y-%m-%d %H:%i:%s') AS createTime
+   FROM tb_order
+   WHERE id = #{orderId}
+     AND driver_id = #{driverId}
+</select>
+```

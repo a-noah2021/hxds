@@ -1,5 +1,6 @@
 package com.example.hxds.bff.driver.feign;
 
+import com.example.hxds.bff.driver.controller.form.AcceptNewOrderForm;
 import com.example.hxds.bff.driver.controller.form.SearchDriverTodayBusinessDataForm;
 import com.example.hxds.common.util.R;
 import org.springframework.cloud.openfeign.FeignClient;
@@ -10,4 +11,7 @@ public interface OdrServiceApi {
 
     @PostMapping("/order/searchDriverTodayBusinessData")
     R searchDriverTodayBusinessData(SearchDriverTodayBusinessDataForm form);
+
+    @PostMapping("/order/acceptNewOrder")
+    R acceptNewOrder(AcceptNewOrderForm form);
 }

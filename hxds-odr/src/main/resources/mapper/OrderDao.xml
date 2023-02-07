@@ -5,11 +5,11 @@
 <mapper namespace="com.example.hxds.odr.db.dao.OrderDao">
     <select id="searchDriverTodayBusinessData" parameterType="long" resultType="HashMap">
         SELECT IFNULL(SUM(TIMESTAMPDIFF(HOUR, end_time, start_time)), 0) AS duration,
-               CAST(IFNULL(SUM(real_fee),0) AS CHAR) AS income,
-               COUNT(id) AS orders
+               CAST(IFNULL(SUM(real_fee), 0) AS CHAR)                    AS income,
+               COUNT(id)                                                 AS orders
         FROM tb_order
         WHERE driver_id = #{driverId}
-          AND `status` IN (5,6,7,8)
+          AND `status` IN (5, 6, 7, 8)
           AND date = CURRENT_DATE
     </select>
 
@@ -34,5 +34,29 @@
         SELECT CAST(id AS CHAR) AS id
         FROM tb_order
         WHERE uuid = #{uuid}
+    </select>
+
+    <update id="acceptNewOrder" parameterType="Map">
+        UPDATE tb_order
+        SET driver_id   = #{driverId},
+            accept_time = NOW(),
+            `status`    = 2
+        WHERE id = #{orderId}
+    </update>
+
+    <select id="searchDriverExecuteOrder" parameterType="Map" resultType="HashMap">
+        SELECT CAST(id AS CHAR)                              AS id,
+               customer_id                                   AS customerId,
+               start_place                                   AS startPlace,
+               start_place_location                          AS startPlaceLocation,
+               end_place                                     AS endPlace,
+               end_place_location                            AS endPlaceLocation,
+               CAST(favour_fee AS CHAR)                      AS favourFee,
+               car_plate                                     AS carPlate,
+               car_type                                      AS carType,
+               DATE_FORMAT(create_time, '%Y-%m-%d %H:%i:%s') AS createTime
+        FROM tb_order
+        WHERE id = #{orderId}
+          AND driver_id = #{driverId}
     </select>
 </mapper>
