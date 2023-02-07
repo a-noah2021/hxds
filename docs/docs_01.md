@@ -4777,7 +4777,7 @@ public void sendNewOrderMessageAsync(ArrayList<NewOrderMessage> list) {
  * 5. while循环接收消息：定义消息属性对象，然后将其封装到NewOrderMessage
  * 6. 确认接收到消息，让 MQ 删除该消息
  * 7. 消息倒叙，让新消息排在前面
- *
+ * 自测的时候注意ttl为1分钟
  * @param userId
  * @return
  */
@@ -4796,7 +4796,7 @@ public List<NewOrderMessage> receiveNewOrderMessage(long userId) {
       // 每次接收10条消息然后循环接收
       channel.basicQos(0, 10, true);
       while (true) {
-         GetResponse response = channel.basicGet(queueName, true);
+         GetResponse response = channel.basicGet(queueName, false);
          if (!Objects.isNull(response)) {
             AMQP.BasicProperties properties = response.getProps();
             Map<String, Object> map = properties.getHeaders();
@@ -4822,7 +4822,7 @@ public List<NewOrderMessage> receiveNewOrderMessage(long userId) {
             String msg = new String(body);
             log.debug("从RabbitMQ接收的订单消息：" + msg);
             long deliveryTag = response.getEnvelope().getDeliveryTag();
-            channel.basicAck(deliveryTag, true);
+            channel.basicAck(deliveryTag, false);
          } else {
             break;
          }
@@ -5194,9 +5194,10 @@ returnLocationHandle: function(){
    this.map.moveToLocation();
 }
 
-startWork: `${baseUrl}/driver/startWork`;
-stopWork: `${baseUrl}/driver/stopWork`;
-
+startWork: `${baseUrl}/driver/startWork`,
+stopWork: `${baseUrl}/driver/stopWork`,
+receiveNewOrderMessage: `${baseUrl}/message/order/new/receiveNewOrderMessage`,
+        
 startWorkHandle: function() {
    let that = this;
    /*
@@ -5281,6 +5282,7 @@ stopWorkHandle: function() {
 1. 写 bff-driver/src/main/java/com/example/hxds/bff/driver/controller/form/ReceiveNewOrderMessageForm.java
    写 bff-driver/src/main/java/com/example/hxds/bff/driver/feign/SnmServiceApi.java
    写 bff-driver/src/main/java/com/example/hxds/bff/driver/service/NewOrderMessageService 及其实现类
+   写 bff-driver/src/main/java/com/example/hxds/bff/driver/controller/NewOrderMessageController.java
 ```java
 @Data
 @Schema(description = "接收新订单消息的表单")
@@ -5299,6 +5301,17 @@ public List receiveNewOrderMessage(ReceiveNewOrderMessageForm form) {
    R r = snmServiceApi.receiveNewOrderMessage(form);
    List list = (List) r.get("result");
    return list;
+}
+
+@PostMapping("/receiveNewOrderMessage")
+@Operation(summary = "同步接收新订单消息")
+@SaCheckLogin
+public R receiveNewOrderMessage(){
+   long driverId = StpUtil.getLoginIdAsLong();
+   ReceiveNewOrderMessageForm form=new ReceiveNewOrderMessageForm();
+   form.setUserId(driverId);
+   List list = newOrderMessageService.receiveNewOrderMessage(form);
+   return R.ok().put("result",list);
 }
 ```
 2. 写 hxds-driver-wx/pages/workbench/workbench.vue#createTimer
@@ -5338,8 +5351,134 @@ createTimer: function(ref) {
 that.reciveNewOrderTimer = that.createTimer(that);
 ```
 3. 把 hxds-tm、hxds-dr、hxds-cst、hxds-mps、bff-customer、bff-driver、hxds-odr、hxds-rule、hxds-snm、gateway 这些子系统都运行起来。
-   然后在手机端运行司机端小程序，开始接单之后，我们利用Web接口向bff-customer子系统发出创建订单的请求
+   然后在手机端运行司机端小程序，开始接单之后，我们利用 Web 接口向 bff-customer 子系统发出创建订单的请求
    
 4. 新订单显示在工作台页面，然后用语音引擎播报新订单的详情。司机端小程序项目引用了微信官方的同声传译插件，既可以把文本转换成语音，也可以把语音转换成文字。
 这里我们用前者功能，把新订单播报出来。大家可以参看官方提供的[详细文档](https://mp.weixin.qq.com/wxopen/plugindevdoc?appid=wx069ba97219f66d99&token=1202914355&lang=zh_CN)
-   写 hxds-driver-wx/pages/workbench/workbench.vue#showNewOrder 实现显示和语音播报订单的代码量非常大
+   写 hxds-driver-wx/pages/workbench/workbench.vue#showNewOrder 实现显示和语音播报订单
+   补充 hxds-driver-wx/pages/workbench/workbench.vue#createTimer
+```javascript
+showNewOrder: function(ref) {
+   ref.playFlag = true;
+   ref.canAcceptOrder = false;
+   let order = ref.newOrderList.shift();
+   let orderId = order.orderId;
+   let distance = order.distance;
+   let expectsFee = order.expectsFee;
+   let favourFee = order.favourFee;
+   let from = order.from;
+   let to = order.to;
+   let mileage = order.mileage;
+   let minute = order.minute;
+   ref.newOrder = {
+       orderId: orderId,
+       distance: distance,
+       expectsFee: expectsFee,
+       favourFee: favourFee,
+       from: from,
+       to: to,
+       mileage: mileage,
+       minute: minute
+   };
+   if (ref.settings.listenService) {
+       let audio = uni.createInnerAudioContext();
+       ref.audio = audio;
+       plugin.textToSpeech({
+           lang: 'zh_CN',
+           tts: true,
+           content: `即时订单，距离您${distance}公里，从${from}，到${to}，全程约${mileage}公里，预估代驾费${expectsFee}元`,
+           success: function(resp) {
+               audio.src = resp.filename;
+               audio.play();
+               audio.onEnded(function() {
+                   ref.canAcceptOrder = true;
+                   let verification = uni.getStorageSync('verification');
+                   /*
+                    * TODO 判断人脸识别凭证是否过期，如果过期就要重新人脸验证。
+                    * 这是以防司机今天开始接单人脸验证通过，但是一直没有停止接单，
+                    * 到了次日依然要重新做人脸验证。
+                    *
+                    */
+                   if (false) {
+                   } else {
+                       if (ref.settings.autoAccept) {
+                           let data = {
+                               orderId: orderId
+                           };
+                           ref.ajax(
+                               ref.url.acceptNewOrder,
+                               'POST',
+                               data,
+                               function(resp) {
+                                   let result = resp.data.result;
+                                   if (result == '接单成功') {
+                                       uni.showToast({
+                                           title: '接单成功'
+                                       });
+                                       audio = uni.createInnerAudioContext();
+                                       ref.audio = audio;
+                                       audio.src = '/static/voice/voice_3.mp3';
+                                       audio.play();
+                                       audio.onEnded(function() {
+                                           ref.ajax(ref.url.stopWork, 'POST', null, function(resp) {});
+                                           //初始化新订单和列表变量
+                                           ref.newOrder = null;
+                                           ref.newOrderList.length = 0;
+                                           ref.executeOrder.id = orderId;
+                                           clearInterval(ref.reciveNewOrderTimer);
+                                           ref.reciveNewOrderTimer = null;
+                                           ref.playFlag = false;
+                                           //隐藏了工作台页面底部操作条之后，需要重新计算订单执行View的高度
+                                           ref.contentStyle = `width: 750rpx;height:${ref.windowHeight - 200 - 0}px;`;
+                                           //加载订单执行数据
+                                           ref.loadExecuteOrder(ref);
+                                       });
+                                   } else {
+                                       //自动抢单失败
+                                       audio = uni.createInnerAudioContext();
+                                       ref.audio = audio;
+                                       audio.src = '/static/voice/voice_4.mp3';
+                                       audio.play();
+                                       audio.onEnded(function() {
+                                           ref.playFlag = false;
+                                           if (ref.newOrderList.length > 0) {
+                                               ref.showNewOrder(ref);
+                                           } else {
+                                               ref.newOrder = null;
+                                           }
+                                       });
+                                   }
+                               },
+                               false
+                           );
+                       } else {
+                           ref.playFlag = false;
+                           setTimeout(function() {
+                               //如果用户不是正在手动抢单中，就播放下一个新订单
+                               if (!ref.accepting) {
+                                   ref.canAcceptOrder = false;
+                                   if (ref.newOrderList.length > 0) {
+                                       ref.showNewOrder(ref); //递归调用
+                                   } else {
+                                       ref.newOrder = null;
+                                   }
+                               }
+                           }, 3000);
+                       }
+                   }
+               });
+           },
+           fail: function(resp) {
+               console.error('语音订单播报失败', resp);
+               ref.playFlag = false;
+               ref.canAcceptOrder = true;
+               ref.acception = false;
+           }
+       });
+   }
+},
+
+// 调用封装函数
+ref.showNewOrder(ref);
+```
+5. 执行第3步再次进行自测

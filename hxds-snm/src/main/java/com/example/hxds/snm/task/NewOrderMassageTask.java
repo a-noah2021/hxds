@@ -108,7 +108,7 @@ public class NewOrderMassageTask {
             // 每次接收10条消息然后循环接收
             channel.basicQos(0, 10, true);
             while (true) {
-                GetResponse response = channel.basicGet(queueName, true);
+                GetResponse response = channel.basicGet(queueName, false);
                 if (!Objects.isNull(response)) {
                     AMQP.BasicProperties properties = response.getProps();
                     Map<String, Object> map = properties.getHeaders();
@@ -134,7 +134,7 @@ public class NewOrderMassageTask {
                     String msg = new String(body);
                     log.debug("从RabbitMQ接收的订单消息：" + msg);
                     long deliveryTag = response.getEnvelope().getDeliveryTag();
-                    channel.basicAck(deliveryTag, true);
+                    channel.basicAck(deliveryTag, false);
                 } else {
                     break;
                 }

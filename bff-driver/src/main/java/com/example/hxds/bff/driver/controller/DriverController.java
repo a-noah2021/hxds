@@ -148,14 +148,4 @@ public class DriverController {
         return R.ok();
     }
 
-    @PostMapping("/receiveNewOrderMessage")
-    @Operation(summary = "同步接收新订单消息")
-    @SaCheckLogin
-    public R receiveNewOrderMessage() {
-        long driverId = StpUtil.getLoginIdAsLong();
-        final ReceiveNewOrderMessageForm form = new ReceiveNewOrderMessageForm();
-        form.setUserId(form.getUserId());
-        List list = newOrderMessageService.receiveNewOrderMessage(form);
-        return R.ok().put("result", list);
-    }
 }
