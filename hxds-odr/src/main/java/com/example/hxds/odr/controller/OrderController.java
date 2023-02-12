@@ -1,10 +1,9 @@
 package com.example.hxds.odr.controller;
 
+import cn.hutool.core.bean.BeanUtil;
 import cn.hutool.json.JSONObject;
 import com.example.hxds.common.util.R;
-import com.example.hxds.odr.controller.form.AcceptNewOrderForm;
-import com.example.hxds.odr.controller.form.InsertOrderForm;
-import com.example.hxds.odr.controller.form.SearchDriverTodayBusinessDataForm;
+import com.example.hxds.odr.controller.form.*;
 import com.example.hxds.odr.db.pojo.OrderBillEntity;
 import com.example.hxds.odr.db.pojo.OrderEntity;
 import com.example.hxds.odr.service.OrderService;
@@ -19,6 +18,7 @@ import javax.annotation.Resource;
 import javax.validation.Valid;
 import java.math.BigDecimal;
 import java.util.HashMap;
+import java.util.Map;
 
 import static com.example.hxds.common.constants.HxdsConstants.*;
 
@@ -84,6 +84,30 @@ public class OrderController {
     @Operation(summary = "司机接单")
     public R acceptNewOrder(@RequestBody @Valid AcceptNewOrderForm form) {
         String result = orderService.acceptNewOrder(form.getDriverId(), form.getOrderId());
+        return R.ok().put("result", result);
+    }
+
+    @PostMapping("/searchDriveExecuteOrder")
+    @Operation(summary = "查询司机正在执行的订单记录")
+    public R searchDriveExecutorOrder(@RequestBody @Valid SearchDriverExecuteOrderForm form) {
+        Map param = BeanUtil.beanToMap(form);
+        HashMap map = orderService.searchDriverExecuteOrder(param);
+        return R.ok().put("result", map);
+    }
+
+    @PostMapping("/searchOrderStatus")
+    @Operation(summary = "查询订单状态")
+    public R searchOrderStatus(@RequestBody @Valid SearchOrderStatusForm form) {
+        Map param = BeanUtil.beanToMap(form);
+        Integer status = orderService.searchOrderStatus(param);
+        return R.ok().put("result", status);
+    }
+
+    @PostMapping("/deleteUnAcceptOrder")
+    @Operation(summary = "删除没有司机接单的订单")
+    public R deleteUnAcceptOrder(@RequestBody @Valid DeleteUnAcceptOrderForm form) {
+        Map param = BeanUtil.beanToMap(form);
+        String result = orderService.deleteUnAcceptOrder(param);
         return R.ok().put("result", result);
     }
 

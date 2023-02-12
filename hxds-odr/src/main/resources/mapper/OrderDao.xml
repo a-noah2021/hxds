@@ -59,4 +59,28 @@
         WHERE id = #{orderId}
           AND driver_id = #{driverId}
     </select>
+
+    <select id="searchOrderStatus" parameterType="Map" resultType="Integer">
+        SELECT status
+        FROM tb_order
+        WHERE id = #{orderId}
+        <if test="driverId!=null">
+            AND driver_id = #{driverId}
+        </if>
+        <if test="customerId!=null">
+            AND customer_id = #{customerId}
+        </if>
+    </select>
+
+    <delete id="deleteUnAcceptOrder" parameterType="Map">
+        DELETE FROM tb_order
+        WHERE id = #{orderId}
+        AND `status` = 1
+        <if test="driverId!=null">
+            AND driver_id = #{driverId}
+        </if>
+        <if test="customerId!=null">
+            AND customer_id = #{customerId}
+        </if>
+    </delete>
 </mapper>

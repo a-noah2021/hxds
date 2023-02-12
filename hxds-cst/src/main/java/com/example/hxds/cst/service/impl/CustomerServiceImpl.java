@@ -49,4 +49,10 @@ public class CustomerServiceImpl implements CustomerService {
         customerId = (customerId != null ? customerId : "");
         return customerId;
     }
+
+    @Override
+    public HashMap searchCustomerInfoInOrder(long customerId) {
+        HashMap map = customerDao.searchCustomerInfoInOrder(customerId);
+        return map;
+    }
 }

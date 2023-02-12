@@ -4,6 +4,7 @@ import com.example.hxds.odr.db.pojo.OrderBillEntity;
 import com.example.hxds.odr.db.pojo.OrderEntity;
 
 import java.util.HashMap;
+import java.util.Map;
 
 /**
  * @program: hxds
@@ -18,4 +19,10 @@ public interface OrderService {
     String insertOrder(OrderEntity orderEntity, OrderBillEntity orderBillEntity);
 
     String acceptNewOrder(long driverId, long orderId);
+
+    HashMap searchDriverExecuteOrder(Map param);
+
+    Integer searchOrderStatus(Map param);
+
+    String deleteUnAcceptOrder(Map param);
 }

@@ -16,6 +16,10 @@ public interface OrderDao {
     int acceptNewOrder(Map param);
 
     HashMap searchDriverExecuteOrder(Map param);
+
+    Integer searchOrderStatus(Map param);
+
+    int deleteUnAcceptOrder(Map param);
 }
 
 

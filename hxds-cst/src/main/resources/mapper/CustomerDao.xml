@@ -33,4 +33,11 @@
         FROM tb_customer
         WHERE open_id = #{openId}
     </select>
+    <select id="searchCustomerInfoInOrder" parameterType="long" resultType="HashMap">
+        SELECT IF(sex = '男', '先生', '女士') AS title,
+               tel,
+               photo
+        FROM tb_customer
+        WHERE id = #{customerId}
+    </select>
 </mapper>

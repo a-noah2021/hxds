@@ -1,5 +1,6 @@
 package com.example.hxds.odr.service.impl;
 
+import cn.hutool.core.map.MapUtil;
 import com.codingapi.txlcn.tc.annotation.LcnTransaction;
 import com.example.hxds.common.exception.HxdsException;
 import com.example.hxds.odr.db.dao.OrderBillDao;
@@ -18,6 +19,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import javax.annotation.Resource;
 import java.util.HashMap;
+import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -54,7 +56,7 @@ public class OrderServiceImpl implements OrderService {
             rows = orderBillDao.insert(orderBillEntity);
             if (rows == 1) {
                 redisTemplate.opsForValue().set("order#" + id, "none");
-                redisTemplate.expire("order#" + id, 1, TimeUnit.MINUTES);
+                redisTemplate.expire("order#" + id, 16, TimeUnit.MINUTES);
                 return id;
             } else {
                 throw new HxdsException("保存新订单费用失败");
@@ -97,5 +99,44 @@ public class OrderServiceImpl implements OrderService {
             throw new HxdsException("接单失败，无法更新订单记录");
         }
         return "抢单成功";
+    }
+
+    @Override
+    public HashMap searchDriverExecuteOrder(Map param) {
+        HashMap map = orderDao.searchDriverExecuteOrder(param);
+        return map;
+    }
+
+    @Override
+    public Integer searchOrderStatus(Map param) {
+        Integer status = orderDao.searchOrderStatus(param);
+        if (status == null)
+            throw new HxdsException("没有查询到数据，请核对查询条件");
+        return status;
+    }
+
+    @Override
+    @Transactional
+    @LcnTransaction
+    public String deleteUnAcceptOrder(Map param) {
+        Long orderId = MapUtil.getLong(param, "orderId");
+        if (!redisTemplate.hasKey("order#" + orderId)) {
+            return "订单取消失败";
+        }
+        redisTemplate.execute(new SessionCallback() {
+            @Override
+            public Object execute(RedisOperations operations) throws DataAccessException {
+                operations.watch("order#" + orderId);
+                operations.multi();
+                operations.opsForValue().set("order#" + orderId, "none");
+                return operations.exec();
+            }
+        });
+        redisTemplate.delete("order#" + orderId);
+        int rows = orderDao.deleteUnAcceptOrder(param);
+        if(rows != 1){
+            return "订单取消失败";
+        }
+        return "订单取消成功";
     }
 }

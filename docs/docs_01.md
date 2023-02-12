@@ -3172,7 +3172,7 @@ onLoad: function(options) {
     });
     that.map = uni.createMapContext('map');
 
-		<!--typora中vue的注释在视图层和JS都给统一了，正规JS应该用双斜杠//>
+
     <!--if (options.hasOwnProperty('showCar')) {
         that.showCar = options.showCar;
         that.carId = options.carId;
@@ -4641,7 +4641,7 @@ if(options.hasOwnProperty('showCar')){
    that.showCar = options.showCar;
    that.carId = options.carId;
    that.carPlate = options.carPlate;
-   this.carType = options.carType;
+   that.carType = options.carType;
 }
 
 createOrderHandle: function() {
@@ -4693,7 +4693,7 @@ createOrderHandle: function() {
    });
 },
 ```
-3. 启动hxds-tm、hxds-dr、hxds-mps、hxds-cst、hxds-rule、hxds-odr、bff-driver、bff-costomer、gateway这些子系统都启动了，然后在司机小程序上面登陆，保持实时上传司机的GPS定位，
+3. 把 hxds-tm、hxds-dr、hxds-mps、hxds-cst、hxds-rule、hxds-snm、hxds-odr、bff-driver、bff-customer、gateway 这些子系统都启动了，然后在司机小程序上面登陆，保持实时上传司机的GPS定位，
    最后用FastRequest插件测试Web方法
 ### 消息微服务收发新订单消息
 1. 写 hxds/hxds-snm/src/main/resources/application.yml 连接 RabbitMQ
@@ -5487,7 +5487,7 @@ ref.showNewOrder(ref);
    写 hxds-odr/src/main/java/com/example/hxds/odr/service/impl/OrderService.java#acceptNewOrder 及其实现类
    写 hxds-odr/src/main/java/com/example/hxds/odr/controller/form/AcceptNewOrderForm.java
    写 hxds-odr/src/main/java/com/example/hxds/odr/controller/OrderController.java#acceptNewOrder
-【拓展】tb_order#status:1等待接单，2已接单，3司机已到达，4开始代驾，5结束代驾，6未付款，7已付款，8订单已结束，9顾客撤单，10司机撤单，11事故关闭，12其他
+   【拓展】tb_order#status:1等待接单，2已接单，3司机已到达，4开始代驾，5结束代驾，6未付款，7已付款，8订单已结束，9顾客撤单，10司机撤单，11事故关闭，12其他
 ```java
 int acceptNewOrder(Map param);
 
@@ -5659,6 +5659,7 @@ acceptHandle: function() {
 },
 ```
 ### 订单微服务加载执行订单
+
 1. 写 hxds-odr/src/main/java/com/example/hxds/odr/db/dao/OrderDao.java#searchDriverExecuteOrder 及其对应接口
    写 hxds-odr/src/main/java/com/example/hxds/odr/service/impl/OrderService.java#searchDriverExecuteOrder 及其实现类
    写 hxds-odr/src/main/java/com/example/hxds/odr/controller/form/SearchDriverExecuteOrderForm.java
@@ -5681,5 +5682,479 @@ HashMap searchDriverExecuteOrder(Map param);
    WHERE id = #{orderId}
      AND driver_id = #{driverId}
 </select>
+
+HashMap searchDriverExecuteOrder(Map param);
+
+@Override
+public HashMap searchDriverExecuteOrder(Map param) {
+     HashMap map = orderDao.searchDriverExecuteOrder(param);
+     return map;
+}
+
+@Data
+@Schema(description = "查询司机正在执行的订单")
+public class SearchDriverExecuteOrderForm {
+   @NotNull(message = "orderId不能为空")
+   @Min(value = 1, message = "orderId不能小于1")
+   @Schema(description = "订单ID")
+   private Long orderId;
+
+   @NotNull(message = "driverId不能为空")
+   @Min(value = 1, message = "driverId不能小于1")
+   @Schema(description = "司机ID")
+   private Long driverId;
+}
+
+@PostMapping("/searchDriveExecuteOrder")
+@Operation(summary = "查询司机正在执行的订单记录")
+public R searchDriveExecutorOrder(@RequestBody @Valid SearchDriverExecuteOrderForm form) {
+   Map param = BeanUtil.beanToMap(form);
+   HashMap map = orderService.searchDriverExecuteOrder(param);
+   return R.ok().put("result", map);
+}
 ```
-2. 写
+2. 写 hxds-cst/src/main/resources/mapper/CustomerDao.xml#searchCustomerInfoInOrder 及其对应接口
+   写 hxds-cst/src/main/java/com/example/hxds/cst/service/CustomerService.java 及其实现类
+   写 hxds-cst/src/main/java/com/example/hxds/cst/controller/form/SearchCustomerInfoInOrderForm.java
+   写 hxds-cst/src/main/java/com/example/hxds/cst/controller/CustomerController.java
+```java
+HashMap searchCustomerInfoInOrder(long customerId);
+
+<select id="searchCustomerInfoInOrder" parameterType="long" resultType="HashMap">
+  SELECT IF(sex = '男', '先生', '女士') AS title,
+         tel,
+         photo
+  FROM tb_customer
+  WHERE id = #{customerId}
+</select>
+
+HashMap searchCustomerInfoInOrder(long customerId);
+
+@Override
+public HashMap searchCustomerInfoInOrder(long customerId) {
+     HashMap map = customerDao.searchCustomerInfoInOrder(customerId);
+     return map;
+}
+
+@Data
+@Schema(description = "查询订单中的客户信息")
+public class SearchCustomerInfoInOrderForm {
+
+   @NotNull(message = "customerId不能为空")
+   @Min(value = 1, message = "customerId不能小于1")
+   @Schema(description = "客户ID")
+   private Long customerId;
+}
+
+@PostMapping("/searchCustomerInfoInOrder")
+@Operation(summary = "查询订单中的客户信息")
+public R searchCustomerInfoInOrder(@RequestBody @Valid SearchCustomerInfoInOrderForm form) {
+   HashMap map = customerService.searchCustomerInfoInOrder(form.getCustomerId());
+   return R.ok().put("result", map);
+}
+```
+2. 写 bff-driver/src/main/java/com/example/hxds/bff/driver/controller/form/SearchDriverExecuteOrderForm.java
+   写 bff-driver/src/main/java/com/example/hxds/bff/driver/feign/OdrServiceApi.java#searchDriverExecuteOrder
+   写 bff-driver/src/main/java/com/example/hxds/bff/driver/controller/form/SearchCustomerInfoInOrderForm.java
+   写 bff-driver/src/main/java/com/example/hxds/bff/driver/feign/CstServiceApi.java#searchCustomerInfoInOrder
+   写 bff-driver/src/main/java/com/example/hxds/bff/driver/service/OrderService.java 及其实现类
+   写 bff-driver/src/main/java/com/example/hxds/bff/driver/controller/OrderController.java#searchDriverExecuteOrder
+```java
+@Data
+@Schema(description = "查询司机正在执行的订单")
+public class SearchDriverExecuteOrderForm {
+    @NotNull(message = "orderId不能为空")
+    @Min(value = 1, message = "orderId不能小于1")
+    @Schema(description = "订单ID")
+    private Long orderId;
+
+    @Schema(description = "司机ID")
+    private Long driverId;
+}
+
+@PostMapping("/order/searchDriverExecuteOrder")
+R searchDriverExecuteOrder(SearchDriverExecuteOrderForm form);
+
+@Data
+@Schema(description = "查询订单中的客户信息")
+public class SearchCustomerInfoInOrderForm {
+
+   @NotNull(message = "customerId不能为空")
+   @Min(value = 1, message = "customerId不能小于1")
+   @Schema(description = "客户ID")
+   private Long customerId;
+}
+
+@PostMapping("/customer/searchCustomerInfoInOrder")
+R searchCustomerInfoInOrder(SearchCustomerInfoInOrderForm form);
+
+HashMap searchDriverExecuteOrder(SearchDriverExecuteOrderForm form);
+
+@Override
+public HashMap searchDriverExecuteOrder(SearchDriverExecuteOrderForm form) {
+   // 查询订单信息
+   R r = odrServiceApi.searchDriverExecuteOrder(form);
+   HashMap orderMap = (HashMap) r.get("result");
+
+   // 查询代驾客户信息
+   Long customerId = MapUtil.getLong(orderMap, "customerId");
+   SearchCustomerInfoInOrderForm customerInfoInOrderForm = new SearchCustomerInfoInOrderForm();
+   customerInfoInOrderForm.setCustomerId(customerId);
+   r = cstServiceApi.searchCustomerInfoInOrder(customerInfoInOrderForm);
+   HashMap cstMap = (HashMap) r.get("result");
+
+   HashMap map = new HashMap();
+   map.putAll(orderMap);
+   map.putAll(cstMap);
+   return map;
+}
+
+@PostMapping("/searchDriverExecuteOrder")
+@SaCheckLogin
+@Operation(summary = "查询司机正在执行的订单记录")
+public R searchDriverExecuteOrder(@RequestBody @Valid SearchDriverExecuteOrderForm form) {
+   long driverId = StpUtil.getLoginIdAsLong();
+   form.setDriverId(driverId);
+   HashMap map = orderService.searchDriverExecuteOrder(form);
+   return R.ok().put("result", map);
+}
+```
+3. 写 hxds-driver-wx/main.js
+   写 hxds-driver-wx/pages/workbench/workbench.vue#loadExecuteOrder 在自动抢单和手动抢单的中调用该函数，只要抢单成功就加载正在执行订单的数据
+   写 hxds-driver-wx/pages/workbench/workbench.vue#callCustomerHandle、callServiceHandle 实现拨打代驾客户和客服手机
+```javascript
+searchDriverExecuteOrder: `${baseUrl}/driver/searchDriverExecuteOrder`,
+
+loadExecuteOrder: function(ref) {
+   let data = { orderId: ref.executeOrder.id };
+   this.ajax(ref.url.searchDriverExecuteOrder, 'POST', data, function(resp){
+      let result = resp.data.result;
+      ref.executeOrder = {
+         id: ref.executeOrder.id,
+         photo: result.photo,
+         title: result.title,
+         tel: result.tel,
+         customerId: result.customerId,
+         startPlace: result.startPlace,
+         startPlaceLocation: JSON.parse(result.startPlaceLocation),
+         endPlace: result.endPlace,
+         endPlaceLocation: JSON.parse(result.endPlaceLocation),
+         favourFee: result.favourFee,
+         carPlate: result.carPlate,
+         carType: result.carType,
+         createTime: result.createTime
+      };
+      ref.workStatus = '接客户';
+      uni.setStorageSync('workStatus', '接客户');
+      uni.setStorageSync('executeOrder', ref.executeOrder);
+   })
+},
+callCustomerHandle: function() {
+   let that = this;
+   uni.makePhoneCall({
+      phoneNumber: that.executeOrder.tel
+   });
+},
+callServiceHandle: function() {
+   let that = this;
+   uni.makePhoneCall({
+      phoneNumber: '10086'
+   });
+},
+```
+### 乘客端RR轮询司机接单
+1. 写 hxds-odr/src/main/java/com/example/hxds/odr/db/dao/OrderDao.java 及其对应接口
+   写 hxds-odr/src/main/java/com/example/hxds/odr/service/OrderService.java#searchOrderStatus、deleteUnAcceptOrder 及其实现类
+   修改 hxds-odr/src/main/java/com/example/hxds/odr/service/OrderService.java#insertOrder
+   写 hxds-odr/src/main/java/com/example/hxds/odr/controller/form/SearchOrderStatusForm.java、DeleteUnAcceptOrderForm.java
+   写 hxds-odr/src/main/java/com/example/hxds/odr/controller/OrderController.java#searchOrderStatus、deleteUnAcceptOrder
+【说明】因为乘客端的等待司机接单的倒计时为15分钟，现在后端Redis里面的抢单缓存也是15分钟。如果移动端倒计时到15分钟恰好结束，这时候发起Ajax请求取消订单，那么就会给后端程序带来困难，因为在Redis里面已经不存在抢单缓存了，后端程序无法判断到底是司机抢单成功后删除了抢单缓存，还是因为没有司机抢单，缓存过期自动删除了。
+
+有的同学觉得我们查询数据库的订单状态不就知道有没有人接单了么？这是不行的。因为恰好司机抢单成功之后，修改了订单的状态为2，但是事务还没来的及提交，这时候关闭订单的Ajax请求发过来了。Java程序通过查询数据库，发现订单的状态是1，以为没有司机接单，实际上已经有司机接单了。
+
+为了避免以上的情况，我们把Redis抢单缓存延长到16分钟。如果关闭订单的Ajax请求发送给后端，这时候抢单缓存还存在，说明没有司机抢单，那么我们就删除抢单缓存和订单记录就可以了。如果抢单缓存不存在，说明已经有司机抢单成功了，这时候我们返回给乘客端关闭订单失败，已有司机抢单成功即可。
+```java
+Integer searchOrderStatus(Map param);
+
+int deleteUnAcceptOrder(Map param);
+
+<select id="searchOrderStatus" parameterType="Map" resultType="Integer">
+        SELECT status
+        FROM tb_order
+        WHERE id = #{orderId}
+   <if test="driverId!=null">
+           AND driver_id = #{driverId}
+   </if>
+   <if test="customerId!=null">
+           AND customer_id = #{customerId}
+   </if>
+</select>
+
+<delete id="deleteUnAcceptOrder" parameterType="Map">
+        DELETE FROM tb_order
+        WHERE id = #{orderId}
+        AND `status` = 1
+   <if test="driverId!=null">
+           AND driver_id = #{driverId}
+   </if>
+   <if test="customerId!=null">
+           AND customer_id = #{customerId}
+   </if>
+</delete>
+
+Integer searchOrderStatus(Map param);
+
+String deleteUnAcceptOrder(Map param);
+
+@Override
+public Integer searchOrderStatus(Map param) {
+   Integer status = orderDao.searchOrderStatus(param);
+   if (status == null)
+       throw new HxdsException("没有查询到数据，请核对查询条件");
+   return status;
+}
+
+@Override
+@Transactional
+@LcnTransaction
+public String deleteUnAcceptOrder(Map param) {
+     Long orderId = MapUtil.getLong(param, "orderId");
+     if (!redisTemplate.hasKey("order#" + orderId)) {
+        return "订单取消失败";
+     }
+     redisTemplate.execute(new SessionCallback() {
+        @Override
+        public Object execute(RedisOperations operations) throws DataAccessException {
+           operations.watch("order#" + orderId);
+           operations.multi();
+           operations.opsForValue().set("order#" + orderId, "none");
+           return operations.exec();
+        }
+     });
+     redisTemplate.delete("order#" + orderId);
+     int rows = orderDao.deleteUnAcceptOrder(param);
+     if(rows != 1){
+        return "订单取消失败";
+     }
+     return "订单取消成功";
+}
+
+redisTemplate.expire("order#" + id, 16, TimeUnit.MINUTES);
+
+@Data
+@Schema(description = "查询订单状态的表单")
+public class SearchOrderStatusForm {
+   @NotNull(message = "orderId不能为空")
+   @Schema(description = "订单ID")
+   private Long orderId;
+
+   @Min(value = 0, message = "driverId不能小于0")
+   @Schema(description = "司机ID")
+   private Long driverId;
+
+   @Min(value = 0, message = "customerId不能小于0")
+   @Schema(description = "乘客ID")
+   private Long customerId;
+}
+
+@Data
+@Schema(description = "更新订单状态的表单")
+public class DeleteUnAcceptOrderForm {
+   @NotNull(message = "orderId不能为空")
+   @Min(value = 1,message = "orderId不能小于1")
+   @Schema(description = "订单ID")
+   private Long orderId;
+
+   @Min(value = 0, message = "driverId不能小于0")
+   @Schema(description = "司机ID")
+   private Long driverId;
+
+   @Min(value = 0, message = "customerId不能小于0")
+   @Schema(description = "乘客ID")
+   private Long customerId;
+
+}
+
+@PostMapping("/searchOrderStatus")
+@Operation(summary = "查询订单状态")
+public R searchOrderStatus(@RequestBody @Valid SearchOrderStatusForm form) {
+   Map param = BeanUtil.beanToMap(form);
+   Integer status = orderService.searchOrderStatus(param);
+   return R.ok().put("result", status);
+}
+
+@PostMapping("/deleteUnAcceptOrder")
+@Operation(summary = "删除没有司机接单的订单")
+public R deleteUnAcceptOrder(@RequestBody @Valid DeleteUnAcceptOrderForm form) {
+   Map param = BeanUtil.beanToMap(form);
+   String result = orderService.deleteUnAcceptOrder(param);
+   return R.ok().put("result", result);
+}
+```
+2. 写 bff-customer/src/main/java/com/example/hxds/bff/driver/controller/form/SearchOrderStatusForm.java、DeleteUnAcceptOrderForm.java
+   写 bff-customer/src/main/java/com/example/hxds/bff/driver/service/OrderService.java#searchOrderStatus、deleteUnAcceptOrder 及其实现类
+   写 bff-customer/src/main/java/com/example/hxds/bff/customer/controller/OrderController.java#searchOrderStatus、deleteUnAcceptOrder
+```java
+@Data
+@Schema(description = "查询订单状态的表单")
+public class SearchOrderStatusForm {
+   @NotNull(message = "orderId不能为空")
+   @Schema(description = "订单ID")
+   private Long orderId;
+
+   @Min(value = 0, message = "customerId不能小于0")
+   @Schema(description = "乘客ID")
+   private Long customerId;
+}
+
+@Data
+@Schema(description = "更新订单状态的表单")
+public class DeleteUnAcceptOrderForm {
+   @NotNull(message = "orderId不能为空")
+   @Schema(description = "订单ID")
+   private Long orderId;
+
+   @Min(value = 0, message = "customerId不能小于0")
+   @Schema(description = "乘客ID")
+   private Long customerId;
+}
+
+@PostMapping("/order/searchOrderStatus")
+R searchOrderStatus(SearchOrderStatusForm form);
+
+@PostMapping("/order/deleteUnAcceptOrder")
+R DeleteUnAcceptOrder(DeleteUnAcceptOrderForm form);
+
+Integer searchOrderStatus(SearchOrderStatusForm form);
+
+String deleteUnAcceptOrder(DeleteUnAcceptOrderForm form);
+
+@Override
+public Integer searchOrderStatus(SearchOrderStatusForm form) {
+   R r = odrServiceApi.searchOrderStatus(form);
+   Integer result = MapUtil.getInt(r, "result");
+   return result;
+}
+
+@Override
+@Transactional
+@LcnTransaction
+public String deleteUnAcceptOrder(DeleteUnAcceptOrderForm form) {
+   R r = odrServiceApi.deleteUnAcceptOrder(form);
+   String result = MapUtil.getStr(r, "result");
+   return result;
+}
+
+@PostMapping("/searchOrderStatus")
+@Operation(summary = "查询订单状态")
+@SaCheckLogin
+public R searchOrderStatus(@RequestBody @Valid SearchOrderStatusForm form) {
+   long customerId = StpUtil.getLoginIdAsLong();
+   form.setCustomerId(customerId);
+   Integer status = orderService.searchOrderStatus(form);
+   return R.ok().put("result", status);
+}
+
+@PostMapping("/deleteUnAcceptOrder")
+@Operation(summary = "关闭没有司机接单的订单")
+@SaCheckLogin
+public R deleteUnAcceptOrder(@RequestBody @Valid DeleteUnAcceptOrderForm form) {
+   long customerId = StpUtil.getLoginIdAsLong();
+   form.setCustomerId(customerId);
+   String result = orderService.deleteUnAcceptOrder(form);
+   return R.ok().put("result", result);
+}
+```
+3. 写 hxds-customer-wx/main.js
+   补充 hxds-customer-wx/pages/create_order/create_order.vue#createOrderHandle
+   写 hxds-customer-wx/pages/create_order/create_order.vue#searchOrderStatus、deleteUnAcceptOrder 把查询订单状态的代码封装起来，这样每隔5秒钟轮询的时候，以及倒计时结束取消订单失败后，再次查询订单状态时候，都要调用这个封装函数。同理，也对关闭没有司机接单的订单函数进行封装
+   写 hxds-customer-wx/pages/create_order/create_order.vue#countChangeHandle、countEndHandle、cancelHandle
+```javascript
+searchOrderStatus: `${baseUrl}/order/searchOrderStatus`,
+deleteUnAcceptOrder: `${baseUrl}/order/deleteUnAcceptOrder`,
+
+// 此处应该是15*60，但是测试中我们等不了15分钟,每隔5分钟发送一次查询接单情况的请求
+that.timestamp = 60;
+that.$refs.uCountDown.start();
+
+// 修改模型层
+timestamp: 60,
+
+searchOrderStatus: function(ref) {
+   let data = {
+      orderId: ref.orderId
+   };
+   ref.ajax(
+           ref.url.searchOrderStatus,
+           'POST',
+           data,
+           function(resp) {
+              if (resp.data.result == 2) {
+                 ref.showPopup = false;
+                 ref.timestamp = null;
+                 uni.showToast({
+                    icon: 'success',
+                    title: '司机已接单'
+                 });
+                 uni.vibrateShort({});
+                 setTimeout(function() {
+                    uni.redirectTo({
+                       url: '../move/move?orderId=' + ref.orderId
+                    });
+                 }, 3000);
+              }
+              else if (resp.data.result == 0) {
+                 ref.showPopup = false;
+                 ref.timestamp = null;
+                 uni.showToast({
+                    icon: 'success',
+                    title: '订单已经关闭'
+                 });
+              }
+           },
+           false
+   );
+},
+deleteUnAcceptOrder: function(ref) {
+   ref.showPopup = false;
+   ref.timestamp = null;
+   let data = {
+      orderId: ref.orderId
+   };
+   ref.ajax(ref.url.deleteUnAcceptOrder, 'POST', data, function(resp) {
+      let result = resp.data.result;
+      console.log(result);
+      if (result == '订单取消成功') {
+         uni.showToast({
+            icon: 'success',
+            title: '订单取消成功'
+         });
+         setTimeout(function() {
+            uni.redirectTo({
+               url: '../workbench/workbench'
+            });
+         }, 3000);
+      } else {
+         ref.searchOrderStatus(ref);
+      }
+   });
+},
+countChangeHandle: function(s) {
+   let that = this;
+   if (s != 0 && s % 5 == 0) {
+      that.searchOrderStatus(that);
+   }
+},
+countEndHandle: function() {
+   let that = this;
+   that.deleteUnAcceptOrder(that);
+},
+cancelHandle: function() {
+   let that = this;
+   that.deleteUnAcceptOrder(that);
+}
+```
+4. 把 hxds-tm、hxds-dr、hxds-mps、hxds-cst、hxds-rule、hxds-snm、hxds-odr、bff-driver、bff-customer、gateway 这些子系统都启动了
+   记得调用 http://127.0.0.1:8101/driver/location/updateLocationCache 更新近距离的司机地理位置以防提示`没有适合接单的司机`
+   乘客端下单，然后没有司机接单，我们等待倒计时结束，看看能否自动关闭订单。然后重新创建订单，没有司机接单的情况下，我们手动取消订单。
+   最后我们再创建订单，然后有司机接单，我们看看轮询的结果能不能弹出订单已被接单的提示消息

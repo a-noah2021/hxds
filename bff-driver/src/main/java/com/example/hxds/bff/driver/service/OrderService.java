@@ -1,6 +1,9 @@
 package com.example.hxds.bff.driver.service;
 
 import com.example.hxds.bff.driver.controller.form.AcceptNewOrderForm;
+import com.example.hxds.bff.driver.controller.form.SearchDriverExecuteOrderForm;
+
+import java.util.HashMap;
 
 /**
  * @program: hxds
@@ -11,5 +14,7 @@ import com.example.hxds.bff.driver.controller.form.AcceptNewOrderForm;
 public interface OrderService {
 
     String acceptNewOrder(AcceptNewOrderForm form);
+
+    HashMap searchDriverExecuteOrder(SearchDriverExecuteOrderForm form);
 
 }

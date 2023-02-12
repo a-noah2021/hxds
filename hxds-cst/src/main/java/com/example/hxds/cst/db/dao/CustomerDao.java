@@ -1,5 +1,6 @@
 package com.example.hxds.cst.db.dao;
 
+import java.util.HashMap;
 import java.util.Map;
 
 public interface CustomerDao {
@@ -11,4 +12,6 @@ public interface CustomerDao {
     String searchCustomerId(String openId);
 
     String login(String openId);
+
+    HashMap searchCustomerInfoInOrder(long customerId);
 }
