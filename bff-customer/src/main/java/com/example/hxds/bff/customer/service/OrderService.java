@@ -19,4 +19,5 @@ public interface OrderService {
     Integer searchOrderStatus(SearchOrderStatusForm form);
 
     String deleteUnAcceptOrder(DeleteUnAcceptOrderForm form);
+
 }

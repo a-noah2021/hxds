@@ -38,7 +38,6 @@ public class OrderServiceImpl implements OrderService {
         // 查询订单信息
         R r = odrServiceApi.searchDriverExecuteOrder(form);
         HashMap orderMap = (HashMap) r.get("result");
-
         // 查询代驾客户信息
         Long customerId = MapUtil.getLong(orderMap, "customerId");
         SearchCustomerInfoInOrderForm customerInfoInOrderForm = new SearchCustomerInfoInOrderForm();
@@ -50,6 +49,27 @@ public class OrderServiceImpl implements OrderService {
         map.putAll(orderMap);
         map.putAll(cstMap);
         return map;
+    }
+
+    @Override
+    public HashMap searchDriverCurrentOrder(SearchDriverCurrentOrderForm form) {
+        // 查询订单信息
+        R r = odrServiceApi.searchDriverCurrentOrder(form);
+        HashMap orderMap = (HashMap) r.get("result");
+        if (MapUtil.isNotEmpty(orderMap)) {
+            var map = new HashMap();
+            // 查询代驾客户信息
+            long customerId = MapUtil.getLong(orderMap, "customerId");
+            SearchCustomerInfoInOrderForm customerInfoInOrderForm = new SearchCustomerInfoInOrderForm();
+            customerInfoInOrderForm.setCustomerId(customerId);
+            r = cstServiceApi.searchCustomerInfoInOrder(customerInfoInOrderForm);
+            HashMap cstMap = (HashMap) r.get("result");
+            map.putAll(orderMap);
+            map.putAll(cstMap);
+            return map;
+        } else {
+            return null;
+        }
     }
 
 }

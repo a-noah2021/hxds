@@ -17,4 +17,6 @@ public interface OdrServiceApi {
     @PostMapping("/order/searchDriverExecuteOrder")
     R searchDriverExecuteOrder(SearchDriverExecuteOrderForm form);
 
+    @PostMapping("/order/searchDriverCurrentOrder")
+    R searchDriverCurrentOrder(SearchDriverCurrentOrderForm form);
 }

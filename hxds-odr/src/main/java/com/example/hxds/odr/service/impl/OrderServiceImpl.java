@@ -139,4 +139,10 @@ public class OrderServiceImpl implements OrderService {
         }
         return "订单取消成功";
     }
+
+    @Override
+    public HashMap searchDriverCurrentOrder(long driverId) {
+        HashMap map = orderDao.searchDriverCurrentOrder(driverId);
+        return map;
+    }
 }
