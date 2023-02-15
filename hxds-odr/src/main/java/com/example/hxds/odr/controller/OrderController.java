@@ -117,4 +117,11 @@ public class OrderController {
         HashMap map = orderService.searchDriverCurrentOrder(form.getDriverId());
         return R.ok().put("result", map);
     }
+
+    @PostMapping("/hasCustomerCurrentOrder")
+    @Operation(summary = "查询乘客是否存在当前的订单")
+    public R hasCustomerCurrentOrder(@RequestBody @Valid HasCustomerCurrentOrderForm form) {
+        HashMap map = orderService.hasCustomerCurrentOrder(form.getCustomerId());
+        return R.ok().put("result", map);
+    }
 }

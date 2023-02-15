@@ -6103,14 +6103,6 @@ searchOrderStatus: function(ref) {
                     });
                  }, 3000);
               }
-              else if (resp.data.result == 0) {
-                 ref.showPopup = false;
-                 ref.timestamp = null;
-                 uni.showToast({
-                    icon: 'success',
-                    title: '订单已经关闭'
-                 });
-              }
            },
            false
    );
