@@ -124,4 +124,12 @@ public class OrderController {
         HashMap map = orderService.hasCustomerCurrentOrder(form.getCustomerId());
         return R.ok().put("result", map);
     }
+
+    @PostMapping("/searchOrderForMoveById")
+    @Operation(summary = "查询订单信息用于司乘同显功能")
+    public R searchOrderForMoveById(@RequestBody @Valid SearchOrderForMoveByIdForm form) {
+        Map param = BeanUtil.beanToMap(form);
+        HashMap map = orderService.searchOrderForMoveById(param);
+        return R.ok().put("result", map);
+    }
 }

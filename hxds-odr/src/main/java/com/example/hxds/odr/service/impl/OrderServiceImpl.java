@@ -163,4 +163,10 @@ public class OrderServiceImpl implements OrderService {
         result.put("unFinishedOrder", id);
         return result;
     }
+
+    @Override
+    public HashMap searchOrderForMoveById(Map param) {
+        HashMap map = orderDao.searchOrderForMoveById(param);
+        return map;
+    }
 }

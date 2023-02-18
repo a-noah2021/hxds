@@ -3,6 +3,7 @@ package com.example.hxds.bff.driver.service;
 import com.example.hxds.bff.driver.controller.form.AcceptNewOrderForm;
 import com.example.hxds.bff.driver.controller.form.SearchDriverCurrentOrderForm;
 import com.example.hxds.bff.driver.controller.form.SearchDriverExecuteOrderForm;
+import com.example.hxds.bff.driver.controller.form.SearchOrderForMoveByIdForm;
 
 import java.util.HashMap;
 
@@ -19,5 +20,7 @@ public interface OrderService {
     HashMap searchDriverExecuteOrder(SearchDriverExecuteOrderForm form);
 
     HashMap searchDriverCurrentOrder(SearchDriverCurrentOrderForm form);
+
+    HashMap searchOrderForMoveById(SearchOrderForMoveByIdForm form);
 
 }

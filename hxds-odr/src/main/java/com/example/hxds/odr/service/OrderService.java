@@ -29,4 +29,6 @@ public interface OrderService {
     HashMap searchDriverCurrentOrder(long driverId);
 
     HashMap hasCustomerCurrentOrder(long customerId);
+
+    HashMap searchOrderForMoveById(Map param);
 }

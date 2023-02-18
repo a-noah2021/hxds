@@ -406,3 +406,278 @@ if(options.hasOwnProperty("showPopup")){
 抢单缓存依然为1分钟，然后乘客创建订单成功就立即关闭微信。等待10秒钟，重新打开微信登陆小程序，看看页面跳转到create_order.vue页面之后，我们看看能不能手动关闭订单。
 
 把抢单缓存恢复成16分钟，然后乘客正常创建订单，倒计时结束之后，看看订单能不能成功关闭
+### 地图微服务，司机端的司乘同显
+1. 写 hxds-odr/src/main/resources/mapper/OrderDao.xml#searchOrderForMoveById 及其对应接口
+   写 hxds-odr/src/main/java/com/example/hxds/odr/service/impl/OrderService.java#searchOrderForMoveById 及其实现类
+   写 hxds-odr/src/main/java/com/example/hxds/odr/controller/form/SearchOrderByIdForm.java
+   写 hxds-odr/src/main/java/com/example/hxds/odr/controller/OrderController.java#searchOrderForMoveById
+```java
+ <select id="searchOrderForMoveById" parameterType="Map" resultType="HashMap">
+     SELECT
+     start_place AS startPlace,
+     start_place_location AS startPlaceLocation,
+     end_place AS endPlace,
+     end_place_location AS endPlaceLocation,
+     `status`
+     FROM tb_order
+     WHERE id = #{orderId}
+     <if test="customerId!=null">
+         AND customer_id = #{customerId}
+     </if>
+     <if test="driverId!=null">
+         AND driver_id = #{driverId}
+     </if>
+     LIMIT 1;
+ </select>
+
+HashMap searchOrderForMoveById(Map param);
+ 
+HashMap searchOrderForMoveById(Map param);
+
+@Override
+public HashMap searchOrderForMoveById(Map param) {
+     HashMap map = orderDao.searchOrderForMoveById(param);
+     return map;
+}
+
+@Data
+@Schema(description = "根据ID查询订单信息的表单")
+public class SearchOrderByIdForm {
+   @NotNull
+   @Min(value = 1, message = "orderId不能小于1")
+   @Schema(description = "订单ID")
+   private Long orderId;
+
+   @Min(value = 1, message = "customerId不能小于1")
+   @Schema(description = "客户ID")
+   private Long customerId;
+
+   @Min(value = 1, message = "driverId不能小于1")
+   @Schema(description = "司机ID")
+   private Long driverId;
+}
+
+@PostMapping("/searchOrderForMoveById")
+@Operation(summary = "查询订单信息用于司乘同显功能")
+public R searchOrderForMoveById(@RequestBody @Valid SearchOrderForMoveByIdForm form) {
+   Map param = BeanUtil.beanToMap(form);
+   HashMap map = orderService.searchOrderForMoveById(param);
+   return R.ok().put("result", map);
+}
+```
+2. 写 bff-driver/src/main/java/com/example/hxds/bff/driver/controller/form/SearchOrderForMoveByIdForm.java
+   写 bff-driver/src/main/java/com/example/hxds/bff/driver/feign/OdrServiceApi.java#searchOrderForMoveById
+   写 bff-driver/src/main/java/com/example/hxds/bff/driver/service/OrderService.java#searchOrderForMoveById 及其实现类
+```java
+@Data
+@Schema(description = "查询订单信息用于司乘同显功能的表单")
+public class SearchOrderForMoveByIdForm {
+
+   @NotNull(message = "orderId不能为空")
+   @Schema(description = "订单ID")
+   private Long orderId;
+
+   @Schema(description = "司机ID")
+   private Long driverId;
+
+}
+
+@PostMapping("/order/searchOrderForMoveById")
+R searchOrderForMoveById(SearchOrderForMoveByIdForm form);
+
+HashMap searchOrderForMoveById(SearchOrderForMoveByIdForm form);
+
+@Override
+public HashMap searchOrderForMoveById(SearchOrderForMoveByIdForm form) {
+   R r = odrServiceApi.searchOrderForMoveById(form);
+   HashMap map = (HashMap) r.get("result");
+   return map;
+}
+
+@PostMapping("/searchOrderForMoveById")
+@SaCheckLogin
+@Operation(summary = "查询订单信息用于司乘同显功能")
+public R searchOrderForMoveById(@RequestBody @Valid SearchOrderForMoveByIdForm form) {
+   long driverId = StpUtil.getLoginIdAsLong();
+   form.setDriverId(driverId);
+   HashMap map = orderService.searchOrderForMoveById(form);
+   return R.ok().put("result", map);
+}
+```
+3. 启动 hxds-tm、hxds-odr、hxds-dr 和 bff-driver 子系统，用FastRequest插件测试Web方法
+4. 写 hxds-driver-wx/pages/workbench/workbench.vue#showMoveHandle
+   补充 hxds-driver-wx/main.js
+   补充 hxds-driver-wx/execution/move/move.vue 模型层
+   写 hxds-driver-wx/execution/move/move.vue#formatPolyline 实现把腾讯位置服务查询到的导航坐标解压缩
+   写 hxds-driver-wx/execution/move/move.vue#calculateLine
+   写 hxds-driver-wx/execution/move/move.vue#onLoad
+   写 hxds-driver-wx/execution/move/move.vue#onShow
+   写 hxds-driver-wx/execution/move/move.vue#onHide
+   写 hxds-driver-wx/execution/move/move.vue#hideHandle
+   写 hxds-driver-wx/execution/move/move.vue#showHandle
+【说明】在地图组件上长按，触发长按事件，我们编写回调函数把状态条显示出来。如果点击状态条的关闭图标，就隐藏状态条
+```javascript
+showMoveHandle: function() {
+   let that = this;
+   uni.navigateTo({
+       url: '../../execution/move/move?orderId=' + that.executeOrder.id
+   });
+},
+
+searchOrderForMoveById: `${baseUrl}/order/searchOrderForMoveById`,
+
+orderId: null,
+status: null,
+mode: null,
+map: null,
+mapStyle: '',
+startLatitude: 0,
+startLongitude: 0,
+endLatitude: 0,
+endLongitude: 0,
+latitude: 0,
+longitude: 0,
+targetLatitude: 0,
+targetLongitude: 0,
+distance: 0,
+duration: 0,
+polyline: [],
+markers: [],
+timer: null,
+infoStatus: true
+
+formatPolyline(polyline) {
+   let coors = polyline;
+   let pl = [];
+   //坐标解压（返回的点串坐标，通过前向差分进行压缩）
+   const kr = 1000000;
+   for (let i = 2; i < coors.length; i++) {
+      coors[i] = Number(coors[i - 2]) + Number(coors[i]) / kr;
+   }
+   //将解压后的坐标放入点串数组pl中
+   for (let i = 0; i < coors.length; i += 2) {
+      pl.push({
+         longitude: coors[i + 1],
+         latitude: coors[i]
+      });
+   }
+   return pl;
+},
+
+calculateLine: function(ref) {
+   if (ref.latitude == 0 || ref.longitude == 0) {
+      return;
+   }
+   qqmapsdk.direction({
+      mode: ref.mode,
+      from: {
+         latitude: ref.latitude,
+         longitude: ref.longitude
+      },
+      to: {
+         latitude: ref.targetLatitude,
+         longitude: ref.targetLongitude
+      },
+      success: function(resp) {
+         let route = resp.result.routes[0];
+         let distance = route.distance;
+         let duration = route.duration;
+         let polyline = route.polyline;
+         ref.distance = Math.ceil((distance / 1000) * 10) / 10;
+         ref.duration = duration;
+
+         let points = ref.formatPolyline(polyline);
+
+         ref.polyline = [
+            {
+               points: points,
+               width: 6,
+               color: '#05B473',
+               arrowLine: true
+            }
+         ];
+         ref.markers = [
+            {
+               id: 1,
+               latitude: ref.latitude,
+               longitude: ref.longitude,
+               width: 35,
+               height: 35,
+               anchor: {
+                  x: 0.5,
+                  y: 0.5
+               },
+               iconPath: '../static/move/driver-icon.png'
+            }
+         ];
+      },
+      fail: function(error) {
+         console.log(error);
+      }
+   });
+},
+
+onLoad: function(options) {
+   let that = this;
+   that.orderId = options.orderId;
+   qqmapsdk = new QQMapWX({
+      key: that.tencent.map.key
+   });
+   let windowHeight = uni.getSystemInfoSync().windowHeight;
+   that.mapStyle = `height:${windowHeight}px`;
+},
+onShow: function() {
+   let that = this;
+   uni.$on('updateLocation', function(location) {
+      if (location != null) {
+         that.latitude = location.latitude;
+         that.longitude = location.longitude;
+      }
+   });
+
+   let data = {
+      orderId: that.orderId
+   };
+   that.ajax(that.url.searchOrderForMoveById, 'POST', data, function(resp) {
+      let result = resp.data.result;
+
+      let startPlaceLocation = JSON.parse(result.startPlaceLocation);
+      that.startLatitude = startPlaceLocation.latitude;
+      that.startLongitude = startPlaceLocation.longitude;
+
+      let endPlaceLocation = JSON.parse(result.endPlaceLocation);
+      that.endLatitude = endPlaceLocation.latitude;
+      that.endLongitude = endPlaceLocation.longitude;
+
+      let status = result.status;
+      if (status == 2) {
+         that.targetLatitude = that.startLatitude;
+         that.targetLongitude = that.startLongitude;
+         that.mode = 'bicycling';
+      } else if (status == 3 || status == 4) {
+         that.targetLatitude = that.endLatitude;
+         that.targetLongitude = that.endLongitude;
+         that.mode = 'driving';
+      }
+      that.calculateLine(that);
+      that.timer = setInterval(function() {
+         that.calculateLine(that);
+      }, 6000);
+   });
+},
+onHide: function() {
+   let that = this;
+   uni.$off('updateLocation');
+   clearInterval(that.timer);
+   that.timer = null;
+}
+
+hideHandle: function() {
+   this.infoStatus = false;
+},
+showHandle: function() {
+   this.infoStatus = true;
+}
+```
+5. 修改 main.js/App.vue 文件的 URL 进行自测
+### 地图微服务，乘客端的司乘同显

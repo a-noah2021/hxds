@@ -5,6 +5,7 @@ import cn.dev33.satoken.stp.StpUtil;
 import com.example.hxds.bff.driver.controller.form.AcceptNewOrderForm;
 import com.example.hxds.bff.driver.controller.form.SearchDriverCurrentOrderForm;
 import com.example.hxds.bff.driver.controller.form.SearchDriverExecuteOrderForm;
+import com.example.hxds.bff.driver.controller.form.SearchOrderForMoveByIdForm;
 import com.example.hxds.bff.driver.service.OrderService;
 import com.example.hxds.common.util.R;
 import io.swagger.v3.oas.annotations.Operation;
@@ -58,6 +59,16 @@ public class OrderController {
         long driverId = StpUtil.getLoginIdAsLong();
         form.setDriverId(driverId);
         HashMap map = orderService.searchDriverCurrentOrder(form);
+        return R.ok().put("result", map);
+    }
+
+    @PostMapping("/searchOrderForMoveById")
+    @SaCheckLogin
+    @Operation(summary = "查询订单信息用于司乘同显功能")
+    public R searchOrderForMoveById(@RequestBody @Valid SearchOrderForMoveByIdForm form) {
+        long driverId = StpUtil.getLoginIdAsLong();
+        form.setDriverId(driverId);
+        HashMap map = orderService.searchOrderForMoveById(form);
         return R.ok().put("result", map);
     }
 }
