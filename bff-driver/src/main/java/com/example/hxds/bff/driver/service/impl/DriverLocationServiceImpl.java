@@ -2,6 +2,7 @@ package com.example.hxds.bff.driver.service.impl;
 
 import com.example.hxds.bff.driver.controller.form.RemoveLocationCacheForm;
 import com.example.hxds.bff.driver.controller.form.UpdateLocationCacheForm;
+import com.example.hxds.bff.driver.controller.form.UpdateOrderLocationCacheForm;
 import com.example.hxds.bff.driver.feign.MpsServiceApi;
 import com.example.hxds.bff.driver.service.DriverLocationService;
 import org.springframework.stereotype.Service;
@@ -27,5 +28,10 @@ public class DriverLocationServiceImpl implements DriverLocationService {
     @Override
     public void removeLocationCache(RemoveLocationCacheForm form) {
         mpsServiceApi.removeLocationCache(form);
+    }
+
+    @Override
+    public void updateOrderLocationCache(UpdateOrderLocationCacheForm form) {
+        mpsServiceApi.updateOrderLocationCache(form);
     }
 }

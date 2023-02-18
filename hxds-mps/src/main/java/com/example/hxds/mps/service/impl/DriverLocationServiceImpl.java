@@ -153,4 +153,29 @@ public class DriverLocationServiceImpl implements DriverLocationService {
         }
         return list;
     }
+
+    @Override
+    public void updateOrderLocationCache(Map param) {
+        Long orderId = MapUtil.getLong(param, "orderId");
+        String latitude = MapUtil.getStr(param, "latitude");
+        String longitude = MapUtil.getStr(param, "longitude");
+        String location = latitude + "#" + longitude;
+        redisTemplate.opsForValue().set("order_location#" + orderId, location, 10, TimeUnit.MINUTES);
+    }
+
+    @Override
+    public HashMap searchOrderLocationCache(long orderId) {
+        Object obj = redisTemplate.opsForValue().get("order_location#" + orderId);
+        if(obj != null){
+            String[] temp = obj.toString().split("#");
+            String latitude = temp[0];
+            String longitude = temp[1];
+            HashMap map = new HashMap() {{
+                put("latitude", latitude);
+                put("longitude", longitude);
+            }};
+            return map;
+        }
+        return null;
+    }
 }

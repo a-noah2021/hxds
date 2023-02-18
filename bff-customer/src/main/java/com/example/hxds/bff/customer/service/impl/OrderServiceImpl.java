@@ -200,4 +200,11 @@ public class OrderServiceImpl implements OrderService {
         HashMap map = (HashMap) r.get("result");
         return map;
     }
+
+    @Override
+    public HashMap searchOrderForMoveById(SearchOrderForMoveByIdForm form) {
+        R r = odrServiceApi.searchOrderForMoveById(form);
+        HashMap map = (HashMap) r.get("result");
+        return map;
+    }
 }

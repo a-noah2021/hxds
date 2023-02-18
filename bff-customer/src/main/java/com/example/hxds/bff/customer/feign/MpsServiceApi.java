@@ -2,6 +2,7 @@ package com.example.hxds.bff.customer.feign;
 
 import com.example.hxds.bff.customer.controller.form.EstimateOrderMileageAndMinuteForm;
 import com.example.hxds.bff.customer.controller.form.SearchBefittingDriverAboutOrderForm;
+import com.example.hxds.bff.customer.controller.form.SearchOrderLocationCacheForm;
 import com.example.hxds.common.util.R;
 import org.springframework.cloud.openfeign.FeignClient;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -20,4 +21,7 @@ public interface MpsServiceApi {
 
     @PostMapping("/driver/location/searchBefittingDriverAboutOrder")
     R searchBefittingDriverAboutOrder(SearchBefittingDriverAboutOrderForm form);
+
+    @PostMapping("/driver/location/searchOrderLocationCache")
+    R searchOrderLocationCache(SearchOrderLocationCacheForm form);
 }

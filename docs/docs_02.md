@@ -468,6 +468,7 @@ public R searchOrderForMoveById(@RequestBody @Valid SearchOrderForMoveByIdForm f
 2. 写 bff-driver/src/main/java/com/example/hxds/bff/driver/controller/form/SearchOrderForMoveByIdForm.java
    写 bff-driver/src/main/java/com/example/hxds/bff/driver/feign/OdrServiceApi.java#searchOrderForMoveById
    写 bff-driver/src/main/java/com/example/hxds/bff/driver/service/OrderService.java#searchOrderForMoveById 及其实现类
+   同理，给乘客端也来一套一样的，记得把 driverId 改成 customerId
 ```java
 @Data
 @Schema(description = "查询订单信息用于司乘同显功能的表单")
@@ -515,6 +516,7 @@ public R searchOrderForMoveById(@RequestBody @Valid SearchOrderForMoveByIdForm f
    写 hxds-driver-wx/execution/move/move.vue#onHide
    写 hxds-driver-wx/execution/move/move.vue#hideHandle
    写 hxds-driver-wx/execution/move/move.vue#showHandle
+   同理，给乘客端也来一套一样的
 【说明】在地图组件上长按，触发长按事件，我们编写回调函数把状态条显示出来。如果点击状态条的关闭图标，就隐藏状态条
 ```javascript
 showMoveHandle: function() {
@@ -678,6 +680,363 @@ hideHandle: function() {
 showHandle: function() {
    this.infoStatus = true;
 }
+
+// 乘客端
+methods: {
+   formatPolyline(polyline) {
+      let coors = polyline;
+      let pl = [];
+      //坐标解压（返回的点串坐标，通过前向差分进行压缩）
+      const kr = 1000000;
+      for (let i = 2; i < coors.length; i++) {
+         coors[i] = Number(coors[i - 2]) + Number(coors[i]) / kr;
+      }
+      //将解压后的坐标放入点串数组pl中
+      for (let i = 0; i < coors.length; i += 2) {
+         pl.push({
+            longitude: coors[i + 1],
+            latitude: coors[i]
+         });
+      }
+      return pl;
+   },
+   calculateLine: function(ref) {
+      if (ref.latitude == 0 || ref.longitude == 0) {
+         return;
+      }
+      qqmapsdk.direction({
+         mode: ref.mode,
+         from: {
+            latitude: ref.latitude,
+            longitude: ref.longitude
+         },
+         to: {
+            latitude: ref.targetLatitude,
+            longitude: ref.targetLongitude
+         },
+         success: function(resp) {
+            let route = resp.result.routes[0];
+            let distance = route.distance;
+            let duration = route.duration;
+            let polyline = route.polyline;
+            ref.distance = Math.ceil((distance / 1000) * 10) / 10;
+            ref.duration = duration;
+
+            let points = ref.formatPolyline(polyline);
+
+            ref.polyline = [
+               {
+                  points: points,
+                  width: 6,
+                  color: '#05B473',
+                  arrowLine: true
+               }
+            ];
+            ref.markers = [
+               {
+                  id: 1,
+                  latitude: ref.latitude,
+                  longitude: ref.longitude,
+                  width: 35,
+                  height: 35,
+                  anchor: {
+                     x: 0.5,
+                     y: 0.5
+                  },
+                  iconPath: '../../static/move/driver-icon.png'
+               }
+            ];
+         },
+         fail: function(error) {
+            console.log(error);
+         }
+      });
+   },
+   analyse: function(ref) {
+      if (ref.status == 2) {
+         let data = {
+            orderId: ref.orderId
+         };
+         ref.ajax(
+                 ref.url.searchOrderLocationCache,
+                 'POST',
+                 data,
+                 function(resp) {
+                    let result = resp.data.result;
+                    if (result.hasOwnProperty('latitude') && result.hasOwnProperty('longitude')) {
+                       let latitude = result.latitude;
+                       let longitude = result.longitude;
+                       ref.latitude = latitude;
+                       ref.longitude = longitude;
+                       ref.calculateLine(ref);
+                    }
+                 },
+                 false
+         );
+      } else {
+         ref.calculateLine(ref);
+      }
+   },
+},
+onLoad: function(options) {
+   let that = this;
+   that.orderId = options.orderId;
+   qqmapsdk = new QQMapWX({
+      key: that.tencent.map.key
+   });
+   let windowHeight = uni.getSystemInfoSync().windowHeight;
+   that.mapStyle = `height:${windowHeight}px`;
+},
+onShow: function() {
+   let that = this;
+   uni.$on('updateLocation', function(location) {
+      if (location != null && that.status != 2) {
+         that.latitude = location.latitude;
+         that.longitude = location.longitude;
+      }
+   });
+
+   let data = {
+      orderId: that.orderId
+   };
+   that.ajax(that.url.searchOrderForMoveById, 'POST', data, function(resp) {
+      let result = resp.data.result;
+
+      let startPlaceLocation = JSON.parse(result.startPlaceLocation);
+      that.startLatitude = startPlaceLocation.latitude;
+      that.startLongitude = startPlaceLocation.longitude;
+
+      let endPlaceLocation = JSON.parse(result.endPlaceLocation);
+      that.endLatitude = endPlaceLocation.latitude;
+      that.endLongitude = endPlaceLocation.longitude;
+
+      let status = result.status;
+
+      that.status = status;
+      if (status == 2) {
+         that.targetLatitude = that.startLatitude;
+         that.targetLongitude = that.startLongitude;
+         that.mode = 'bicycling';
+      } else if (status == 3 || status == 4) {
+         that.targetLatitude = that.endLatitude;
+         that.targetLongitude = that.endLongitude;
+         that.mode = 'driving';
+      }
+
+      that.analyse(that);
+      that.timer = setInterval(function() {
+         that.analyse(that);
+      }, 6000);
+
+      if(status == 4 || status == 5){
+         that.messageTimer=setInterval(function(){
+            that.ajax(that.url.receiveBillMessage,"POST",{},function(resp){
+               if(resp.data.result=="您有代驾订单待支付"){
+                  uni.redirectTo({
+                     url:"../order/order?orderId="+that.orderId
+                  })
+               }
+            },false)
+         },5000)
+      }
+   });
+},
+onHide: function() {
 ```
 5. 修改 main.js/App.vue 文件的 URL 进行自测
 ### 地图微服务，乘客端的司乘同显
+1. 写 hxds-mps/src/main/java/com/example/hxds/mps/service/DriverLocationService.java#updateOrderLocationCache、searchOrderLocationCache 及其实现类
+   写 hxds-mps/src/main/java/com/example/hxds/mps/controller/form/UpdateOrderLocationCacheForm.java
+   写 hxds-mps/src/main/java/com/example/hxds/mps/controller/form/SearchOrderLocationCacheForm.java
+   写 hxds-mps/src/main/java/com/example/hxds/mps/controller/DriverLocationController.java#updateOrderLocationCache、searchOrderLocationCache
+```java
+void updateOrderLocationCache(Map param);
+
+HashMap searchOrderLocationCache(long orderId);
+
+@Override
+public void updateOrderLocationCache(Map param) {
+     Long orderId = MapUtil.getLong(param, "orderId");
+     String latitude = MapUtil.getStr(param, "latitude");
+     String longitude = MapUtil.getStr(param, "longitude");
+     String location = latitude + "#" + longitude;
+     redisTemplate.opsForValue().set("order_location#" + orderId, location, 10, TimeUnit.MINUTES);
+}
+
+@Override
+public HashMap searchOrderLocationCache(long orderId) {
+     Object obj = redisTemplate.opsForValue().get("order_location#" + orderId);
+     if(obj != null){
+        String[] temp = obj.toString().split("#");
+        String latitude = temp[0];
+        String longitude = temp[1];
+        HashMap map = new HashMap() {{
+           put("latitude", latitude);
+           put("longitude", longitude);
+        }};
+        return map;
+     }
+     return null;
+}
+
+@Data
+@Schema(description = "更新订单定位缓存的表单")
+public class UpdateOrderLocationCacheForm {
+
+   @NotNull(message = "orderId不能为空")
+   @Min(value = 1, message = "orderId不能小于1")
+   @Schema(description = "订单ID")
+   private String orderId;
+
+   @NotBlank(message = "latitude不能为空")
+   @Pattern(regexp = "^(([1-8]\\d?)|([1-8]\\d))(\\.\\d{1,18})|90|0(\\.\\d{1,18})?$", message = "latitude内容不正确")
+   @Schema(description = "纬度")
+   private String latitude;
+
+   @NotBlank(message = "longitude不能为空")
+   @Pattern(regexp = "^(([1-9]\\d?)|(1[0-7]\\d))(\\.\\d{1,18})|180|0(\\.\\d{1,18})?$", message = "longitude内容不正确")
+   @Schema(description = "经度")
+   private String longitude;
+}
+
+@Data
+@Schema(description = "查询订单定位缓存的表单")
+public class SearchOrderLocationCacheForm {
+   @NotNull(message = "orderId不能为空")
+   @Min(value = 1, message = "orderId不能小于1")
+   @Schema(description = "订单ID")
+   private Long orderId;
+}
+
+@PostMapping("/updateOrderLocationCache")
+@Operation(summary = "更新订单定位缓存")
+public R updateOrderLocationCache(@RequestBody @Valid UpdateOrderLocationCacheForm form){
+   Map param = BeanUtil.beanToMap(form);
+   driverLocationService.updateOrderLocationCache(param);
+   return R.ok();
+}
+
+@PostMapping("/searchOrderLocationCache")
+@Operation(summary = "查询订单定位缓存")
+public R searchOrderLocationCache(@RequestBody @Valid SearchOrderLocationCacheForm form){
+   HashMap map = driverLocationService.searchOrderLocationCache(form.getOrderId());
+   return R.ok().put("result",map);
+}
+```
+2. 写 bff-driver/src/main/java/com/example/hxds/bff/driver/controller/form/UpdateOrderLocationCacheForm.java
+   写 bff-customer/src/main/java/com/example/hxds/bff/customer/controller/form/SearchOrderLocationCacheForm.java
+   写 bff-driver/src/main/java/com/example/hxds/bff/driver/feign/MpsServiceApi.java#updateOrderLocationCache
+   写 bff-customer/src/main/java/com/example/hxds/bff/customer/feign/MpsServiceApi.java#searchOrderLocationCache
+   写 bff-driver/src/main/java/com/example/hxds/bff/driver/service/DriverLocationService.java#updateOrderLocationCache 及其实现类
+   写 bff-customer/src/main/java/com/example/hxds/bff/customer/service/OrderLocationService.java#searchOrderLocationCache 及其实现类
+   写 bff-driver/src/main/java/com/example/hxds/bff/driver/controller/DriverLocationController.java#updateOrderLocationCache
+   写 bff-customer/src/main/java/com/example/hxds/bff/customer/controller/OrderLocationController.java#searchOrderLocationCache
+```java
+@Data
+@Schema(description = "更新订单定位缓存的表单")
+public class UpdateOrderLocationCacheForm {
+
+    @NotNull(message = "orderId不能为空")
+    @Min(value = 1, message = "orderId不能小于1")
+    @Schema(description = "订单ID")
+    private String orderId;
+
+    @NotBlank(message = "latitude不能为空")
+    @Pattern(regexp = "^(([1-8]\\d?)|([1-8]\\d))(\\.\\d{1,18})|90|0(\\.\\d{1,18})?$", message = "latitude内容不正确")
+    @Schema(description = "纬度")
+    private String latitude;
+
+    @NotBlank(message = "longitude不能为空")
+    @Pattern(regexp = "^(([1-9]\\d?)|(1[0-7]\\d))(\\.\\d{1,18})|180|0(\\.\\d{1,18})?$", message = "longitude内容不正确")
+    @Schema(description = "经度")
+    private String longitude;
+}
+
+@Data
+@Schema(description = "查询订单定位缓存的表单")
+public class SearchOrderLocationCacheForm {
+   @NotNull(message = "orderId不能为空")
+   @Min(value = 1, message = "orderId不能小于1")
+   @Schema(description = "订单ID")
+   private Long orderId;
+}
+
+@PostMapping("/driver/location/updateOrderLocationCache")
+R updateOrderLocationCache(UpdateOrderLocationCacheForm form);
+
+@PostMapping("/driver/location/searchOrderLocationCache")
+R searchOrderLocationCache(SearchOrderLocationCacheForm form);
+
+void updateOrderLocationCache(UpdateOrderLocationCacheForm form)
+   
+@Override
+public void updateOrderLocationCache(UpdateOrderLocationCacheForm form) {
+   mpsServiceApi.updateOrderLocationCache(form);
+}
+
+HashMap searchOrderLocationCache(SearchOrderLocationCacheForm form);
+
+@Override
+public HashMap searchOrderLocationCache(SearchOrderLocationCacheForm form) {
+   R r = mpsServiceApi.searchOrderLocationCache(form);
+   HashMap map = (HashMap) r.get("result");
+   return map;
+}
+
+@PostMapping("/updateOrderLocationCache")
+@Operation(summary = "更新订单定位缓存")
+@SaCheckLogin
+public R updateOrderLocationCache(@RequestBody @Valid UpdateOrderLocationCacheForm form){
+   driverLocationService.updateOrderLocationCache(form);
+   return R.ok();
+}
+
+@PostMapping("/searchOrderLocationCache")
+@Operation(summary = "查询订单定位缓存")
+@SaCheckLogin
+public R searchOrderLocationCache(@RequestBody @Valid SearchOrderLocationCacheForm form){
+   HashMap map = orderLocationService.searchOrderLocationCache(form);
+   return R.ok().put("result",map);
+}
+```
+3. 补充 hxds-driver-wx/App.vue
+```javascript
+ let executeOrder = uni.getStorageSync('executeOrder');
+ let orderId = executeOrder.id;
+ let data = {
+     orderId: orderId,
+     latitude: latitude,
+     longitude: longitude
+ };
+ uni.request({
+     url: `${baseUrl}/driver/location/updateOrderLocationCache`,
+     method: 'POST',
+     header: {
+         token: uni.getStorageSync('token')
+     },
+     data: data,
+     success: function(resp) {
+         if (resp.statusCode == 401) {
+             uni.redirectTo({
+                 url: 'pages/login/login'
+             });
+         } else if (resp.statusCode == 200 && resp.data.code == 200) {
+             let data = resp.data;
+             if (data.hasOwnProperty('token')) {
+                 let token = data.token;
+                 uni.setStorageSync('token', token);
+             }
+             console.log('订单定位更新成功');
+         } else {
+             console.error('订单定位更新失败', resp.data);
+         }
+     },
+     fail: function(error) {
+         console.error('订单定位更新失败', error);
+     }
+ });
+```
+4. 把后端各个子系统都运行起来，然后通过FastRequest插件调用Web方法，手动上传司机定位信息，然后打开乘客端小程序，自动跳转到司乘同显页面并且显示司机
+   赶往上车点的最佳线路、里程和时间。这时候我们用FastRequest插件调用Web方法，更新司机定位之后，乘客端的司乘同显页面也会随之更新
+### 订单微服务司机到达起始点，更新订单状态
+1. 写 

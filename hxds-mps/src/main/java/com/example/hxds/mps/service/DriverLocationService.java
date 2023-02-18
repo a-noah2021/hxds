@@ -1,5 +1,6 @@
 package com.example.hxds.mps.service;
 
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -18,4 +19,8 @@ public interface DriverLocationService {
     List searchBefittingDriverAboutOrder(double startPlaceLatitude,
                      double startPlaceLongitude, double endPlaceLatitude,
                      double endPlaceLongitude, double mileage);
+
+    void updateOrderLocationCache(Map param);
+
+    HashMap searchOrderLocationCache(long orderId);
 }

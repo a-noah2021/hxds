@@ -2,10 +2,7 @@ package com.example.hxds.bff.customer.controller;
 
 import cn.dev33.satoken.annotation.SaCheckLogin;
 import cn.dev33.satoken.stp.StpUtil;
-import com.example.hxds.bff.customer.controller.form.CreateNewOrderForm;
-import com.example.hxds.bff.customer.controller.form.DeleteUnAcceptOrderForm;
-import com.example.hxds.bff.customer.controller.form.HasCustomerCurrentOrderForm;
-import com.example.hxds.bff.customer.controller.form.SearchOrderStatusForm;
+import com.example.hxds.bff.customer.controller.form.*;
 import com.example.hxds.bff.customer.service.OrderService;
 import com.example.hxds.common.util.R;
 import io.swagger.v3.oas.annotations.Operation;
@@ -72,6 +69,16 @@ public class OrderController {
         HasCustomerCurrentOrderForm form = new HasCustomerCurrentOrderForm();
         form.setCustomerId(customerId);
         HashMap map = orderService.hasCustomerCurrentOrder(form);
+        return R.ok().put("result", map);
+    }
+
+    @PostMapping("/searchOrderForMoveById")
+    @SaCheckLogin
+    @Operation(summary = "查询订单信息用于司乘同显功能")
+    public R searchOrderForMoveById(@RequestBody @Valid SearchOrderForMoveByIdForm form) {
+        long customerId = StpUtil.getLoginIdAsLong();
+        form.setCustomerId(customerId);
+        HashMap map = orderService.searchOrderForMoveById(form);
         return R.ok().put("result", map);
     }
 }
