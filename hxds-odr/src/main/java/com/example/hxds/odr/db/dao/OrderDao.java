@@ -28,6 +28,8 @@ public interface OrderDao {
     HashMap hasCustomerUnAcceptOrder(long customerId);
 
     HashMap searchOrderForMoveById(Map param);
+
+    int updateOrderStatus(Map param);
 }
 
 

@@ -150,7 +150,7 @@ that.ajax(
 int deleteUnAcceptOrderBill(long orderId);
 
 <delete id="deleteUnAcceptOrderBill" parameterType="long">
-        DELETE tb_order_bill WHERE order_id = #{orderId}
+        DELETE FROM tb_order_bill WHERE order_id = #{orderId}
 </delete>
 
 rows = orderBillDao.deleteUnAcceptOrderBill(orderId);
@@ -1039,4 +1039,992 @@ public R searchOrderLocationCache(@RequestBody @Valid SearchOrderLocationCacheFo
 4. 把后端各个子系统都运行起来，然后通过FastRequest插件调用Web方法，手动上传司机定位信息，然后打开乘客端小程序，自动跳转到司乘同显页面并且显示司机
    赶往上车点的最佳线路、里程和时间。这时候我们用FastRequest插件调用Web方法，更新司机定位之后，乘客端的司乘同显页面也会随之更新
 ### 订单微服务司机到达起始点，更新订单状态
+1. 写 hxds-odr/src/main/resources/mapper/OrderDao.xml 及其对应接口
+   写 hxds-odr/src/main/java/com/example/hxds/odr/service/OrderService.java#arriveStartPlace 及其实现类
+   写 hxds-odr/src/main/java/com/example/hxds/odr/controller/form/ArriveStartPlaceForm.java
+   写 hxds-odr/src/main/java/com/example/hxds/odr/controller/OrderController.java#arriveStartPlace
+```java
+ <update id="updateOrderStatus" parameterType="Map">
+     UPDATE tb_order
+     SET
+     <if test="status==3">
+         arrive_time = NOW(),
+     </if>
+     <if test="status==4">
+         start_time = NOW(),
+         waiting_minute = CEIL(TIMESTAMPDIFF(SECOND, arrive_time, NOW())/60),
+     </if>
+     <if test="status==5">
+         end_time = NOW(),
+     </if>
+     `status` = #{status}
+     WHERE id = #{orderId}
+     <if test="customerId!=null">
+         AND customer_id = #{customerId}
+     </if>
+     <if test="driverId!=null">
+         AND driver_id = #{driverId}
+     </if>
+ </update>
+
+int arriveStartPlace(Map param);
+
+@Override
+public int arriveStartPlace(Map param) {
+     // 添加到达上车点标志位
+     Long orderId = MapUtil.getLong(param, "orderId");
+     redisTemplate.opsForValue().set("order_driver_arrived#" + orderId, "1");
+     int rows = orderDao.updateOrderStatus(param);
+     if (rows != 1) {
+        throw new HxdsException("更新订单状态失败");
+     }
+     return rows;
+}
+
+@Data
+@Schema(description = "更新订单状态的表单")
+public class ArriveStartPlaceForm {
+   @NotNull(message = "orderId不能为空")
+   @Min(value = 1, message = "orderId不能小于1")
+   @Schema(description = "订单ID")
+   private Long orderId;
+
+   @NotNull(message = "driverId不能为空")
+   @Min(value = 1, message = "driverId不能小于1")
+   @Schema(description = "司机ID")
+   private Long driverId;
+
+}
+
+@PostMapping("/arriveStartPlace")
+@Operation(summary = "司机到达上车点")
+public R arriveStartPlace(@RequestBody @Valid ArriveStartPlaceForm form) {
+     Map param = BeanUtil.beanToMap(form);
+     param.put("status", 3);
+     int rows = orderService.arriveStartPlace(param);
+     return R.ok().put("rows", rows);
+}
+```
+2. 写 bff-driver/src/main/java/com/example/hxds/bff/driver/controller/form/ArriveStartPlaceForm.java
+   写 bff-driver/src/main/java/com/example/hxds/bff/driver/feign/OdrServiceApi.java
+   写 bff-driver/src/main/java/com/example/hxds/bff/driver/service/OrderService.java#arriveStartPlace 及其实现类
+   写 bff-driver/src/main/java/com/example/hxds/bff/driver/controller/OrderController.java#arriveStartPlace
+```java
+@Data
+@Schema(description = "更新订单状态的表单")
+public class ArriveStartPlaceForm {
+    @NotNull(message = "orderId不能为空")
+    @Min(value = 1, message = "orderId不能小于1")
+    @Schema(description = "订单ID")
+    private Long orderId;
+
+    @Schema(description = "司机ID")
+    private Long driverId;
+
+    @NotNull(message = "customerId不能为空")
+    @Min(value = 1, message = "customerId不能小于1")
+    @Schema(description = "客户ID")
+    private Long customerId;
+}
+
+@PostMapping("/order/arriveStartPlace")
+R arriveStartPlace(ArriveStartPlaceForm form);
+
+int arriveStartPlace(ArriveStartPlaceForm form);
+
+@Override
+@Transactional
+@LcnTransaction
+public int arriveStartPlace(ArriveStartPlaceForm form) {
+   R r = odrServiceApi.arriveStartPlace(form);
+   int rows = MapUtil.getInt(r, "rows");
+   if (rows == 1) {
+      //TODO 发送通知消息
+   }
+   return rows;
+}
+
+@PostMapping("/arriveStartPlace")
+@Operation(summary = "司机到达上车点")
+@SaCheckLogin
+public R arriveStartPlace(@RequestBody @Valid ArriveStartPlaceForm form) {
+   long driverId = StpUtil.getLoginIdAsLong();
+   form.setDriverId(driverId);
+   int rows = orderService.arriveStartPlace(form);
+   return R.ok().put("rows", rows);
+}
+```
+3. 写 hxds-driver-wx/main.js
+   写 hxds-driver-wx/pages/workbench/workbench.vue#arriveStartPlaceHandle
+```javascript
+arriveStartPlace: `${baseUrl}/order/arriveStartPlace`,
+
+arriveStartPlaceHandle: function() {
+   let that = this;
+   uni.showModal({
+       title: '消息通知',
+       content: '确认已经到达了代驾点？',
+       success: function(resp) {
+           if (resp.confirm) {
+               let data = {
+                   orderId: that.executeOrder.id,
+                   customerId: that.executeOrder.customerId
+               };
+               that.ajax(that.url.arriveStartPlace, 'POST', data, function(resp) {
+                   if (resp.data.rows == 1) {
+                       uni.showToast({
+                           icon: 'success',
+                           title: '订单状态更新成功'
+                       });
+                       that.workStatus = '到达代驾点';
+                       uni.setStorageSync('workStatus', '到达代驾点');
+                   }
+               });
+           }
+       }
+   });
+},
+```
+### 乘客端手动确认司机到达，并开始代驾模式
+1. 写 hxds-odr/src/main/java/com/example/hxds/odr/service/OrderService.java#confirmArriveStartPlace 及其实现类
+   写 hxds-odr/src/main/java/com/example/hxds/odr/controller/form/ConfirmArriveStartPlaceForm.java
+   写 hxds-odr/src/main/java/com/example/hxds/odr/controller/OrderController.java#confirmArriveStartPlace
+【说明】有一点需要大家必须清楚，乘客端点击了司机已到达，并不更改订单状态，因为上节课司机已到达的时候就已经把订单改成了3状态，为什么不是乘客确认司机已到达之后，再把订单改成3状态呢？这是因为司机到达上车点之后，有10分钟的免费等时。10分钟之后，乘客还没有到达上车点，代驾账单中就会出现等时费（1分钟1元钱）。有时候明明司机已经到达了上车点，但是乘客拖拖拉拉半个小时才到上车点，然后才点击司机已到达，于是等待的半个小时就成了免费的，因为没有确认司机已到达上车点，那就不算等时。
+
+乘客端点击确认司机已到达之后，并不会修改订单状态，修改Redis里面的标志位缓存。等到司机端点击开始代驾的时候，要确定Redis里面标志位的值为2，然后才能把订单更新成4状态。
+```java
+boolean confirmArriveStartPlace(long orderId);
+
+@Override
+public boolean confirmArriveStartPlace(long orderId) {
+   String key = "order_driver_arrivied#" + orderId;
+   if (redisTemplate.hasKey(key) && redisTemplate.opsForValue().get(key).toString().equals("1")) {
+      redisTemplate.opsForValue().set(key, "2");
+      return true;
+   }
+   return false;
+}
+
+@PostMapping("/confirmArriveStartPlace")
+@Operation(summary = "乘客确认司机到达上车点")
+public R confirmArriveStartPlace(@RequestBody @Valid ConfirmArriveStartPlaceForm form) {
+     boolean result = orderService.confirmArriveStartPlace(form.getOrderId());
+     return R.ok().put("result", result);
+}
+```
+2. 写 bff-customer/src/main/java/com/example/hxds/bff/customer/controller/form/ConfirmArriveStartPlaceForm.java
+   写 bff-customer/src/main/java/com/example/hxds/bff/customer/feign/OdrServiceApi.java#confirmArriveStartPlace
+   写 bff-customer/src/main/java/com/example/hxds/bff/customer/service/OrderService.java#confirmArriveStartPlace 及其实现类
+   写 bff-customer/src/main/java/com/example/hxds/bff/customer/controller/OrderController.java#confirmArriveStartPlace
+```java
+@Data
+@Schema(description = "更新订单状态的表单")
+public class ConfirmArriveStartPlaceForm {
+    
+    @NotNull(message = "orderId不能为空")
+    @Min(value = 1, message = "orderId不能小于1")
+    @Schema(description = "订单ID")
+    private Long orderId;
+
+}
+
+@PostMapping("/order/confirmArriveStartPlace")
+R confirmArriveStartPlace(ConfirmArriveStartPlaceForm form);
+
+boolean confirmArriveStartPlace(ConfirmArriveStartPlaceForm form);
+   
+@Override
+public boolean confirmArriveStartPlace(ConfirmArriveStartPlaceForm form) {
+   R r = odrServiceApi.confirmArriveStartPlace(form);
+   boolean result = MapUtil.getBool(r, "result");
+   return result;
+}
+
+@PostMapping("/confirmArriveStartPlace")
+@SaCheckLogin
+@Operation(summary = "确定司机已经到达")
+public R confirmArriveStartPlace(@RequestBody @Valid ConfirmArriveStartPlaceForm form) {
+   boolean result = orderService.confirmArriveStartPlace(form);
+   return R.ok().put("result", result);
+}
+```
+3. 写 hxds-customer-wx/main.js
+   写 hxds-customer-wx/pages/move/move.vue#driverArriviedHandle
+```javascript
+confirmArriveStartPlace: `${baseUrl}/order/confirmArriveStartPlace`,
+
+driverArriviedHandle: function() {
+   let that = this;
+   uni.showModal({
+      title: '提示消息',
+      content: '确定司机已经到达代驾点？',
+      success: function(resp) {
+         if (resp.confirm) {
+            let data = {
+               orderId: that.orderId
+            };
+            that.ajax(that.url.confirmArriveStartPlace, 'POST', data, function(resp) {
+               if (resp.data.result) {
+                  uni.showToast({
+                     icon: 'success',
+                     title: '状态更新成功'
+                  });
+                  that.status = 4;
+                  that.mode = 'driving';
+                  that.targetLatitude = that.endLatitude;
+                  that.targetLongitude = that.endLongitude;
+               }
+            });
+         }
+      }
+   });
+}
+```
+4. 把后端各个子系统运行起来，然后运行乘客端小程序，在司乘同显页面点击“司机到达”按钮，看看页面上是不是变成根据当前乘客定位计算最佳线路
+5. 写 hxds-odr/src/main/java/com/example/hxds/odr/service/OrderService.java#startDriving 及其实现类
+   写 hxds-odr/src/main/java/com/example/hxds/odr/controller/form/StartDrivingForm.java
+   写 hxds-odr/src/main/java/com/example/hxds/odr/controller/OrderController.java#startDriving
+```java
+int startDriving(Map param);
+
+@Override
+@Transactional
+@LcnTransaction
+public int startDriving(Map param) {
+   long orderId = MapUtil.getLong(param, "orderId");
+   String key = "order_driver_arrivied#" + orderId;
+   if (redisTemplate.hasKey(key) && redisTemplate.opsForValue().get(key).toString().equals("2")) {
+      redisTemplate.delete(key);
+      int rows = orderDao.updateOrderStatus(param);
+      if (rows != 1) {
+            throw new HxdsException("更新订单状态失败");
+      }
+      return rows;
+   }
+   return 0;
+}
+
+@Data
+@Schema(description = "开始代驾的表单")
+public class StartDrivingForm {
+    
+   @NotNull(message = "orderId不能为空")
+   @Min(value = 1, message = "orderId不能小于1")
+   @Schema(description = "订单ID")
+   private Long orderId;
+
+   @NotNull(message = "driverId不能为空")
+   @Min(value = 1, message = "driverId不能小于1")
+   @Schema(description = "司机ID")
+   private Long driverId;
+
+}
+
+@PostMapping("/startDriving")
+@Operation(summary = "开始代驾")
+public R startDriving(@RequestBody @Valid StartDrivingForm form) {
+   Map param = BeanUtil.beanToMap(form);
+   param.put("status", 4);
+   int rows = orderService.startDriving(param);
+   return R.ok().put("rows", rows);
+}
+```
+6. 写 bff-driver/src/main/java/com/example/hxds/bff/driver/controller/form/StartDrivingForm.java
+   写 bff-driver/src/main/java/com/example/hxds/bff/driver/feign/OdrServiceApi.java#startDriving
+   写 bff-driver/src/main/java/com/example/hxds/bff/driver/service/OrderService.java#startDriving 及其实现类
+   写 bff-driver/src/main/java/com/example/hxds/bff/driver/controller/OrderController.java#startDriving
+```java
+@Data
+@Schema(description = "开始代驾的表单")
+public class StartDrivingForm {
+    
+    @NotNull(message = "orderId不能为空")
+    @Min(value = 1, message = "orderId不能小于1")
+    @Schema(description = "订单ID")
+    private Long orderId;
+
+    @Min(value = 1, message = "driverId不能小于1")
+    @Schema(description = "司机ID")
+    private Long driverId;
+
+    @NotNull(message = "customerId不能为空")
+    @Min(value = 1, message = "customerId不能小于1")
+    @Schema(description = "客户ID")
+    private Long customerId;
+
+}
+
+@PostMapping("/order/startDriving")
+R startDriving(StartDrivingForm form);
+
+int startDriving(StartDrivingForm form)
+   
+@Override
+@Transactional
+@LcnTransaction
+public int startDriving(StartDrivingForm form) {
+   R r = odrServiceApi.startDriving(form);
+   int rows = MapUtil.getInt(r, "rows");
+   // TODO 发送通知消息
+   return rows;
+}
+
+@PostMapping("/startDriving")
+@Operation(summary = "开始代驾")
+@SaCheckLogin
+public R startDriving(@RequestBody @Valid StartDrivingForm form) {
+   long driverId = StpUtil.getLoginIdAsLong();
+   form.setDriverId(driverId);
+   int rows = orderService.startDriving(form);
+   return R.ok().put("rows", rows);
+}
+```
+7. 写 hxds-driver-wx/main.js
+   写 hxds-driver-wx/pages/workbench/workbench.vue#startDrivingHandle
+```javascript
+startDriving: `${baseUrl}/order/startDriving`,
+
+startDrivingHandle: function() {
+   let that = this;
+   uni.showModal({
+      title: '消息通知',
+      content: '您已经接到客户，现在开始代驾？',
+      success: function(resp) {
+         if (resp.confirm) {
+            // TODO:设置录音标志位
+            // that.stopRecord = false;
+            let data = {
+               orderId: that.executeOrder.id,
+               customerId: that.executeOrder.customerId
+            };
+            that.ajax(that.url.startDriving, 'POST', data, function(resp) {
+               if (resp.data.rows == 1) {
+                  uni.showToast({
+                     icon: 'success',
+                     title: '订单状态更新成功'
+                  });
+                  that.workStatus = '开始代驾';
+                  uni.setStorageSync('workStatus', '开始代驾');
+                  // TODO:开始录音
+               }
+            });
+         }
+      }
+   });
+},
+```
+8. 把后端各个子系统开启，手机运行司机端小程序，进入工作台页面之后，点击“开始代驾”按钮，看看订单状态是否更新
+### 司机端利用地图APP实现驾驶导航
+到目前为止，我们完成了司机到达上车点，经过乘客确认，司机可以开始代驾了。如果开车光盯着司乘同显的最佳线路并不方便，所以我们应该把地图导航功能给实现了。首先说清楚，微信小程序的分包加载之后的总体积不能超过32M，所以我们根本不可能把地图导航功能塞到小程序里面。为此我们只能用小程序调用手机上面的地图APP，实现驾驶导航功能
+小程序地图组件的openMapApp()函数可以打开手机默认的地图APP，然后进行导航。比如苹果手机内置了地图APP，我又额外安装了腾讯地图APP，所以弹窗出现了选项，让我选择使用哪个APP软件
+```javascript
+showNavigationHandle: function() {
+   let that = this;
+   let latitude = null;
+   let longitude = null;
+   let destination = null;
+   if (that.workStatus == '接客户') {
+       latitude = Number(that.executeOrder.startPlaceLocation.latitude);
+       longitude = Number(that.executeOrder.startPlaceLocation.longitude);
+       destination = that.executeOrder.startPlace;
+   } else {
+       latitude = Number(that.executeOrder.endPlaceLocation.latitude);
+       longitude = Number(that.executeOrder.endPlaceLocation.longitude);
+       destination = that.executeOrder.endPlace;
+   }
+   //打开手机导航软件
+   that.map.openMapApp({
+       latitude: latitude,
+       longitude: longitude,
+       destination: destination
+   });
+},
+```
+### 搭建HBase+Phoenix大数据平台
+1. 在云服务器上搭建环境
+```bash
+# 导入镜像文件
+docker load < phoenix.tar.gz
+# 创建容器
+docker run -it -d -p 2181:2181 -p 8765:8765 -p 15165:15165 \
+-p 16000:16000 -p 16010:16010 -p 16020:16020 \
+-v /www/evmt/hbase/data:/tmp/hbase-root/hbase/data \
+--name phoenix --net mynet --ip 172.18.0.14 \
+boostport/hbase-phoenix-all-in-one:2.0-5.0
+# 开放端口
+把Linux的2181、8765、15165、16000、16010、16020端口，映射到Windows的相应端口上面
+# 初始化Phoenix
+docker exec -it phoenix bash
+export HBASE_CONF_DIR=/opt/hbase/conf/
+/opt/phoenix-server/bin/sqlline.py localhost
+# 创建逻辑库
+0: jdbc:phoenix:localhost> CREATE SCHEMA hxds;
+No rows affected (0.23 seconds)
+0: jdbc:phoenix:localhost> USE hxds;
+No rows affected (0.017 seconds)
+# 创建数据表：创建order_voice_text、order_monitoring和order_gps数据表。其中order_voice_text表用于存放司乘对话内容的文字内容
+CREATE TABLE hxds.order_voice_text
+(
+   "id" BIGINT NOT NULL PRIMARY KEY,
+   "uuid" VARCHAR,
+   "order_id" BIGINT,
+   "record_file" VARCHAR,
+   "text" VARCHAR,
+   "label" VARCHAR,
+   "suggestion" VARCHAR,
+   "keyWords"VARCHAR,
+   "create_time" DATE
+);
+CREATE SEQUENCE hxds.ovt_sequence START wITH 1 INCREMENT BY 1;
+CREATE INDEX ovt_index_1 ON hxds.order_voice_text("uuid");
+CREATE INDEX ovt_index_2 ON hxds.order_voice_text("order_id");
+CREATE INDEX ovt_index_3 ON hxds.order_voice_text("label");
+CREATE INDEX ovt_index_4 ON hxds.order_voice_text("suggestion");
+CREATE INDEX ovt_index_5 ON hxds.order_voice_text("create_time");
+
+# 创建数据表：order_monitoring表存储AI分析对话内容的安全评级结果
+CREATE TABLE hxds.order_monitoring
+(
+      "id"              BIGINT NOT NULL PRIMARY KEY,
+      "order_id"        BIGINT,
+      "status"          TINYINT,
+      "records"         INTEGER,
+      "safety"          VARCHAR,
+      "reviews"         INTEGER,
+      "alarm"           TINYINT,
+      "create_time"     DATE
+);
+CREATE INDEX om_index_1 ON hxds.order_monitoring("order_id");
+CREATE INDEX om_index_2 ON hxds.order_monitoring("status");
+CREATE INDEX om_index_3 ON hxds.order_monitoring("safety");
+CREATE INDEX om_index_4 ON hxds.order_monitoring("reviews");
+CREATE INDEX om_index_5 ON hxds.order_monitoring("alarm");
+CREATE INDEX om_index_6 ON hxds.order_monitoring("create_time");
+CREATE SEQUENCE hXds.om_Sequence START WITH 1 INCREMENT BY 1;
+
+# 创建数据表：order_gps表保存的时候代驾过程中的GPS定位
+CREATE TABLE hxds.order_gps(
+      "id"              BIGINT NOT NULL PRIMARY KEY,
+      "order_id"        BIGINT,
+      "driver_id"       BIGINT,
+      "customer_id"     BIGINT,
+      "latitude"        VARCHAR,
+      "longitude"       VARCHAR,
+      "speed"           VARCHAR,
+      "create_time"     DATE
+);
+CREATE SEQUENCE og_Sequence START WITH 1 INCREMENT BY 1;
+CREATE INDEX og_index_1 ON hxds.order_gps("order_id");
+CREATE INDEX og_index_2 ON hxds.order_gps("driver_id");
+CREATE INDEX og_index_3 ON hxds.order_gps("customer_id");
+CREATE INDEX og_index_4 ON hxds.order_gps("create_time");
+```
+2. 写 hxds-nebula/src/main/java/com/example/hxds/nebula/db/pojo/OrderGpsEntity.java、OrderMonitoringEntity.java、OrderVoiceTextEntity.java
+   写 hxds-nebula/src/main/java/com/example/hxds/nebula/db/dao/OrderGpsDao.java、OrderMonitoringDao.java、OrderVoiceTextDao.java
+   写 hxds-nebula/src/main/resources/mapper/OrderGpsDao.xml、OrderMonitoringDao.xml、OrderVoiceTextDao.xml
+```java
+@Data
+public class OrderVoiceTextEntity {
+    private Long id;
+    private String uuid;
+    private Long orderId;
+    private String recordFile;
+    private String text;
+    private String label;
+    private String suggestion;
+    private String keywords;
+    private String createTime;
+}
+
+@Data
+public class OrderMonitoringEntity {
+   private Long id;
+   private Long orderId;
+   private Byte status;
+   private Integer records;
+   private String safety;
+   private Integer reviews;
+   private Byte alarm;
+   private String createTime;
+}
+
+@Data
+public class OrderGpsEntity {
+   private Long id;
+   private Long orderId;
+   private Long driverId;
+   private Long customerId;
+   private String latitude;
+   private String longitude;
+   private String speed;
+   private String createTime;
+}
+
+public interface OrderGpsDao {
+
+}
+
+public interface OrderMonitoringDao {
+
+}
+
+public interface OrderVoiceTextDao {
+
+}
+
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.hxds.nebula.db.dao.OrderGpsDao">
+
+</mapper>
+
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.hxds.nebula.db.dao.OrderMonitoringDao">
+
+</mapper>
+
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.hxds.nebula.db.dao.OrderVoiceTextDao">
+
+</mapper>
+```
+### 将录音监控保存到私有云，对话文本保存到大数据平台
+1. 写 hxds-nebula/src/main/resources/mapper/OrderVoiceTextDao.xml#insert 及其对应接口
+   写 hxds-nebula/src/main/java/com/example/hxds/nebula/service/MonitoringService.java#monitoring 及其对应实现类
+   写 hxds-nebula/src/main/java/com/example/hxds/nebula/controller/MonitoringController.java#monitoring
+```java
+ <insert id="insert" parameterType="com.example.hxds.nebula.db.pojo.OrderVoiceTextEntity">
+     UPSERT INTO hxds.order_voice_text("id", "uuid", "order_id", "record_file", "text", "create_time")
+     VALUES(NEXT VALUE FOR hxds.ovt_sequence, '${uuid}', #{orderId}, '${recordFile}', '${text}', NOW())
+ </insert>
+
+int insert(OrderVoiceTextEntity entity);
+
+void monitoring(MultipartFile file, String name, String text);
+
+@Override
+@Transactional
+public void monitoring(MultipartFile file, String name, String text) {
+     // 把录音文件上传到minio
+     try {
+        MinioClient client = new MinioClient.Builder().endpoint(endpoint)
+                                    .credentials(accessKey, secretKey).build();
+        client.putObject(PutObjectArgs.builder().bucket("hxds-record")
+              .object(name).stream(file.getInputStream(), -1, 20971520)
+              .contentType("audio/x-mpeg").build());
+     } catch (Exception e) {
+        log.error("上传代驾录音文件失败", e);
+           throw new HxdsException("上传代驾录音文件失败");
+     }
+     OrderVoiceTextEntity entity = new OrderVoiceTextEntity();
+     // 文件名格式例如:2156356656617-1.mp3，解析出订单号
+     String[] temp = name.substring(0, name.indexOf(".mp3")).split("-");
+     Long orderId = Long.parseLong(temp[0]);
+     String uuid = IdUtil.simpleUUID();
+     entity.setOrderId(orderId);
+     entity.setUuid(uuid);
+     entity.setRecordFile(name);
+     entity.setText(text);
+     // 把文稿保持到HBase
+     int rows = orderVoiceTextDao.insert(entity);
+     if (rows != 1) {
+        throw new HxdsException("保存录音文稿失败");
+     }
+     // TODO:执行文稿内容审查
+}
+
+@PostMapping(value = "/uploadRecordFile")
+@Operation(summary = "上传代驾录音文件")
+public R uploadRecordFile(@RequestPart("file") MultipartFile file,
+@RequestPart("name") String name,
+@RequestPart(value = "text", required = false) String text) {
+     if (file.isEmpty()) {
+        throw new HxdsException("录音文件不能为空");
+     }
+     monitoringService.monitoring(file, name, text);
+     return R.ok();
+}
+```
+2. 写 bff-customer/src/main/java/com/example/hxds/bff/customer/feign/NebulaServiceApi.java#uploadRecordFile
+   写 bff-customer/src/main/java/com/example/hxds/bff/customer/controller/MonitoringController.java#uploadRecordFile
+【说明】在com.example.hxds.bff.driver.controller包中，创建MonitoringController.java类，声明Web方法。这里之所以让Web方法直接调用Feign接口，是因为要把接收到的文件直接传递给hxds-nebula子系统。如果通过业务层去调用Feign接口，业务方法的参数用上了@RequestPart("file")就非常不适合
+```java
+@PostMapping(value = "/monitoring/uploadRecordFile", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+R uploadRecordFile(@RequestPart(value = "file") MultipartFile file,
+                           @RequestPart("name") String name,
+                           @RequestPart(value = "text", required = false) String text);
+
+@PostMapping(value = "/uploadRecordFile")
+public R uploadRecordFile(@RequestPart("file") MultipartFile file,
+                           @RequestPart("name") String name,
+                           @RequestPart(value = "text", required = false) String text) {
+     if (file.isEmpty()) {
+        throw new HxdsException("上传文件不能为空");
+     }
+     nebulaServiceApi.uploadRecordFile(file, name, text);
+     return R.ok();
+}
+```
+3. 写 hxds-odr/src/main/java/com/example/hxds/odr/service/OrderService.java#updateOrderStatus 及其实现类
+   写 hxds-odr/src/main/java/com/example/hxds/odr/controller/form/UpdateOrderStatusForm.java
+   写 hxds-odr/src/main/java/com/example/hxds/odr/controller/OrderController.java#updateOrderStatus
+```java
+int updateOrderStatus(Map param);
+
+ @Override
+ @Transactional
+ @LcnTransaction
+ public int updateOrderStatus(Map param) {
+     int rows = orderDao.updateOrderStatus(param);
+     if (rows != 1) {
+         throw new HxdsException("更新取消订单记录失败");
+     }
+     return rows;
+ }
+
+@Data
+@Schema(description = "更新订单状态的表单")
+public class UpdateOrderStatusForm {
+   @NotNull(message = "orderId不能为空")
+   @Min(value = 1, message = "orderId不能小于1")
+   @Schema(description = "订单ID")
+   private Long orderId;
+
+   @NotNull(message = "status不能为空")
+   @Range(min = 1, max = 12, message = "status内容不正确")
+   @Schema(description = "订单状态")
+   private Byte status;
+}
+
+@PostMapping("/updateOrderStatus")
+@Operation(summary = "更新订单状态")
+public R updateOrderStatus(@RequestBody @Valid UpdateOrderStatusForm form) {
+   Map param = BeanUtil.beanToMap(form);
+   int rows = orderService.updateOrderStatus(param);
+   return R.ok().put("rows", rows);
+}
+```
+4. 写 bff-driver/src/main/java/com/example/hxds/bff/driver/controller/form/UpdateOrderStatusForm.java
+   写 bff-driver/src/main/java/com/example/hxds/bff/driver/feign/OdrServiceApi.java#updateOrderStatus
+   写 bff-driver/src/main/java/com/example/hxds/bff/driver/service/OrderService.java#updateOrderStatus 及其实现类
+   写 bff-driver/src/main/java/com/example/hxds/bff/driver/controller/OrderController.java#updateOrderStatus
+```java
+@Data
+@Schema(description = "更新订单状态的表单")
+public class UpdateOrderStatusForm {
+    @NotNull(message = "orderId不能为空")
+    @Min(value = 1, message = "orderId不能小于1")
+    @Schema(description = "订单ID")
+    private Long orderId;
+
+    @NotNull(message = "status不能为空")
+    @Range(min = 1, max = 12, message = "status内容不正确")
+    @Schema(description = "订单状态")
+    private Byte status;
+
+    @NotNull(message = "customerId不能为空")
+    @Min(value = 1, message = "customerId不能小于1")
+    @Schema(description = "客户ID")
+    private Long customerId;
+}
+
+@PostMapping("/order/updateOrderStatus")
+R updateOrderStatus(UpdateOrderStatusForm form);
+
+int updateOrderStatus(UpdateOrderStatusForm form)
+   
+@Override
+@Transactional
+@LcnTransaction
+public int updateOrderStatus(UpdateOrderStatusForm form) {
+   R r = odrServiceApi.updateOrderStatus(form);
+   int rows = MapUtil.getInt(r, "rows");
+   // TODO:判断订单的状态，然后实现后续业务
+   return rows;
+}
+
+@PostMapping("/updateOrderStatus")
+@SaCheckLogin
+@Operation(summary = "更新订单状态")
+public R updateOrderStatus(@RequestBody @Valid UpdateOrderStatusForm form) {
+   int rows = orderService.updateOrderStatus(form);
+   return R.ok().put("rows", rows);
+}
+```
+5. 写 hxds-driver-wx/main.js
+   补充 hxds-driver-wx/pages/workbench/workbench.vue#onLoad
+   补充 hxds-driver-wx/pages/workbench/workbench.vue#startDrivingHandle
+   写 hxds-driver-wx/pages/workbench/workbench.vue#endDrivingHandle
+【说明】同声传译插件可以实现录音，并且把录音中的语音部分转换成文本。我们先来看一下官方提供的API接口案例，[官方文档](https://mp.weixin.qq.com/wxopen/plugindevdoc?appid=wx069ba97219f66d99&token=61191740&lang=zh_CN)
+在测试的过程中，我们的小程序上传文件的请求会被积压到队列中，直到我们点击结束代驾按钮之后，订单状态变更成5，然后页面跳转。这时队列中的上传任务才会执行，然后你等上5分钟，去Minio的数据目录中看一眼，就能找到小程序上传的音频文件了。如果按照以往，真的是几秒钟音频文件就上传好了。唉，现在只能等待微信APP解决这个BUG了
+```javascript
+// index.js 同声传译示例
+var plugin = requirePlugin("WechatSI")
+let manager = plugin.getRecordRecognitionManager()
+// 从语音中识别出文字，会执行该回调函数
+manager.onRecognize = function(res) {
+    console.log("current result", res.result)
+}
+// 录音结束的回调函数
+manager.onStop = function(res) {
+    console.log("record file path", res.tempFilePath)
+    console.log("result", res.result)
+}
+// 开始录音的回调函数
+manager.onStart = function(res) {
+    console.log("成功开始录音识别", res)
+}
+// 出现异常的回调函数
+manager.onError = function(res) {
+    console.error("error msg", res.msg)
+}
+// 开始录音，并且识别中文语音内容
+manager.start({duration:30000, lang: "zh_CN"})
+```
+```javascript
+uploadRecordFile: `${baseUrl}/monitoring/uploadRecordFile`,
+updateOrderStatus: `${baseUrl}/order/updateOrderStatus`,
+
+let recordManager = plugin.getRecordRecognitionManager(); //初始化录音管理器
+recordManager.onStop = function(resp) {
+   if (that.workStatus == '开始代驾' && that.stopRecord == false) {
+      that.recordManager.start({ duration: 20 * 1000, lang: 'zh_CN' });
+   }
+   let tempFilePath = resp.tempFilePath;
+   //上传录音
+   that.recordNum += 1;
+   let data = {
+      name: `${that.executeOrder.id}-${that.recordNum}.mp3`,
+      text: resp.result
+   };
+   // console.log(data);
+   that.upload(that.url.uploadRecordFile, tempFilePath, data, function(resp) {
+      console.log('录音上传成功');
+   });
+};
+recordManager.onStart = function(resp) {
+   console.log('成功开始录音识别');
+   if (that.recordNum == 0) {
+      uni.vibrateLong({
+         complete: function() {}
+      });
+      uni.showToast({
+         icon: 'none',
+         title: '请提示客户系上安全带！'
+      });
+   }
+};
+recordManager.onError = function(resp) {
+   console.error('录音识别故障', resp.msg);
+};
+that.recordManager = recordManager;
+
+startDrivingHandle: function() {
+   let that = this;
+   uni.showModal({
+      title: '消息通知',
+      content: '您已经接到客户，现在开始代驾？',
+      success: function(resp) {
+         if (resp.confirm) {
+            //设置录音标志位
+            that.stopRecord = false;
+            let data = {
+               orderId: that.executeOrder.id,
+               customerId: that.executeOrder.customerId
+            };
+            that.ajax(that.url.startDriving, 'POST', data, function(resp) {
+               if (resp.data.rows == 1) {
+                  uni.showToast({
+                     icon: 'success',
+                     title: '订单状态更新成功'
+                  });
+                  that.workStatus = '开始代驾';
+                  uni.setStorageSync('workStatus', '开始代驾');
+                  //开始录音
+                  that.recordManager.start({ duration: 20 * 1000, lang: 'zh_CN' });
+               }
+            });
+         }
+      }
+   });
+},
+
+endDrivingHandle: function() {
+   let that = this;
+   uni.showModal({
+      title: '消息通知',
+      content: '已经到达终点，现在结束代驾？',
+      success: function(resp) {
+         if (resp.confirm) {
+            let data = {
+               orderId: that.executeOrder.id,
+               customerId: that.executeOrder.customerId,
+               status: 5
+            };
+            that.ajax(that.url.updateOrderStatus, 'POST', data, function(resp) {
+               that.stopRecord = true;
+               try {
+                  that.recordManager.stop();
+                  that.recordNum = 0;
+                  that.stopRecord = false;
+                  that.workStatus = '结束代驾';
+                  uni.setStorageSync('workStatus', '结束代驾');
+                  uni.navigateTo({
+                     url: '../../order/enter_fee/enter_fee?orderId=' + that.executeOrder.id + '&customerId=' + that.executeOrder.customerId
+                  });
+               } catch (e) {
+                  console.error(e);
+               }
+            });
+         }
+      }
+   });
+},
+```
+### 司机微服务打击刷单，禁止其他手机卡登陆司机小程序
+上次测试司机端小程序，开始代驾之后确实能实时录制音频，并且同声传译插件可以把司乘对话内容提取出文字内容，最后音频文件保存在Minio中，对话内容保存在HBase里面。这一章我们还有个非常重要的功能要完成，那就是打击司机刷单行为。有同学可能会问：为什么只打击司机刷单，不去管管乘客的刷单呢？这很简单，因为司机有实名认证，而且还跟代驾平台签了合同，所以代驾平台可以处罚司机。但是乘客没有做实名认证，我们想处罚乘客也没有办法，所以还是把司机监管好吧
+
+因为后续我们要写程序实现对刷单的监管，司机接单之后，只有到达上车点一公里以内的时候才可以点击到达上车点按钮。司机想要结束订单的时候，必须距离订单终点在两公里以内，才可以点击结束代驾按钮。这一公里和两公里，给乘客上车和下车留足了变通的余地。比如说乘客发现小区北门关闭了，那就只能绕道南门进入小区，这时候距离订单终点的距离在两公里以内是允许的。
+
+如果司机想要在现有规则之下刷单，需要两个人相互配合，比如说A手机充当乘客下单，然后司机用B手机接单。A手机下单的上车点正好距离司机的位置在1公里以内，于是司机接单然后点击到达上车点。接下来，另一个人距离代驾终点在两公里以内，然后用C手机登陆司机小程序，点击代驾结束。你看看，两个人用3部手机，足不出户就可以刷单，这多简单啊。
+
+为了避免上述情况，司机登陆小程序的时候，咱们必须要获取手机卡的手机号，然后跟实名认证的手机号做对比，如果手机号一致，就允许司机登陆。如果不一致，那就不允许登陆。这就能避免两部手机交替登陆司机账号的情况出现，刷单的漏洞也就堵死了。
+
+大家目前的微信开发者账号是个人类型的，所以不能获取到用户的手机号，所以这两集的视频大家看一个流程即可。等到你有企业身份的账号之后，再去实现以下的功能也不迟。
+
+个人开发账号不支持获取登陆小程序的手机号[传送门](https://developers.weixin.qq.com/miniprogram/dev/framework/open-ability/getPhoneNumber.html)，本节略
+
+### 利用地图服务，智能判断司机刷单行为
+本节实现实现排查司机刷单的行为。判断司机刷单的办法也很简单，司机点击到达上车点按钮的时候，司机端小程序通过腾讯地图服务的API，计算当前定位到上车点的距离。如果超过1公里，那就不可以。司机必须距离上车点在1公里以内，点击到达上车点才有效。当司机想要结束代驾的时候，距离代驾终点必须在两公里以内才可以，否则就无法结束代驾
+1. 写 hxds-driver-wx/pages/workbench/workbench.vue#onLoad
+   补充 hxds-driver-wx/pages/workbench/workbench.vue#arriveStartPlaceHandle
+   补充 hxds-driver-wx/pages/workbench/workbench.vue#endDrivingHandle
+```javascript
+let QQMapWX = require('../../lib/qqmap-wx-jssdk.min.js');
+let qqmapsdk
+// 补充 onLoad
+qqmapsdk = new QQMapWX({
+   key: that.tencent.map.key
+});
+// 打注释即为补充部分
+arriveStartPlaceHandle: function() {
+   let that = this;
+   uni.showModal({
+      title: '消息通知',
+      content: '确认已经到达了代驾点？',
+      success: function(resp) {
+         if (resp.confirm) {
+            // qqmapsdk.calculateDistance({
+            //     mode: 'straight',
+            //     from: {
+            //         latitude: that.latitude,
+            //         longitude: that.longitude
+            //     },
+            //     to: [
+            //         {
+            //             latitude: that.executeOrder.startPlaceLocation.latitude,
+            //             longitude: that.executeOrder.startPlaceLocation.longitude
+            //         }
+            //     ],
+            //     success: function(resp) {
+            //         let distance = resp.result.elements[0].distance;
+            //         if (distance <= 1000) {
+            let data = {
+               orderId: that.executeOrder.id,
+               customerId: that.executeOrder.customerId
+            };
+            that.ajax(that.url.arriveStartPlace, 'POST', data, function(resp) {
+               if (resp.data.rows == 1) {
+                  uni.showToast({
+                     icon: 'success',
+                     title: '订单状态更新成功'
+                  });
+                  that.workStatus = '到达代驾点';
+                  uni.setStorageSync('workStatus', '到达代驾点');
+               }
+            });
+            //         } else {
+            //             uni.showToast({
+            //                 icon: 'none',
+            //                 title: '请移动到距离代驾起点1公里以内'
+            //             });
+            //         }
+            //     },
+            //     fail: function(error) {
+            //         console.log(error);
+            //     }
+            // });
+         }
+      }
+   });
+},
+// 打注释即为补充部分
+endDrivingHandle: function() {
+   let that = this;
+   uni.showModal({
+      title: '消息通知',
+      content: '已经到达终点，现在结束代驾？',
+      success: function(resp) {
+         if (resp.confirm) {
+            // qqmapsdk.calculateDistance({
+            //     mode: 'straight',
+            //     from: {
+            //         latitude: that.latitude,
+            //         longitude: that.longitude
+            //     },
+            //     to: [
+            //         {
+            //             latitude: that.executeOrder.endPlaceLocation.latitude,
+            //             longitude: that.executeOrder.endPlaceLocation.longitude
+            //         }
+            //     ],
+            //     success: function(resp) {
+            //         let distance = resp.result.elements[0].distance;
+            //         if (distance <= 2000) {
+            let data = {
+               orderId: that.executeOrder.id,
+               customerId: that.executeOrder.customerId,
+               status: 5
+            };
+            that.ajax(that.url.updateOrderStatus, 'POST', data, function(resp) {
+               that.stopRecord = true;
+               try {
+                  that.recordManager.stop();
+                  that.recordNum = 0;
+                  that.stopRecord = false;
+                  that.workStatus = '结束代驾';
+                  uni.setStorageSync('workStatus', '结束代驾');
+                  uni.navigateTo({
+                     url: '../../order/enter_fee/enter_fee?orderId=' + that.executeOrder.id + '&customerId=' + that.executeOrder.customerId
+                  });
+               } catch (e) {
+                  console.error(e);
+               }
+            });
+            //         } else {
+            //             uni.showToast({
+            //                 icon: 'none',
+            //                 title: '请移动到距离代驾终点2公里以内'
+            //             });
+            //         }
+            //     },
+            //     fail: function(error) {
+            //         console.log(error);
+            //     }
+            // });
+         }
+      }
+   });
+},
+```
+## AI分析与订单监控（AI智能分析司乘对话内容，如有危害自动告警）
+### 利用AI对司乘对话内容安全评级
 1. 写 

@@ -5533,7 +5533,7 @@ public String acceptNewOrder(long driverId, long orderId) {
     if (rows != 1) {
         throw new HxdsException("接单失败，无法更新订单记录");
     }
-    return "抢单成功";
+    return "接单成功";
 }
 
 @Data
@@ -5583,6 +5583,8 @@ R acceptNewOrder(AcceptNewOrderForm form);
 R acceptNewOrder(AcceptNewOrderForm form);
 
 @Override
+@Transactional
+@LcnTransaction
 public String acceptNewOrder(AcceptNewOrderForm form) {
    R r = odrServiceApi.acceptNewOrder(form);
    String result = MapUtil.getStr(r, "result");
@@ -5705,7 +5707,7 @@ public class SearchDriverExecuteOrderForm {
    private Long driverId;
 }
 
-@PostMapping("/searchDriveExecuteOrder")
+@PostMapping("/searchDriverExecuteOrder")
 @Operation(summary = "查询司机正在执行的订单记录")
 public R searchDriveExecutorOrder(@RequestBody @Valid SearchDriverExecuteOrderForm form) {
    Map param = BeanUtil.beanToMap(form);

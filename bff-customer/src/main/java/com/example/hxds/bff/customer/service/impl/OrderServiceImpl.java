@@ -207,4 +207,11 @@ public class OrderServiceImpl implements OrderService {
         HashMap map = (HashMap) r.get("result");
         return map;
     }
+
+    @Override
+    public boolean confirmArriveStartPlace(ConfirmArriveStartPlaceForm form) {
+        R r = odrServiceApi.confirmArriveStartPlace(form);
+        boolean result = MapUtil.getBool(r, "result");
+        return result;
+    }
 }

@@ -28,4 +28,7 @@ public interface OdrServiceApi {
 
     @PostMapping("/order/searchOrderForMoveById")
     R searchOrderForMoveById(SearchOrderForMoveByIdForm form);
+
+    @PostMapping("/order/confirmArriveStartPlace")
+    R confirmArriveStartPlace(ConfirmArriveStartPlaceForm form);
 }

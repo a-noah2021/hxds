@@ -1,12 +1,15 @@
 package com.example.hxds.bff.driver.service.impl;
 
 import cn.hutool.core.map.MapUtil;
+import com.codingapi.txlcn.tc.annotation.LcnTransaction;
 import com.example.hxds.bff.driver.controller.form.*;
 import com.example.hxds.bff.driver.feign.CstServiceApi;
 import com.example.hxds.bff.driver.feign.OdrServiceApi;
 import com.example.hxds.bff.driver.service.OrderService;
+import com.example.hxds.common.exception.HxdsException;
 import com.example.hxds.common.util.R;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import javax.annotation.Resource;
 import java.util.HashMap;
@@ -27,6 +30,8 @@ public class OrderServiceImpl implements OrderService {
     private CstServiceApi cstServiceApi;
 
     @Override
+    @Transactional
+    @LcnTransaction
     public String acceptNewOrder(AcceptNewOrderForm form) {
         R r = odrServiceApi.acceptNewOrder(form);
         String result = MapUtil.getStr(r, "result");
@@ -79,4 +84,35 @@ public class OrderServiceImpl implements OrderService {
         return map;
     }
 
+    @Override
+    @Transactional
+    @LcnTransaction
+    public int arriveStartPlace(ArriveStartPlaceForm form) {
+        R r = odrServiceApi.arriveStartPlace(form);
+        int rows = MapUtil.getInt(r, "rows");
+        if (rows == 1) {
+            //TODO 发送通知消息
+        }
+        return rows;
+    }
+
+    @Override
+    @Transactional
+    @LcnTransaction
+    public int startDriving(StartDrivingForm form) {
+        R r = odrServiceApi.startDriving(form);
+        int rows = MapUtil.getInt(r, "rows");
+        // TODO 发送通知消息
+        return rows;
+    }
+
+    @Override
+    @Transactional
+    @LcnTransaction
+    public int updateOrderStatus(UpdateOrderStatusForm form) {
+        R r = odrServiceApi.updateOrderStatus(form);
+        int rows = MapUtil.getInt(r, "rows");
+        // TODO:判断订单的状态，然后实现后续业务
+        return rows;
+    }
 }

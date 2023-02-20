@@ -31,4 +31,12 @@ public interface OrderService {
     HashMap hasCustomerCurrentOrder(long customerId);
 
     HashMap searchOrderForMoveById(Map param);
+
+    int arriveStartPlace(Map param);
+
+    boolean confirmArriveStartPlace(long orderId);
+
+    int startDriving(Map param);
+
+    int updateOrderStatus(Map param);
 }

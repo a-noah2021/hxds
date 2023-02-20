@@ -98,7 +98,7 @@ public class OrderServiceImpl implements OrderService {
         if (rows != 1) {
             throw new HxdsException("接单失败，无法更新订单记录");
         }
-        return "抢单成功";
+        return "接单成功";
     }
 
     @Override
@@ -136,11 +136,11 @@ public class OrderServiceImpl implements OrderService {
         });
         redisTemplate.delete("order#" + orderId);
         int rows = orderDao.deleteUnAcceptOrder(param);
-        if(rows != 1){
+        if (rows != 1) {
             return "订单取消失败";
         }
         rows = orderBillDao.deleteUnAcceptOrderBill(orderId);
-        if(rows != 1){
+        if (rows != 1) {
             return "订单取消失败";
         }
         return "订单取消成功";
@@ -168,5 +168,55 @@ public class OrderServiceImpl implements OrderService {
     public HashMap searchOrderForMoveById(Map param) {
         HashMap map = orderDao.searchOrderForMoveById(param);
         return map;
+    }
+
+    @Override
+    public int arriveStartPlace(Map param) {
+        // 添加到达上车点标志位
+        Long orderId = MapUtil.getLong(param, "orderId");
+        redisTemplate.opsForValue().set("order_driver_arrived#" + orderId, "1");
+        int rows = orderDao.updateOrderStatus(param);
+        if (rows != 1) {
+            throw new HxdsException("更新订单状态失败");
+        }
+        return rows;
+    }
+
+    @Override
+    public boolean confirmArriveStartPlace(long orderId) {
+        String key = "order_driver_arrivied#" + orderId;
+        if (redisTemplate.hasKey(key) && redisTemplate.opsForValue().get(key).toString().equals("1")) {
+            redisTemplate.opsForValue().set(key, "2");
+            return true;
+        }
+        return false;
+    }
+
+    @Override
+    @Transactional
+    @LcnTransaction
+    public int startDriving(Map param) {
+        long orderId = MapUtil.getLong(param, "orderId");
+        String key = "order_driver_arrivied#" + orderId;
+        if (redisTemplate.hasKey(key) && redisTemplate.opsForValue().get(key).toString().equals("2")) {
+            redisTemplate.delete(key);
+            int rows = orderDao.updateOrderStatus(param);
+            if (rows != 1) {
+                throw new HxdsException("更新订单状态失败");
+            }
+            return rows;
+        }
+        return 0;
+    }
+
+    @Override
+    @Transactional
+    @LcnTransaction
+    public int updateOrderStatus(Map param) {
+        int rows = orderDao.updateOrderStatus(param);
+        if (rows != 1) {
+            throw new HxdsException("更新取消订单记录失败");
+        }
+        return rows;
     }
 }

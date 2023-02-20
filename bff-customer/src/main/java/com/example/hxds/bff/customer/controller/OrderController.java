@@ -81,4 +81,12 @@ public class OrderController {
         HashMap map = orderService.searchOrderForMoveById(form);
         return R.ok().put("result", map);
     }
+
+    @PostMapping("/confirmArriveStartPlace")
+    @SaCheckLogin
+    @Operation(summary = "确定司机已经到达")
+    public R confirmArriveStartPlace(@RequestBody @Valid ConfirmArriveStartPlaceForm form) {
+        boolean result = orderService.confirmArriveStartPlace(form);
+        return R.ok().put("result", result);
+    }
 }

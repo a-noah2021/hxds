@@ -138,4 +138,27 @@
         </if>
         LIMIT 1;
     </select>
+
+    <update id="updateOrderStatus" parameterType="Map">
+        UPDATE tb_order
+        SET
+        <if test="status==3">
+            arrive_time = NOW(),
+        </if>
+        <if test="status==4">
+            start_time = NOW(),
+            waiting_minute = CEIL(TIMESTAMPDIFF(SECOND, arrive_time, NOW())/60),
+        </if>
+        <if test="status==5">
+            end_time = NOW(),
+        </if>
+        `status` = #{status}
+        WHERE id = #{orderId}
+        <if test="customerId!=null">
+            AND customer_id = #{customerId}
+        </if>
+        <if test="driverId!=null">
+            AND driver_id = #{driverId}
+        </if>
+    </update>
 </mapper>

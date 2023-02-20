@@ -2,10 +2,7 @@ package com.example.hxds.bff.driver.controller;
 
 import cn.dev33.satoken.annotation.SaCheckLogin;
 import cn.dev33.satoken.stp.StpUtil;
-import com.example.hxds.bff.driver.controller.form.AcceptNewOrderForm;
-import com.example.hxds.bff.driver.controller.form.SearchDriverCurrentOrderForm;
-import com.example.hxds.bff.driver.controller.form.SearchDriverExecuteOrderForm;
-import com.example.hxds.bff.driver.controller.form.SearchOrderForMoveByIdForm;
+import com.example.hxds.bff.driver.controller.form.*;
 import com.example.hxds.bff.driver.service.OrderService;
 import com.example.hxds.common.util.R;
 import io.swagger.v3.oas.annotations.Operation;
@@ -70,5 +67,33 @@ public class OrderController {
         form.setDriverId(driverId);
         HashMap map = orderService.searchOrderForMoveById(form);
         return R.ok().put("result", map);
+    }
+
+    @PostMapping("/arriveStartPlace")
+    @Operation(summary = "司机到达上车点")
+    @SaCheckLogin
+    public R arriveStartPlace(@RequestBody @Valid ArriveStartPlaceForm form) {
+        long driverId = StpUtil.getLoginIdAsLong();
+        form.setDriverId(driverId);
+        int rows = orderService.arriveStartPlace(form);
+        return R.ok().put("rows", rows);
+    }
+
+    @PostMapping("/startDriving")
+    @Operation(summary = "开始代驾")
+    @SaCheckLogin
+    public R startDriving(@RequestBody @Valid StartDrivingForm form) {
+        long driverId = StpUtil.getLoginIdAsLong();
+        form.setDriverId(driverId);
+        int rows = orderService.startDriving(form);
+        return R.ok().put("rows", rows);
+    }
+
+    @PostMapping("/updateOrderStatus")
+    @SaCheckLogin
+    @Operation(summary = "更新订单状态")
+    public R updateOrderStatus(@RequestBody @Valid UpdateOrderStatusForm form) {
+        int rows = orderService.updateOrderStatus(form);
+        return R.ok().put("rows", rows);
     }
 }

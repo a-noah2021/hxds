@@ -87,7 +87,7 @@ public class OrderController {
         return R.ok().put("result", result);
     }
 
-    @PostMapping("/searchDriveExecuteOrder")
+    @PostMapping("/searchDriverExecuteOrder")
     @Operation(summary = "查询司机正在执行的订单记录")
     public R searchDriveExecutorOrder(@RequestBody @Valid SearchDriverExecuteOrderForm form) {
         Map param = BeanUtil.beanToMap(form);
@@ -131,5 +131,38 @@ public class OrderController {
         Map param = BeanUtil.beanToMap(form);
         HashMap map = orderService.searchOrderForMoveById(param);
         return R.ok().put("result", map);
+    }
+
+    @PostMapping("/arriveStartPlace")
+    @Operation(summary = "司机到达上车点")
+    public R arriveStartPlace(@RequestBody @Valid ArriveStartPlaceForm form) {
+        Map param = BeanUtil.beanToMap(form);
+        param.put("status", 3);
+        int rows = orderService.arriveStartPlace(param);
+        return R.ok().put("rows", rows);
+    }
+
+    @PostMapping("/confirmArriveStartPlace")
+    @Operation(summary = "乘客确认司机到达上车点")
+    public R confirmArriveStartPlace(@RequestBody @Valid ConfirmArriveStartPlaceForm form) {
+        boolean result = orderService.confirmArriveStartPlace(form.getOrderId());
+        return R.ok().put("result", result);
+    }
+
+    @PostMapping("/startDriving")
+    @Operation(summary = "开始代驾")
+    public R startDriving(@RequestBody @Valid StartDrivingForm form) {
+        Map param = BeanUtil.beanToMap(form);
+        param.put("status", 4);
+        int rows = orderService.startDriving(param);
+        return R.ok().put("rows", rows);
+    }
+
+    @PostMapping("/updateOrderStatus")
+    @Operation(summary = "更新订单状态")
+    public R updateOrderStatus(@RequestBody @Valid UpdateOrderStatusForm form) {
+        Map param = BeanUtil.beanToMap(form);
+        int rows = orderService.updateOrderStatus(param);
+        return R.ok().put("rows", rows);
     }
 }
