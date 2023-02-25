@@ -1902,7 +1902,7 @@ endDrivingHandle: function() {
 
 个人开发账号不支持获取登陆小程序的手机号[传送门](https://developers.weixin.qq.com/miniprogram/dev/framework/open-ability/getPhoneNumber.html)，本节略
 
-### 利用地图服务，智能判断司机刷单行为
+### 利用地图服务，智能判断司机刷单行为 
 本节实现实现排查司机刷单的行为。判断司机刷单的办法也很简单，司机点击到达上车点按钮的时候，司机端小程序通过腾讯地图服务的API，计算当前定位到上车点的距离。如果超过1公里，那就不可以。司机必须距离上车点在1公里以内，点击到达上车点才有效。当司机想要结束代驾的时候，距离代驾终点必须在两公里以内才可以，否则就无法结束代驾
 1. 写 hxds-driver-wx/pages/workbench/workbench.vue#onLoad
    补充 hxds-driver-wx/pages/workbench/workbench.vue#arriveStartPlaceHandle
