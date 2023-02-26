@@ -25,6 +25,7 @@ import javax.annotation.Resource;
 @Service
 @Slf4j
 public class MonitoringServiceImpl implements MonitoringService {
+
     @Resource
     private OrderVoiceTextDao orderVoiceTextDao;
 
@@ -69,5 +70,15 @@ public class MonitoringServiceImpl implements MonitoringService {
             throw new HxdsException("保存录音文稿失败");
         }
         // TODO:执行文稿内容审查
+    }
+
+    @Override
+    @Transactional
+    public int insertOrderMonitoring(long orderId) {
+        int rows = orderMonitoringDao.insert(orderId);
+        if (rows != 1) {
+            throw new HxdsException("添加订单监控摘要记录失败");
+        }
+        return rows;
     }
 }

@@ -2027,4 +2027,41 @@ endDrivingHandle: function() {
 ```
 ## AI分析与订单监控（AI智能分析司乘对话内容，如有危害自动告警）
 ### 利用AI对司乘对话内容安全评级
-1. 写 
+1. 写 hxds-nebula/src/main/resources/mapper/OrderMonitoringDao.xml#insert 及其对应接口
+   写 hxds-nebula/src/main/java/com/example/hxds/nebula/service/MonitoringService.java#insertOrderMonitoring 及其实现类
+   写 hxds-nebula/src/main/java/com/example/hxds/nebula/db/pojo/InsertOrderMonitoringForm.java
+   写 hxds-nebula/src/main/java/com/example/hxds/nebula/controller/MonitoringController.java#insertOrderMonitoring
+```java
+ <insert id="insert" parameterType="long">
+     UPSERT INTO hxds.order_monitoring("id","order_id","status","records","safety","reviews","alarm","create_time")
+     VALUES(NEXT VALUE FOR hxds.om_sequence, #{orderId}, 1, 0, 'common', 0, 1, NOW())
+ </insert>
+
+int insertOrderMonitoring(long orderId);
+
+@Override
+@Transactional
+public int insertOrderMonitoring(long orderId) {
+     int rows = orderMonitoringDao.insert(orderId);
+     if (rows != 1) {
+        throw new HxdsException("添加订单监控摘要记录失败");
+     }
+     return rows;
+}
+
+@Data
+@Schema(description = "添加订单监控摘要记录的表单")
+public class InsertOrderMonitoringForm {
+   @NotNull(message = "orderId不能为空")
+   @Min(value = 1, message = "orderId不能小于1")
+   @Schema(description = "订单ID")
+   private Long orderId;
+}
+
+@PostMapping(value = "/insertOrderMonitoring")
+@Operation(summary = "添加订单监控摘要记录")
+public R insertOrderMonitoring(@RequestBody @Valid InsertOrderMonitoringForm form) {
+     int rows = monitoringService.insertOrderMonitoring(form.getOrderId());
+     return R.ok().put("rows", rows);
+}
+```
