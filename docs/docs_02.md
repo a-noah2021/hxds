@@ -2066,7 +2066,8 @@ public R insertOrderMonitoring(@RequestBody @Valid InsertOrderMonitoringForm for
 }
 ```
 2. 写 bff-driver/src/main/java/com/example/hxds/bff/driver/controller/form/InsertOrderMonitoringForm.java
-   写 
+   写 bff-driver/src/main/java/com/example/hxds/bff/driver/feign/NebulaServiceApi.java#insertOrderMonitoring
+   补充 bff-driver/src/main/java/com/example/hxds/bff/driver/service/impl/OrderServiceImpl.java#startDriving
 ```java
 @Data
 @Schema(description = "添加订单监控摘要记录的表单")
@@ -2077,5 +2078,21 @@ public class InsertOrderMonitoringForm {
     private Long orderId;
 }
 
- 
+@PostMapping(value = "/monitoring/insertOrderMonitoring")
+R insertOrderMonitoring(InsertOrderMonitoringForm form);
+
+@Override
+@Transactional
+@LcnTransaction
+public int startDriving(StartDrivingForm form) {
+   R r = odrServiceApi.startDriving(form);
+   int rows = MapUtil.getInt(r, "rows");
+   if (rows == 1){
+      InsertOrderMonitoringForm monitoringForm = new InsertOrderMonitoringForm();
+      monitoringForm.setOrderId(form.getOrderId());
+      nebulaServiceApi.insertOrderMonitoring(monitoringForm);
+      // TODO 发送通知消息
+   }
+   return rows;
+}
 ```

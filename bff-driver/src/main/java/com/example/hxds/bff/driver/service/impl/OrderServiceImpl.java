@@ -4,6 +4,7 @@ import cn.hutool.core.map.MapUtil;
 import com.codingapi.txlcn.tc.annotation.LcnTransaction;
 import com.example.hxds.bff.driver.controller.form.*;
 import com.example.hxds.bff.driver.feign.CstServiceApi;
+import com.example.hxds.bff.driver.feign.NebulaServiceApi;
 import com.example.hxds.bff.driver.feign.OdrServiceApi;
 import com.example.hxds.bff.driver.service.OrderService;
 import com.example.hxds.common.exception.HxdsException;
@@ -28,6 +29,9 @@ public class OrderServiceImpl implements OrderService {
 
     @Resource
     private CstServiceApi cstServiceApi;
+
+    @Resource
+    private NebulaServiceApi nebulaServiceApi;
 
     @Override
     @Transactional
@@ -102,7 +106,12 @@ public class OrderServiceImpl implements OrderService {
     public int startDriving(StartDrivingForm form) {
         R r = odrServiceApi.startDriving(form);
         int rows = MapUtil.getInt(r, "rows");
-        // TODO 发送通知消息
+        if (rows == 1){
+            InsertOrderMonitoringForm monitoringForm = new InsertOrderMonitoringForm();
+            monitoringForm.setOrderId(form.getOrderId());
+            nebulaServiceApi.insertOrderMonitoring(monitoringForm);
+            // TODO 发送通知消息
+        }
         return rows;
     }
 
