@@ -120,6 +120,12 @@
             <artifactId>minio</artifactId>
             <version>8.2.1</version>
         </dependency>
+        <!--数据万象文本审查-->
+        <dependency>
+            <groupId>com.qcloud</groupId>
+            <artifactId>cos_api</artifactId>
+            <version>5.6.74</version>
+        </dependency>
     </dependencies>
 
     <dependencyManagement>

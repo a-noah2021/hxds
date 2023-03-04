@@ -9,4 +9,38 @@
         VALUES(NEXT VALUE FOR hxds.om_sequence, #{orderId}, 1, 0, 'common', 0, 1, NOW())
     </insert>
 
+    <select id="searchOrderRecordsAndReviews" parameterType="long" resultType="HashMap">
+        SELECT "id",
+               "records",
+               "reviews"
+        FROM hxds.order_monitoring
+        WHERE "order_id" = #{orderId}
+    </select>
+    <update id="updateOrderMonitoring" parameterType="com.example.hxds.nebula.db.pojo.OrderMonitoringEntity">
+        UPSERT INTO hxds.order_monitoring("id","order_id",
+        <if test="status!=null">
+            "status",
+        </if>
+        <if test="safety!=null">
+            "safety",
+        </if>
+        <if test="reviews!=null">
+            "reviews",
+        </if>
+        "records"
+        )
+        VALUES(#{id}, #{orderId},
+        <if test="status!=null">
+            #{status},
+        </if>
+        <if test="safety!=null">
+            #{safety},
+        </if>
+        <if test="reviews!=null">
+            #{reviews},
+        </if>
+        #{records}
+        )
+    </update>
+
 </mapper>

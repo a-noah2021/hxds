@@ -9,4 +9,19 @@
         VALUES(NEXT VALUE FOR hxds.ovt_sequence, '${uuid}', #{orderId}, '${recordFile}', '${text}', NOW())
     </insert>
 
+    <select id="searchIdByUuid" parameterType="String" resultType="Long">
+        SELECT "id" FROM hxds.order_voice_text WHERE "uuid" = '${uuid}'
+    </select>
+
+    <update id="updateCheckResult" parameterType="Map">
+        UPSERT INTO hxds.order_voice_text("id","label","suggestion","keywords")
+        VALUES(#{id},'${label}','${suggestion}',
+        <if test="keywords!=null">
+            '${keywords}'
+        </if>
+        <if test="keywords==null">
+            NULL
+        </if>
+        )
+    </update>
 </mapper>

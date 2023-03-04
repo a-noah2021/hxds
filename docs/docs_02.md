@@ -141,6 +141,7 @@ that.ajax(
    补充 hxds-odr/src/main/java/com/example/hxds/odr/service/impl/OrderServiceImpl.java#searchOrderStatus
    补充 hxds-customer-wx/pages/create_order/create_order.vue#searchOrderStatus
    
+
 【说明】为了不干扰我们测试程序，首先我们把订单表和账单表所有的记录都给清空。我们把抢单缓存设置成超时30秒，然后像之前一样，把各子系统运行起来。乘客端小程序下单之后，就立即关闭小程序，然后等待30秒钟，看看订单和账单记录能不能都删除掉。测试完程序，你要把抢单缓存改回16分钟。
 
 现在还有一种情况需要我们动脑子认真想想，比如说乘客下单成功之后，等待了5分钟，微信就闪退了。过了5分钟之后，他重新登录小程序。因为抢单缓存还没有被销毁，而且订单和账单记录也都在，小程序跳转到create_order.vue页面，重新从15分钟开始倒计时，但是倒计时过程中，抢单缓存会超时被销毁，同时订单和账单记录也都删除了。这时候乘客端小程序发来轮询请求，业务层发现倒计时还没结束，但是抢单缓存就没有了，说明有司机抢单了，于是就跳转到司乘同显页面，这明显是不对的。
@@ -240,8 +241,8 @@ else if (resp.data.result == 0) {
    写 hxds-odr/src/main/java/com/example/hxds/odr/service/impl/OrderService.java#hasCustomerCurrentOrder 及其实现类
    写 hxds-odr/src/main/java/com/example/hxds/odr/controller/form/HasCustomerCurrentOrderForm.java
    写 hxds-odr/src/main/java/com/example/hxds/odr/controller/OrderController.java#hasCustomerCurrentOrder
-【说明】在OrderDao.xml文件中，定义两个SQL语句，分别查询没有司机接单的订单和没有完成的订单。因为在小程序上面要根据订单的状态，决定跳转到什么页面。
-如果存在没有司机接单的订单，小程序就跳转到create_order.vue页面，重新开始倒计时。如果存在未完成的订单，就跳转到司乘同显页面
+   【说明】在OrderDao.xml文件中，定义两个SQL语句，分别查询没有司机接单的订单和没有完成的订单。因为在小程序上面要根据订单的状态，决定跳转到什么页面。
+   如果存在没有司机接单的订单，小程序就跳转到create_order.vue页面，重新开始倒计时。如果存在未完成的订单，就跳转到司乘同显页面
 ```java
 long hasCustomerUnFinishedOrder(long customerId);
 
@@ -336,7 +337,7 @@ public R hasCustomerCurrentOrder() {
 4. 写 hxds-customer-wx/main.js
    补充 hxds-customer-wx/pages/workbench/workbench.vue#onLoad
    补充 hxds-customer-wx/pages/create_order/create_order.vue#onLoad
-【说明】发起Ajax请求，查询乘客的当前的订单。如果有未接单的订单，就跳转到create_order.vue页面；如果有未完成的订单，就跳转到move.vue页面
+   【说明】发起Ajax请求，查询乘客的当前的订单。如果有未接单的订单，就跳转到create_order.vue页面；如果有未完成的订单，就跳转到move.vue页面
 ```javascript
 hasCustomerCurrentOrder: `${baseUrl}/order/hasCustomerCurrentOrder`,
 
@@ -517,7 +518,7 @@ public R searchOrderForMoveById(@RequestBody @Valid SearchOrderForMoveByIdForm f
    写 hxds-driver-wx/execution/move/move.vue#hideHandle
    写 hxds-driver-wx/execution/move/move.vue#showHandle
    同理，给乘客端也来一套一样的
-【说明】在地图组件上长按，触发长按事件，我们编写回调函数把状态条显示出来。如果点击状态条的关闭图标，就隐藏状态条
+   【说明】在地图组件上长按，触发长按事件，我们编写回调函数把状态条显示出来。如果点击状态条的关闭图标，就隐藏状态条
 ```javascript
 showMoveHandle: function() {
    let that = this;
@@ -1189,7 +1190,7 @@ arriveStartPlaceHandle: function() {
 1. 写 hxds-odr/src/main/java/com/example/hxds/odr/service/OrderService.java#confirmArriveStartPlace 及其实现类
    写 hxds-odr/src/main/java/com/example/hxds/odr/controller/form/ConfirmArriveStartPlaceForm.java
    写 hxds-odr/src/main/java/com/example/hxds/odr/controller/OrderController.java#confirmArriveStartPlace
-【说明】有一点需要大家必须清楚，乘客端点击了司机已到达，并不更改订单状态，因为上节课司机已到达的时候就已经把订单改成了3状态，为什么不是乘客确认司机已到达之后，再把订单改成3状态呢？这是因为司机到达上车点之后，有10分钟的免费等时。10分钟之后，乘客还没有到达上车点，代驾账单中就会出现等时费（1分钟1元钱）。有时候明明司机已经到达了上车点，但是乘客拖拖拉拉半个小时才到上车点，然后才点击司机已到达，于是等待的半个小时就成了免费的，因为没有确认司机已到达上车点，那就不算等时。
+   【说明】有一点需要大家必须清楚，乘客端点击了司机已到达，并不更改订单状态，因为上节课司机已到达的时候就已经把订单改成了3状态，为什么不是乘客确认司机已到达之后，再把订单改成3状态呢？这是因为司机到达上车点之后，有10分钟的免费等时。10分钟之后，乘客还没有到达上车点，代驾账单中就会出现等时费（1分钟1元钱）。有时候明明司机已经到达了上车点，但是乘客拖拖拉拉半个小时才到上车点，然后才点击司机已到达，于是等待的半个小时就成了免费的，因为没有确认司机已到达上车点，那就不算等时。
 
 乘客端点击确认司机已到达之后，并不会修改订单状态，修改Redis里面的标志位缓存。等到司机端点击开始代驾的时候，要确定Redis里面标志位的值为2，然后才能把订单更新成4状态。
 ```java
@@ -1655,7 +1656,7 @@ public R uploadRecordFile(@RequestPart("file") MultipartFile file,
 ```
 2. 写 bff-customer/src/main/java/com/example/hxds/bff/customer/feign/NebulaServiceApi.java#uploadRecordFile
    写 bff-customer/src/main/java/com/example/hxds/bff/customer/controller/MonitoringController.java#uploadRecordFile
-【说明】在com.example.hxds.bff.driver.controller包中，创建MonitoringController.java类，声明Web方法。这里之所以让Web方法直接调用Feign接口，是因为要把接收到的文件直接传递给hxds-nebula子系统。如果通过业务层去调用Feign接口，业务方法的参数用上了@RequestPart("file")就非常不适合
+   【说明】在com.example.hxds.bff.driver.controller包中，创建MonitoringController.java类，声明Web方法。这里之所以让Web方法直接调用Feign接口，是因为要把接收到的文件直接传递给hxds-nebula子系统。如果通过业务层去调用Feign接口，业务方法的参数用上了@RequestPart("file")就非常不适合
 ```java
 @PostMapping(value = "/monitoring/uploadRecordFile", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
 R uploadRecordFile(@RequestPart(value = "file") MultipartFile file,
@@ -1763,8 +1764,8 @@ public R updateOrderStatus(@RequestBody @Valid UpdateOrderStatusForm form) {
    补充 hxds-driver-wx/pages/workbench/workbench.vue#onLoad
    补充 hxds-driver-wx/pages/workbench/workbench.vue#startDrivingHandle
    写 hxds-driver-wx/pages/workbench/workbench.vue#endDrivingHandle
-【说明】同声传译插件可以实现录音，并且把录音中的语音部分转换成文本。我们先来看一下官方提供的API接口案例，[官方文档](https://mp.weixin.qq.com/wxopen/plugindevdoc?appid=wx069ba97219f66d99&token=61191740&lang=zh_CN)
-在测试的过程中，我们的小程序上传文件的请求会被积压到队列中，直到我们点击结束代驾按钮之后，订单状态变更成5，然后页面跳转。这时队列中的上传任务才会执行，然后你等上5分钟，去Minio的数据目录中看一眼，就能找到小程序上传的音频文件了。如果按照以往，真的是几秒钟音频文件就上传好了。唉，现在只能等待微信APP解决这个BUG了
+   【说明】同声传译插件可以实现录音，并且把录音中的语音部分转换成文本。我们先来看一下官方提供的API接口案例，[官方文档](https://mp.weixin.qq.com/wxopen/plugindevdoc?appid=wx069ba97219f66d99&token=61191740&lang=zh_CN)
+   在测试的过程中，我们的小程序上传文件的请求会被积压到队列中，直到我们点击结束代驾按钮之后，订单状态变更成5，然后页面跳转。这时队列中的上传任务才会执行，然后你等上5分钟，去Minio的数据目录中看一眼，就能找到小程序上传的音频文件了。如果按照以往，真的是几秒钟音频文件就上传好了。唉，现在只能等待微信APP解决这个BUG了
 ```javascript
 // index.js 同声传译示例
 var plugin = requirePlugin("WechatSI")
@@ -2096,4 +2097,170 @@ public int startDriving(StartDrivingForm form) {
    return rows;
 }
 ```
-3. 写 
+2. 写 hxds-nebula/src/main/resources/mapper/OrderVoiceTextDao.xml 及其对应接口
+   写 hxds-nebula/src/main/resources/mapper/OrderMonitoringDao.xml 及其对应接口
+   补充 hxds-nebula/pom.xml
+   写 hxds-nebula/src/main/java/com/example/hxds/nebula/task/VoiceTextCheckTask.java#checkText
+   补充 hxds-nebula/src/main/java/com/example/hxds/nebula/service/impl/MonitoringServiceImpl.java#monitoring
+   【说明】因为调用数据万象接口审核文字内容，然后还要更新order_monitoring表中的记录，根据数据万象审核的结果更新订单的安全等级。这些操作都是需要消耗时间的，所以我们应该交给异步线程任务去做。业务层调用DAO，向order_voice_text插入记录，至于说调用数据万象审核文本内容，以及更新记录，这些就都交给异步线程去做。我们应该简单看一下数据万象的API文档（https://cloud.tencent.com/document/product/460/61607）。
+```java
+ <select id="searchIdByUuid" parameterType="String" resultType="Long">
+     SELECT "id" FROM hxds.order_voice_text WHERE "uuid" = '${uuid}'
+ </select>
+ <update id="updateCheckResult" parameterType="Map">
+     UPSERT INTO hxds.order_voice_text("id","label","suggestion","keywords")
+     VALUES(#{id},'${label}','${suggestion}',
+     <if test="keywords!=null">
+         '${keywords}'
+     </if>
+     <if test="keywords==null">
+         NULL
+     </if>
+     )
+ </update>
+
+Long searchIdByUuid(String uuid);
+
+int updateCheckResult(Map param);
+
+<select id="searchOrderRecordsAndReviews" parameterType="long" resultType="HashMap">
+        SELECT "id",
+        "records",
+        "reviews"
+        FROM hxds.order_monitoring
+        WHERE "order_id" = #{orderId}
+</select>
+<update id="updateOrderMonitoring" parameterType="com.example.hxds.nebula.db.pojo.OrderMonitoringEntity">
+        UPSERT INTO hxds.order_monitoring("id","order_id",
+         <if test="status!=null">
+                 "status",
+         </if>
+         <if test="safety!=null">
+                 "safety",
+         </if>
+         <if test="reviews!=null">
+                 "reviews",
+         </if>
+                 "records"
+                 )
+        VALUES(#{id}, #{orderId},
+         <if test="status!=null">
+                 #{status},
+         </if>
+         <if test="safety!=null">
+                 #{safety},
+         </if>
+         <if test="reviews!=null">
+                 #{reviews},
+         </if>
+                 #{records}
+        )
+</update>
+
+HashMap searchOrderRecordsAndReviews(long orderId);
+
+int updateOrderMonitoring(OrderMonitoringEntity entity);
+
+<!--数据万象文本审查-->
+<dependency>
+   <groupId>com.qcloud</groupId>
+   <artifactId>cos_api</artifactId>
+   <version>5.6.74</version>
+</dependency>
+
+ @Async
+ @Transactional
+ public void checkText(long orderId, String content, String uuid) {
+     String label = "Normal"; // 审核结果
+     String suggestion = "Pass"; // 后续建议
+
+     // 后续建议模板
+     Map<String, String> template = new HashMap<>() {{
+         put("0", "Pass");
+         put("1", "Block");
+         put("2", "Review");
+     }};
+     if (StrUtil.isNotBlank(content)) {
+         BasicCOSCredentials credentials = new BasicCOSCredentials(secretId, secretKey);
+         Region region = new Region("ap-beijing");
+         ClientConfig config = new ClientConfig(region);
+         COSClient client = new COSClient(credentials, config);
+         TextAuditingRequest request = new TextAuditingRequest();
+         request.setBucketName(bucketPublic);
+         request.getInput().setContent(Base64.encode(content));
+         request.getConf().setDetectType("all");
+         TextAuditingResponse response = client.createAuditingTextJobs(request);
+         AuditingJobsDetail detail = response.getJobsDetail();
+         String state = detail.getState();
+         ArrayList keywords = Lists.newArrayList();
+         if ("Success".equals(state)) {
+             label = detail.getLabel(); // 审核结果
+             String result = detail.getResult(); // 检测结果
+             suggestion = template.get(result); // 后续建议
+             List<SectionInfo> list = detail.getSectionList();
+             for (SectionInfo info : list) {
+                 String keywords1 = info.getPornInfo().getKeywords();
+                 String keywords2 = info.getIllegalInfo().getKeywords();
+                 String keywords3 = info.getAbuseInfo().getKeywords();
+                 if (keywords1.length() > 0) {
+                     List<String> temp = Arrays.asList(keywords1.split(","));
+                     keywords.addAll(temp);
+                 } else if (keywords2.length() > 0) {
+                     List<String> temp = Arrays.asList(keywords2.split(","));
+                     keywords.addAll(temp);
+                 } else if (keywords3.length() > 0) {
+                     List<String> temp = Arrays.asList(keywords3.split(","));
+                     keywords.addAll(temp);
+                 }
+             }
+         }
+         Long id = orderVoiceTextDao.searchIdByUuid(uuid);
+         if (id == null) {
+             throw new HxdsException("没有找到代驾语音文本记录");
+         }
+         HashMap param = new HashMap();
+         param.put("id", id);
+         param.put("label", label);
+         param.put("suggestion", suggestion);
+         param.put("keywords", ArrayUtil.join(keywords.toArray(), ","));
+         int rows = orderVoiceTextDao.updateCheckResult(param);
+         if (rows != 1) {
+             throw new HxdsException("更新内容检查结果失败");
+         }
+         // 查询该订单中有多少个审核录音和需要人工审核的文本
+         HashMap map = orderMonitoringDao.searchOrderRecordsAndReviews(orderId);
+         id = MapUtil.getLong(map, "id");
+         Integer records = MapUtil.getInt(map, "records");
+         Integer reviews = MapUtil.getInt(map, "reviews");
+         OrderMonitoringEntity entity = new OrderMonitoringEntity();
+         entity.setId(id);
+         entity.setOrderId(orderId);
+         entity.setRecords(records + 1);
+         if (suggestion.equals("Review")) {
+             entity.setReviews(reviews + 1);
+         }
+         if (suggestion.equals("Block")) {
+             entity.setSafety("danger");
+         }
+         // 更新 order_monitoring 表中的记录
+         rows = orderMonitoringDao.updateOrderMonitoring(entity);
+         if (rows != 1) {
+             throw new HxdsException("更新订单监控记录失败");
+         }
+     }
+ }
+
+// 执行文稿内容审查
+task.checkText(orderId, text, uuid);
+```
+3.【测试】为了更清晰的查看HBase中的数据和数据万象的审查结果，执行下面的SQL语句删除数据表中的记录。
+```sql
+delete from hxds.order_voice_text
+delete from hxds.order_monitoring
+```
+把后端各个子系统都运行起来，司机端小程序点击开始代驾按钮，你对着手机正常说话聊天，持续一分钟之后，结束代驾。最后去看一下order_voice_text表和order_monitoring表的记录
+```sql
+select "order_id", "records", "safety", "reviews" from hxds.order_monitoring
+select "order_id", "record_files", "label", "suggestion" from hxds.order_voice_text
+```
+### 大数据服务记录代驾途中GPS定位信息

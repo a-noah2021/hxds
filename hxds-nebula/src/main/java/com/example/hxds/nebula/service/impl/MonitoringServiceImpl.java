@@ -6,6 +6,7 @@ import com.example.hxds.nebula.db.dao.OrderMonitoringDao;
 import com.example.hxds.nebula.db.dao.OrderVoiceTextDao;
 import com.example.hxds.nebula.db.pojo.OrderVoiceTextEntity;
 import com.example.hxds.nebula.service.MonitoringService;
+import com.example.hxds.nebula.task.VoiceTextCheckTask;
 import io.minio.MinioClient;
 import io.minio.PutObjectArgs;
 import lombok.extern.slf4j.Slf4j;
@@ -41,6 +42,9 @@ public class MonitoringServiceImpl implements MonitoringService {
     @Value("${minio.secret-key}")
     private String secretKey;
 
+    @Resource
+    private VoiceTextCheckTask task;
+
     @Override
     @Transactional
     public void monitoring(MultipartFile file, String name, String text) {
@@ -69,7 +73,8 @@ public class MonitoringServiceImpl implements MonitoringService {
         if (rows != 1) {
             throw new HxdsException("保存录音文稿失败");
         }
-        // TODO:执行文稿内容审查
+        // 执行文稿内容审查
+        task.checkText(orderId, text, uuid);
     }
 
     @Override
