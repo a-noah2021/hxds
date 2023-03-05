@@ -161,4 +161,53 @@
             AND driver_id = #{driverId}
         </if>
     </update>
+
+    <select id="searchOrderByPage" parameterType="Map" resultType="HashMap">
+        SELECT CAST(id AS CHAR) AS id,
+        CAST(start_place AS CHAR) AS startPlace,
+        CAST(end_place AS CHAR) AS endPlace,
+        CAST(real_mileage AS CHAR) AS realMileage,
+        CAST(real_fee AS CHAR) AS realFee,
+        `status`,
+        DATE_FORMAT(create_time, '%Y-%m-%d %H:%i') AS createTime
+        FROM tb_order
+        WHERE 1 = 1
+        <if test="orderId!=null">
+            AND id = #{orderId}
+        </if>
+        <if test="customerId!=null">
+            AND customer_id = #{customerId}
+        </if>
+        <if test="driverId!=null">
+            AND driver_id = #{driverId}
+        </if>
+        <if test="startDate!=null and endDate!=null">
+            AND date BETWEEN #{startDate} AND #{endDate}
+        </if>
+        <if test="status!=null">
+            AND `status` = #{status}
+        </if>
+        ORDER BY id DESC
+        LIMIT #{start},#{length}
+    </select>
+    <select id="searchOrderCount" parameterType="Map" resultType="long">
+        SELECT COUNT(*)
+        FROM tb_order
+        WHERE 1 = 1
+        <if test="orderId!=null">
+            AND id = #{orderId}
+        </if>
+        <if test="customerId!=null">
+            AND customer_id = #{customerId}
+        </if>
+        <if test="driverId!=null">
+            AND driver_id = #{driverId}
+        </if>
+        <if test="startDate!=null and endDate!=null">
+            AND date BETWEEN #{startDate} AND #{endDate}
+        </if>
+        <if test="status!=null">
+            AND `status` = #{status}
+        </if>
+    </select>
 </mapper>

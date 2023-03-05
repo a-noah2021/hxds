@@ -2,6 +2,7 @@ package com.example.hxds.odr.controller;
 
 import cn.hutool.core.bean.BeanUtil;
 import cn.hutool.json.JSONObject;
+import com.example.hxds.common.util.PageUtils;
 import com.example.hxds.common.util.R;
 import com.example.hxds.odr.controller.form.*;
 import com.example.hxds.odr.db.pojo.OrderBillEntity;
@@ -164,5 +165,17 @@ public class OrderController {
         Map param = BeanUtil.beanToMap(form);
         int rows = orderService.updateOrderStatus(param);
         return R.ok().put("rows", rows);
+    }
+
+    @PostMapping("/searchOrderByPage")
+    @Operation(summary = "查询订单分页记录")
+    public R searchOrderByPage(@RequestBody @Valid SearchOrderByPageForm form) {
+        Map param = BeanUtil.beanToMap(form);
+        int page = form.getPage();
+        int length = form.getLength();
+        int start = (page - 1) * length;
+        param.put("start", start);
+        PageUtils pageUtils = orderService.searchOrderByPage(param);
+        return R.ok().put("result", pageUtils);
     }
 }

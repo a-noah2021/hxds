@@ -3,6 +3,7 @@ package com.example.hxds.odr.db.dao;
 import com.example.hxds.odr.db.pojo.OrderEntity;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 public interface OrderDao {
@@ -30,6 +31,10 @@ public interface OrderDao {
     HashMap searchOrderForMoveById(Map param);
 
     int updateOrderStatus(Map param);
+
+    long searchOrderCount(Map param);
+
+    List<HashMap> searchOrderByPage(Map param);
 }
 
 

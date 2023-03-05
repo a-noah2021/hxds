@@ -3,11 +3,13 @@ package com.example.hxds.odr.service.impl;
 import cn.hutool.core.map.MapUtil;
 import com.codingapi.txlcn.tc.annotation.LcnTransaction;
 import com.example.hxds.common.exception.HxdsException;
+import com.example.hxds.common.util.PageUtils;
 import com.example.hxds.odr.db.dao.OrderBillDao;
 import com.example.hxds.odr.db.dao.OrderDao;
 import com.example.hxds.odr.db.pojo.OrderBillEntity;
 import com.example.hxds.odr.db.pojo.OrderEntity;
 import com.example.hxds.odr.service.OrderService;
+import com.google.common.collect.Lists;
 import org.springframework.dao.DataAccessException;
 import org.springframework.data.redis.connection.RedisConnection;
 import org.springframework.data.redis.core.RedisCallback;
@@ -19,6 +21,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import javax.annotation.Resource;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
@@ -218,5 +221,20 @@ public class OrderServiceImpl implements OrderService {
             throw new HxdsException("更新取消订单记录失败");
         }
         return rows;
+    }
+
+    @Override
+    public PageUtils searchOrderByPage(Map param) {
+        long count = orderDao.searchOrderCount(param);
+        List<HashMap> list = null;
+        if (count == 0) {
+            list = Lists.newArrayList();
+        } else {
+            list = orderDao.searchOrderByPage(param);
+        }
+        Integer start = (Integer) param.get("start");
+        Integer length = (Integer) param.get("length");
+        PageUtils pageUtils = new PageUtils(list, count, start, length);
+        return pageUtils;
     }
 }

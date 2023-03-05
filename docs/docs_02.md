@@ -2264,3 +2264,384 @@ select "order_id", "records", "safety", "reviews" from hxds.order_monitoring
 select "order_id", "record_files", "label", "suggestion" from hxds.order_voice_text
 ```
 ### 大数据服务记录代驾途中GPS定位信息
+1. 写 hxds-nebula/src/main/resources/mapper/OrderGpsDao.xml 及其对应接口
+   写 hxds-nebula/src/main/java/com/example/hxds/nebula/controller/vo/InsertOrderGpsVO.java
+   写 hxds-nebula/src/main/java/com/example/hxds/nebula/service/OrderGpsService.java 及其实现类
+   写 hxds-nebula/src/main/java/com/example/hxds/nebula/controller/form/InsertOrderGpsForm.java
+   写 hxds-nebula/src/main/java/com/example/hxds/nebula/controller/OrderGpsController.java
+```java
+ <insert id="insert" parameterType="com.example.hxds.nebula.db.pojo.OrderGpsEntity">
+     UPSERT INTO hxds.order_gps("id", "order_id", "driver_id", "customer_id", "latitude", "longitude", "speed", "create_time")
+     VALUES(NEXT VALUE FOR hxds.og_sequence, ${orderId}, ${driverId}, ${customerId}, '${latitude}', '${longitude}', '${speed}', NOW())
+ </insert>
+
+int insert(OrderGpsEntity orderGpsEntity);
+
+@Data
+public class InsertOrderGpsVO extends OrderGpsEntity {
+   @NotNull(message = "orderId不能为空")
+   @Min(value = 1, message = "orderId不能小于1")
+   @Schema(description = "订单ID")
+   private Long orderId;
+
+   @NotNull(message = "driverId不能为空")
+   @Min(value = 1, message = "driverId不能小于1")
+   @Schema(description = "司机ID")
+   private Long driverId;
+
+   @NotNull(message = "customerId不能为空")
+   @Min(value = 1, message = "customerId不能小于1")
+   @Schema(description = "客户ID")
+   private Long customerId;
+
+
+   @NotBlank(message = "latitude不能为空")
+   @Pattern(regexp = "^(([1-8]\\d?)|([1-8]\\d))(\\.\\d{1,18})|90|0(\\.\\d{1,18})?$", message = "latitude内容不正确")
+   @Schema(description = "纬度")
+   private String latitude;
+
+   @NotBlank(message = "longitude不能为空")
+   @Pattern(regexp = "^(([1-9]\\d?)|(1[0-7]\\d))(\\.\\d{1,18})|180|0(\\.\\d{1,18})?$", message = "longitude内容不正确")
+   @Schema(description = "经度")
+   private String longitude;
+
+   @Schema(description = "速度")
+   private String speed;
+}
+
+int insertOrderGps(List<InsertOrderGpsVO> list);
+
+@Override
+@Transactional
+public int insertOrderGps(List<InsertOrderGpsVO> list) {
+   int rows = 0;
+   for (OrderGpsEntity entity : list) {
+      rows += orderGpsDao.insert(entity);
+   }
+   return rows;
+}
+
+@Data
+@Schema(description = "添加订单GPS记录的表单")
+public class InsertOrderGpsForm {
+   @NotEmpty(message = "list不能为空")
+   @Schema(description = "GPS数据")
+   private List<@Valid InsertOrderGpsVO> list;
+}
+
+@PostMapping("/insertOrderGps")
+@Operation(summary = "添加订单GPS记录")
+public R insertOrderGps(@RequestBody @Valid InsertOrderGpsForm form) {
+   int rows = orderGpsService.insertOrderGps(form.getList());
+   return R.ok().put("rows", rows);
+}
+```
+2. 写 bff-driver/src/main/java/com/example/hxds/bff/driver/controller/vo/InsertOrderGpsVO.java
+   写 bff-driver/src/main/java/com/example/hxds/bff/driver/controller/form/InsertOrderGpsForm.java
+   写 bff-driver/src/main/java/com/example/hxds/bff/driver/feign/NebulaServiceApi.java#insertOrderGps
+   写 bff-driver/src/main/java/com/example/hxds/bff/driver/service/OrderGpsService.java 及其实现类
+   写 bff-driver/src/main/java/com/example/hxds/bff/driver/controller/OrderGpsController.java
+```java
+@Data
+public class InsertOrderGpsVO {
+    @NotNull(message = "orderId不能为空")
+    @Min(value = 1, message = "orderId不能小于1")
+    @Schema(description = "订单ID")
+    private Long orderId;
+
+    @Schema(description = "司机ID")
+    private Long driverId;
+
+    @NotNull(message = "customerId不能为空")
+    @Min(value = 1, message = "customerId不能小于1")
+    @Schema(description = "客户ID")
+    private Long customerId;
+
+    @NotBlank(message = "latitude不能为空")
+    @Pattern(regexp = "^(([1-8]\\d?)|([1-8]\\d))(\\.\\d{1,18})|90|0(\\.\\d{1,18})?$", message = "latitude内容不正确")
+    @Schema(description = "纬度")
+    private String latitude;
+
+    @NotBlank(message = "longitude不能为空")
+    @Pattern(regexp = "^(([1-9]\\d?)|(1[0-7]\\d))(\\.\\d{1,18})|180|0(\\.\\d{1,18})?$", message = "longitude内容不正确")
+    @Schema(description = "经度")
+    private String longitude;
+
+    @Schema(description = "速度")
+    private String speed;
+}
+
+@Data
+@Schema(description = "添加订单GPS记录的表单")
+public class InsertOrderGpsForm {
+   @NotEmpty(message = "list不能为空")
+   @Schema(description = "GPS数据")
+   private List<@Valid InsertOrderGpsVO> list;
+}
+
+@PostMapping("/order/gps/insertOrderGps")
+R insertOrderGps(InsertOrderGpsForm form);
+
+int insertOrderGps(InsertOrderGpsForm form);
+
+@Override
+public int insertOrderGps(InsertOrderGpsForm form) {
+   R r = nebulaServiceApi.insertOrderGps(form);
+   int rows = MapUtil.getInt(r, "rows");
+   return rows;
+}
+
+@PostMapping("/insertOrderGps")
+@SaCheckLogin
+@Operation(summary = "添加订单GPS记录")
+public R insertOrderGps(@RequestBody @Valid InsertOrderGpsForm form){
+   long driverId = StpUtil.getLoginIdAsLong();
+   form.getList().forEach(one->{
+      one.setDriverId(driverId);
+   });
+   int rows = orderGpsService.insertOrderGps(form);
+   return R.ok().put("rows",rows);
+}
+```
+3. 写 hxds-driver-wx/App.vue#onLaunch
+【说明】开始代驾之后，司机端实时上传GPS定位，以前我们做过赶往上车点途中上传定位的功能，那可是实时上传。但是开始代驾之后，不需要实时上传，我们要把网络资源腾出来给同声传译插件和上传录音的Ajax请求。所以我打算在本地先缓存GPS定位，然后积累多了，再批量上传
+```javascript
+} else if (workStatus == '开始代驾') {
+    //每凑够20个定位就上传一次，减少服务器的压力
+    let executeOrder = uni.getStorageSync('executeOrder');
+    if (executeOrder != null) {
+        gps.push({
+            orderId: executeOrder.id,
+            customerId: executeOrder.customerId,
+            latitude: latitude,
+            longitude: longitude,
+            speed: speed
+        });
+        if (gps.length == 5) {
+            uni.request({
+                url: `${baseUrl}/order/gps/insertOrderGps`,
+                method: 'POST',
+                header: {
+                    token: uni.getStorageSync('token')
+                },
+                data: {
+                    list: gps
+                },
+                success: function(resp) {
+                    if (resp.statusCode == 401) {
+                        uni.redirectTo({
+                            url: '/pages/login/login'
+                        });
+                    } else if (resp.statusCode == 200 && resp.data.code == 200) {
+                        let data = resp.data;
+                        console.log('上传GPS成功');
+                    } else {
+                        console.error('保存GPS定位失败', resp.data);
+                    }
+                    gps.length = 0;
+                },
+                fail: function(error) {
+                    console.error('保存GPS定位失败', error);
+                }
+            });
+        }
+    }
+}
+```
+### 订单微服务中查询执行中订单信息
+1. 写 hxds-odr/src/main/resources/mapper/OrderDao.xml 及其对应接口
+   写 hxds-odr/src/main/java/com/example/hxds/odr/service/OrderService.java#searchOrderByPage 及其实现类
+   写 hxds-odr/src/main/java/com/example/hxds/odr/controller/form/SearchOrderByPageForm.java
+   写 hxds-odr/src/main/java/com/example/hxds/odr/controller/OrderController.java#searchOrderByPage
+```java
+ <select id="searchOrderByPage" parameterType="Map" resultType="HashMap">
+     SELECT CAST(id AS CHAR) AS id,
+     CAST(start_place AS CHAR) AS startPlace,
+     CAST(end_place AS CHAR) AS endPlace,
+     CAST(real_mileage AS CHAR) AS realMileage,
+     CAST(real_fee AS CHAR) AS realFee,
+     `status`,
+     DATE_FORMAT(create_time, '%Y-%m-%d %H:%i') AS createTime
+     FROM tb_order
+     WHERE 1 = 1
+     <if test="orderId!=null">
+         AND id = #{orderId}
+     </if>
+     <if test="customerId!=null">
+         AND customer_id = #{customerId}
+     </if>
+     <if test="driverId!=null">
+         AND driver_id = #{driverId}
+     </if>
+     <if test="startDate!=null and endDate!=null">
+         AND date BETWEEN #{startDate} AND #{endDate}
+     </if>
+     <if test="status!=null">
+         AND `status` = #{status}
+     </if>
+     ORDER BY id DESC
+     LIMIT #{start},#{length}
+ </select>
+ <select id="searchOrderCount" parameterType="Map" resultType="long">
+     SELECT COUNT(*)
+     FROM tb_order
+     WHERE 1 = 1
+     <if test="orderId!=null">
+         AND id = #{orderId}
+     </if>
+     <if test="customerId!=null">
+         AND customer_id = #{customerId}
+     </if>
+     <if test="driverId!=null">
+         AND driver_id = #{driverId}
+     </if>
+     <if test="startDate!=null and endDate!=null">
+         AND date BETWEEN #{startDate} AND #{endDate}
+     </if>
+     <if test="status!=null">
+         AND `status` = #{status}
+     </if>
+ </select>
+
+long searchOrderCount(Map param);
+
+List<HashMap> searchOrderByPage(Map param);
+
+PageUtils searchOrderByPage(Map param);
+
+@Override
+public PageUtils searchOrderByPage(Map param) {
+     long count = orderDao.searchOrderCount(param);
+     List<HashMap> list = null;
+     if (count == 0) {
+        list = Lists.newArrayList();
+     } else {
+        list = orderDao.searchOrderByPage(param);
+     }
+     Integer start = (Integer) param.get("start");
+     Integer length = (Integer) param.get("length");
+     PageUtils pageUtils = new PageUtils(list, count, start, length);
+     return pageUtils;
+}
+
+@Data
+@Schema(description = "查询订单分页记录的表单")
+public class SearchOrderByPageForm {
+   @NotNull(message = "page不能为空")
+   @Min(value = 1, message = "page不能小于1")
+   @Schema(description = "页数")
+   private Integer page;
+
+   @NotNull(message = "length不能为空")
+   @Range(min = 10, max = 50, message = "length必须在10~50之间")
+   @Schema(description = "每页记录数")
+   private Integer length;
+
+   @Min(value = 1, message = "orderId不能小于1")
+   @Schema(description = "订单ID")
+   private Long orderId;
+
+   @Min(value = 1, message = "customerId不能小于1")
+   @Schema(description = "客户ID")
+   private Long customerId;
+
+   @Min(value = 1, message = "driverId不能小于1")
+   @Schema(description = "司机ID")
+   private Long driverId;
+
+   @Pattern(regexp = "^((((1[6-9]|[2-9]\\d)\\d{2})-(0?[13578]|1[02])-(0?[1-9]|[12]\\d|3[01]))|(((1[6-9]|[2-9]\\d)\\d{2})-(0?[13456789]|1[012])-(0?[1-9]|[12]\\d|30))|(((1[6-9]|[2-9]\\d)\\d{2})-0?2-(0?[1-9]|1\\d|2[0-8]))|(((1[6-9]|[2-9]\\d)(0[48]|[2468][048]|[13579][26])|((16|[2468][048]|[3579][26])00))-0?2-29-))$",
+           message = "startDate内容不正确")
+   @Schema(description = "开始日期")
+   private String startDate;
+
+   @Pattern(regexp = "^((((1[6-9]|[2-9]\\d)\\d{2})-(0?[13578]|1[02])-(0?[1-9]|[12]\\d|3[01]))|(((1[6-9]|[2-9]\\d)\\d{2})-(0?[13456789]|1[012])-(0?[1-9]|[12]\\d|30))|(((1[6-9]|[2-9]\\d)\\d{2})-0?2-(0?[1-9]|1\\d|2[0-8]))|(((1[6-9]|[2-9]\\d)(0[48]|[2468][048]|[13579][26])|((16|[2468][048]|[3579][26])00))-0?2-29-))$",
+           message = "endDate内容不正确")
+   @Schema(description = "结束日期")
+   private String endDate;
+
+   @Range(min = 1, max = 12, message = "status范围不正确")
+   @Schema(description = "状态")
+   private Byte status;
+}
+
+@PostMapping("/searchOrderByPage")
+@Operation(summary = "查询订单分页记录")
+public R searchOrderByPage(@RequestBody @Valid SearchOrderByPageForm form) {
+   Map param = BeanUtil.beanToMap(form);
+   int page = form.getPage();
+   int length = form.getLength();
+   int start = (page - 1) * length;
+   param.put("start", start);
+   PageUtils pageUtils = orderService.searchOrderByPage(param);
+   return R.ok().put("result", pageUtils);
+}
+```
+2. 写 hxds-mis-api/src/main/java/com/example/hxds/mis/api/controller/form/SearchOrderByPageForm.java
+   写 hxds-mis-api/src/main/java/com/example/hxds/mis/api/feign/OdrServiceApi.java#searchOrderByPage
+   写 hxds-mis-api/src/main/java/com/example/hxds/mis/api/service/OrderService.java#searchOrderByPage 及其实现类
+   写 hxds-mis-api/src/main/java/com/example/hxds/mis/api/controller/OrderController.java#searchOrderByPage
+```java
+@Data
+@Schema(description = "查询订单分页记录的表单")
+public class SearchOrderByPageForm {
+    @NotNull(message = "page不能为空")
+    @Min(value = 1, message = "page不能小于1")
+    @Schema(description = "页数")
+    private Integer page;
+
+    @NotNull(message = "length不能为空")
+    @Range(min = 10, max = 50, message = "length必须在10~50之间")
+    @Schema(description = "每页记录数")
+    private Integer length;
+
+    @Min(value = 1, message = "orderId不能小于1")
+    @Schema(description = "订单ID")
+    private Long orderId;
+
+    @Min(value = 1, message = "customerId不能小于1")
+    @Schema(description = "客户ID")
+    private Long customerId;
+
+    @Min(value = 1, message = "driverId不能小于1")
+    @Schema(description = "司机ID")
+    private Long driverId;
+
+    @Pattern(regexp = "^((((1[6-9]|[2-9]\\d)\\d{2})-(0?[13578]|1[02])-(0?[1-9]|[12]\\d|3[01]))|(((1[6-9]|[2-9]\\d)\\d{2})-(0?[13456789]|1[012])-(0?[1-9]|[12]\\d|30))|(((1[6-9]|[2-9]\\d)\\d{2})-0?2-(0?[1-9]|1\\d|2[0-8]))|(((1[6-9]|[2-9]\\d)(0[48]|[2468][048]|[13579][26])|((16|[2468][048]|[3579][26])00))-0?2-29-))$",
+            message = "startDate内容不正确")
+    @Schema(description = "开始日期")
+    private String startDate;
+
+    @Pattern(regexp = "^((((1[6-9]|[2-9]\\d)\\d{2})-(0?[13578]|1[02])-(0?[1-9]|[12]\\d|3[01]))|(((1[6-9]|[2-9]\\d)\\d{2})-(0?[13456789]|1[012])-(0?[1-9]|[12]\\d|30))|(((1[6-9]|[2-9]\\d)\\d{2})-0?2-(0?[1-9]|1\\d|2[0-8]))|(((1[6-9]|[2-9]\\d)(0[48]|[2468][048]|[13579][26])|((16|[2468][048]|[3579][26])00))-0?2-29-))$",
+            message = "endDate内容不正确")
+    @Schema(description = "结束日期")
+    private String endDate;
+
+    @Range(min = 1, max = 12, message = "status范围不正确")
+    @Schema(description = "状态")
+    private Byte status;
+}
+
+@PostMapping("/order/searchOrderByPage")
+R searchOrderByPage(SearchOrderByPageForm form);
+
+PageUtils searchOrderByPage(SearchOrderByPageForm form);
+
+@Override
+public PageUtils searchOrderByPage(SearchOrderByPageForm form) {
+   R r = odrServiceApi.searchOrderByPage(form);
+   PageUtils pageUtils = BeanUtil.toBean(r.get("result"), PageUtils.class);
+   return pageUtils;
+}
+
+@PostMapping("/searchOrderByPage")
+@SaCheckPermission(value = {"ROOT", "ORDER:SELECT"}, mode = SaMode.OR)
+@Operation(summary = "查询订单分页记录")
+public R searchOrderByPage(@RequestBody @Valid SearchOrderByPageForm form){
+   PageUtils pageUtils = orderService.searchOrderByPage(form);
+   return R.ok().put("result",pageUtils);
+}
+```
+3. 写 
+```javascript
+
+```
