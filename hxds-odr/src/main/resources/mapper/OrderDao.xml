@@ -210,4 +210,27 @@
             AND `status` = #{status}
         </if>
     </select>
+    <select id="searchOrderContent" parameterType="long" resultType="HashMap">
+        SELECT CAST(o.driver_id AS CHAR)                      AS driverId,
+               CAST(o.customer_id AS CHAR)                    AS customerId,
+               o.car_plate                                    AS carPlate,
+               o.car_type                                     AS carType,
+               DATE_FORMAT(o.accept_time, '%Y-%m-%d %H:%i')   AS acceptTime,
+               DATE_FORMAT(o.arrive_time, '%Y-%m-%d %H:%i')   AS arriveTime,
+               DATE_FORMAT(o.start_time, '%Y-%m-%d %H:%i')    AS startTime,
+               DATE_FORMAT(o.end_time, '%Y-%m-%d %H:%i')      AS endTime,
+               o.waiting_minute                               AS waitingMinute,
+               TIMESTAMPDIFF(MINUTE,o.start_time, o.end_time) AS `driveMinute`,
+               CAST(o.real_mileage AS CHAR)                   AS realMileage,
+               CAST(o.real_fee AS CHAR)                       AS realFee,
+               o.`status`,
+               CAST(o.charge_rule_id AS CHAR)                 AS chargeRuleId,
+               CAST(o.cancel_rule_id AS CHAR)                 AS cancelRuleId,
+               CAST(p.rule_id AS CHAR)                        AS profitsharingRuleId,
+               o.start_place_location                         AS startPlaceLocation,
+               o.end_place_location                           AS endPlaceLocation
+        FROM tb_order o
+                 LEFT JOIN tb_order_profitsharing p ON o.id = p.order_id
+        WHERE o.id = #{orderId}
+    </select>
 </mapper>

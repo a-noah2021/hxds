@@ -35,6 +35,8 @@ public interface OrderDao {
     long searchOrderCount(Map param);
 
     List<HashMap> searchOrderByPage(Map param);
+
+    HashMap searchOrderContent(long orderId);
 }
 
 

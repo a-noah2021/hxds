@@ -2641,7 +2641,400 @@ public R searchOrderByPage(@RequestBody @Valid SearchOrderByPageForm form){
    return R.ok().put("result",pageUtils);
 }
 ```
-3. 写
+3. 写 hxds-mis-vue/src/views/order.vue
 ```javascript
+ loadDataList(){
+   let that = this;
+   let data = {
+     page: that.pageIndex,
+     length: that.pageSize,
+     orderId: that.dataForm.orderId == ''? null:that.dataForm.orderId,
+     driverId: that.dataForm.driverId == ''? null:that.dataForm.driverId,
+     customId: that.dataForm.customId == ''? null:that.dataForm.customId,
+     status: that.dataForm.status == '' ? null : that.dataForm.status
+   }
+   if (that.dataForm.date != null && that.dataForm.date.length == 2) {
+     let startDate = that.dataForm.date[0];
+     let endDate = that.dataForm.date[1];
+     data.startDate = dayjs(startDate).format('YYYY-MM-DD');
+     data.endDate = dayjs(endDate).format('YYYY-MM-DD');
+   }
+   that.$http('order/searchOrderByPage', 'POST', data, true, function(resp) {
+     let result = resp.result;
+     let list = result.list;
+     for (let one of list) {
+       one.status = status[one.status + ''];
+       if (!one.hasOwnProperty('realMileage')) {
+         one.realMileage = '--';
+       }
+       if (!one.hasOwnProperty('realFee')) {
+         one.realFee = '--';
+       }
+     }
+     that.dataList = list;
+     that.totalCount = Number(result.totalCount);
+     that.dataListLoading = false;
+   });
+ },
+ sizeChangeHandle(val) {
+   this.pageSize = val;
+   this.pageIndex = 1;
+   this.loadDataList();
+ },
+ currentChangeHandle(val) {
+   this.pageIndex = val;
+   this.loadDataList();
+ },
+ searchHandle: function() {
+   this.$refs['dataForm'].validate(valid => {
+     if (valid) {
+       this.$refs['dataForm'].clearValidate();
+       this.loadDataList();
+     } else {
+       return false;
+     }
+   });
+ },
+ loadPanelData: function(ref, row) {
+   let data = {
+     orderId: row.id
+   };
+   ref.$http('order/searchOrderComprehensiveInfo', 'POST', data, true, function(resp) {
+     let result = resp.result;
+     let content = result.content;
 
+     let customerInfo = result.customerInfo;
+     ref.panel.customer.id = customerInfo.id;
+     ref.panel.customer.sex = customerInfo.sex;
+     ref.panel.customer.tel = customerInfo.tel;
+
+     let driverInfo = result.driverInfo;
+     ref.panel.driver.id = driverInfo.id;
+     ref.panel.driver.name = driverInfo.name;
+     ref.panel.driver.tel = driverInfo.tel;
+
+     ref.panel.order.carPlate = content.carPlate;
+     ref.panel.order.carType = content.carType;
+     let city = calculateCarPlateCity(content.carPlate);
+     ref.panel.order.city = city;
+
+     if (content.hasOwnProperty('acceptTime')) {
+       ref.panel.order.acceptTime = content.acceptTime;
+     } else {
+       ref.panel.order.acceptTime = '--';
+     }
+     if (content.hasOwnProperty('arriveTime')) {
+       ref.panel.order.arriveTime = content.arriveTime;
+     } else {
+       ref.panel.order.arriveTime = '--';
+     }
+     if (content.hasOwnProperty('startTime')) {
+       ref.panel.order.startTime = content.startTime;
+     } else {
+       ref.panel.order.startTime = '--';
+     }
+     if (content.hasOwnProperty('endTime')) {
+       ref.panel.order.endTime = content.endTime;
+     } else {
+       ref.panel.order.endTime = '--';
+     }
+     if (content.hasOwnProperty('waitingMinute')) {
+       ref.panel.order.waitingMinute = content.waitingMinute + '分钟';
+     } else {
+       ref.panel.order.waitingMinute = '--';
+     }
+     if (content.hasOwnProperty('driveMinute')) {
+       ref.panel.order.driveMinute = content.driveMinute + '分钟';
+     } else {
+       ref.panel.order.driveMinute = '--';
+     }
+     if (content.hasOwnProperty('realMileage')) {
+       ref.panel.order.realMileage = content.realMileage + '公里';
+       row.realMileage = content.realMileage;
+     } else {
+       ref.panel.order.realMileage = '--';
+       row.realMileage = '--';
+     }
+     if (content.hasOwnProperty('realFee')) {
+       ref.panel.order.realFee = content.realFee + '元';
+       row.realFee = content.realFee;
+     } else {
+       ref.panel.order.realFee = '--';
+       row.realFee = '--';
+     }
+     ref.panel.order.status = status[content.status + ''];
+     row.status = status[content.status + ''];
+     if (result.hasOwnProperty('chargeRule')) {
+       ref.panel.order.chargeRule = result.chargeRule.code;
+     } else {
+       ref.panel.order.chargeRule = '--';
+     }
+     if (result.hasOwnProperty('cancelRule')) {
+       ref.panel.order.cancelRule = result.cancelRule.code;
+     } else {
+       ref.panel.order.cancelRule = '--';
+     }
+     if (result.hasOwnProperty('profitsharingRule')) {
+       ref.panel.order.profitsharingRule = result.profitsharingRule.code;
+     } else {
+       ref.panel.order.profitsharingRule = '--';
+     }
+
+     ref.$nextTick(function() {
+       let startPlaceLocation = content.startPlaceLocation;
+       let endPlaceLocation = content.endPlaceLocation;
+       let mapCenter = new TMap.LatLng(startPlaceLocation.latitude, startPlaceLocation.longitude);
+       let map = new TMap.Map($(`.el-table__expanded-cell #order_${row.id}`)[0], {
+         center: mapCenter, //地图显示中心点
+         zoom: 13,
+         viewMode: '2D',
+         baseMap: {
+           type: 'vector',
+           features: ['base', 'label']
+         }
+       });
+
+       let driveLine = result.driveLine;
+       let coors = driveLine.routes[0].polyline;
+       let pl = [];
+       //坐标解压（返回的点串坐标，通过前向差分进行压缩，因此需要解压）
+       let kr = 1000000;
+       for (let i = 2; i < coors.length; i++) {
+         coors[i] = Number(coors[i - 2]) + Number(coors[i]) / kr;
+       }
+       //将解压后的坐标生成LatLng数组
+       for (let i = 0; i < coors.length; i += 2) {
+         pl.push(new TMap.LatLng(coors[i], coors[i + 1]));
+       }
+
+       let polylineLayer = new TMap.MultiPolyline({
+         id: 'polyline-layer', //图层唯一标识
+         map: map, //绘制到目标地图
+         styles: {
+           style_blue: new TMap.PolylineStyle({
+             color: 'rgba(190,188,188,1)',
+             width: 6,
+             lineCap: 'round' //线端头方式
+           })
+         },
+         geometries: [
+           {
+             id: 'pl_1',
+             styleId: 'style_blue',
+             paths: pl
+           }
+         ]
+       });
+
+       let markerLayer = new TMap.MultiMarker({
+         map: map,
+         styles: {
+           startStyle: new TMap.MarkerStyle({
+             width: 24,
+             height: 36,
+             anchor: { x: 16, y: 32 },
+             src: 'https://mapapi.qq.com/web/lbs/javascriptGL/demo/img/start.png'
+           }),
+           endStyle: new TMap.MarkerStyle({
+             width: 24,
+             height: 36,
+             anchor: { x: 16, y: 32 },
+             src: 'https://mapapi.qq.com/web/lbs/javascriptGL/demo/img/end.png'
+           }),
+           carStyle: new TMap.MarkerStyle({
+             width: 30,
+             height: 30,
+             src: '../order/driver-icon.png',
+             anchor: { x: 16, y: 32 }
+           })
+         },
+         geometries: [
+           //起点标记
+           {
+             id: '1',
+             styleId: 'startStyle',
+             position: new TMap.LatLng(startPlaceLocation.latitude, startPlaceLocation.longitude)
+           },
+           //终点标记
+           {
+             id: '2',
+             styleId: 'endStyle',
+             position: new TMap.LatLng(endPlaceLocation.latitude, endPlaceLocation.longitude)
+           }
+         ]
+       });
+       if (content.status == 4) {
+         let lastGps = result.lastGps;
+         markerLayer.add([
+           {
+             id: '3',
+             styleId: 'carStyle', //指定样式id
+             position: new TMap.LatLng(lastGps.latitude, lastGps.longitude)
+           }
+         ]);
+         ref.gpsTimer = setInterval(function() {
+           let data = {
+             orderId: row.id
+           };
+           ref.$http('order/searchOrderLastGps', 'POST', data, true, function(resp) {
+             if (resp.hasOwnProperty('result')) {
+               let lastGps = resp.result;
+               markerLayer.updateGeometries([
+                 {
+                   id: '3',
+                   styleId: 'carStyle',
+                   position: new TMap.LatLng(lastGps.latitude, lastGps.longitude)
+                 }
+               ]);
+             } else {
+               //重新加载面板数据
+               $(`.el-table__expanded-cell #order_${row.id}`).empty();
+               ref.loadPanelData(ref, row);
+               clearInterval(ref.gpsTimer);
+             }
+           });
+         }, 15 * 1000);
+       } else if (content.status >= 5 && content.status <= 8) {
+         let orderGps = result.orderGps;
+         let paths = [];
+         for (let one of orderGps) {
+           let temp = new TMap.LatLng(one.latitude, one.longitude);
+           paths.push(temp);
+         }
+         let polylineLayer = new TMap.MultiPolyline({
+           id: 'drive-polyline-layer', //图层唯一标识
+           map: map,
+           //折线样式定义
+           styles: {
+             style_blue: new TMap.PolylineStyle({
+               color: '#3777FF', //线填充色
+               width: 6 //折线宽度
+             })
+           },
+           //折线数据定义
+           geometries: [
+             {
+               id: 'pl_1',
+               styleId: 'style_blue',
+               paths: paths
+             }
+           ]
+         });
+       }
+     });
+   });
+ },
+ expand: function(row, expandedRows) {
+   let that = this;
+   if (expandedRows.length > 0) {
+     that.expands = [];
+     if (row) {
+       that.expands.push(row.id);
+       that.panel.id = `order_${row.id}`;
+       that.loadPanelData(that, row);
+     } else {
+       that.expands = [];
+     }
+   }
+ }
 ```
+### 展示详情最佳线路与实际线路
+1. 写 hxds-odr/src/main/java/com/example/hxds/odr/db/dao/OrderDao.xml 及其对应接口
+   写 hxds-odr/src/main/java/com/example/hxds/mis/api/service/OrderService.java#searchOrderContent 及其实现类
+   写 hxds-odr/src/main/java/com/example/hxds/odr/controller/form/SearchOrderContentForm.java
+   写 hxds-odr/src/main/java/com/example/hxds/odr/controller/OrderController#searchOrderContent
+```java
+HashMap searchOrderContent(long orderId);
+
+<select id="searchOrderContent" parameterType="long" resultType="HashMap">
+        SELECT CAST(o.driver_id AS CHAR)                      AS driverId,
+        CAST(o.customer_id AS CHAR)                    AS customerId,
+        o.car_plate                                    AS carPlate,
+        o.car_type                                     AS carType,
+        DATE_FORMAT(o.accept_time, '%Y-%m-%d %H:%i')   AS acceptTime,
+        DATE_FORMAT(o.arrive_time, '%Y-%m-%d %H:%i')   AS arriveTime,
+        DATE_FORMAT(o.start_time, '%Y-%m-%d %H:%i')    AS startTime,
+        DATE_FORMAT(o.end_time, '%Y-%m-%d %H:%i')      AS endTime,
+        o.waiting_minute                               AS waitingMinute,
+        TIMESTAMPDIFF(MINUTE,o.start_time, o.end_time) AS `driveMinute`,
+        CAST(o.real_mileage AS CHAR)                   AS realMileage,
+        CAST(o.real_fee AS CHAR)                       AS realFee,
+        o.`status`,
+        CAST(o.charge_rule_id AS CHAR)                 AS chargeRuleId,
+        CAST(o.cancel_rule_id AS CHAR)                 AS cancelRuleId,
+        CAST(p.rule_id AS CHAR)                        AS profitsharingRuleId,
+        o.start_place_location                         AS startPlaceLocation,
+        o.end_place_location                           AS endPlaceLocation
+        FROM tb_order o
+        LEFT JOIN tb_order_profitsharing p ON o.id = p.order_id
+        WHERE o.id = #{orderId}
+</select>
+        
+HashMap searchOrderContent(long orderId);
+
+@Override
+public HashMap searchOrderContent(long orderId) {
+     HashMap map = orderDao.searchOrderContent(orderId);
+     JSONObject startPlaceLocation = JSONUtil.parseObj(MapUtil.getStr(map, "startPlaceLocation"));
+     JSONObject endPlaceLocation = JSONUtil.parseObj(MapUtil.getStr(map, "endPlaceLocation"));
+     map.put("startPlaceLocation", startPlaceLocation);
+     map.put("endPlaceLocation", endPlaceLocation);
+     return map;
+}
+
+@Data
+@Schema(description = "查询订单详情的表单")
+public class SearchOrderContentForm {
+   @NotNull(message = "orderId不能为空")
+   @Min(value = 1, message = "orderId不能小于1")
+   @Schema(description = "订单ID")
+   private Long orderId;
+}
+
+@PostMapping("/searchOrderContent")
+@Operation(summary = "查询订单详情")
+public R searchOrderContent(@RequestBody @Valid SearchOrderContentForm form) {
+   HashMap map = orderService.searchOrderContent(form.getOrderId());
+   return R.ok().put("result", map);
+}
+```
+2. 写 hxds-cst/src/main/resources/mapper/CustomerDao.xml 及其对应接口
+   写 hxds-cst/src/main/java/com/example/hxds/cst/service/CustomerService.java#searchCustomerBriefInfo 及其实现类
+   写 hxds-cst/src/main/java/com/example/hxds/cst/controller/form/SearchCustomerBriefInfoForm.java
+   写 hxds-cst/src/main/java/com/example/hxds/cst/controller/CustomerController.java#searchCustomerBriefInfo
+```java
+HashMap searchCustomerBriefInfo(long customerId);
+
+<select id="searchCustomerBriefInfo" parameterType="long" resultType="HashMap">
+     SELECT CAST(id AS CHAR) AS id,
+     sex,
+     tel
+     FROM tb_customer
+     WHERE id = #{customerId};
+</select>
+
+HashMap searchCustomerBriefInfo(long customerId);
+
+@Override
+public HashMap searchCustomerBriefInfo(long customerId) {
+     HashMap map = customerDao.searchCustomerBriefInfo(customerId);
+     return map;
+}
+
+@Data
+@Schema(description = "查询客户简明信息的表单")
+public class SearchCustomerBriefInfoForm {
+   @NotNull(message = "customerId不能为空")
+   @Min(value = 1, message = "customerId不能小于1")
+   @Schema(description = "客户ID")
+   private Long customerId;
+}
+
+@PostMapping("/searchCustomerBriefInfo")
+@Operation(summary = "查询客户简明信息")
+public R searchCustomerBriefInfo(@RequestBody @Valid SearchCustomerBriefInfoForm form) {
+     HashMap map = customerService.searchCustomerBriefInfo(form.getCustomerId());
+     return R.ok().put("result", map);
+}
+```
+3. 写 

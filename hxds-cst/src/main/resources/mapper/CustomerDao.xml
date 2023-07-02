@@ -40,4 +40,11 @@
         FROM tb_customer
         WHERE id = #{customerId}
     </select>
+    <select id="searchCustomerBriefInfo" parameterType="long" resultType="HashMap">
+        SELECT CAST(id AS CHAR) AS id,
+               sex,
+               tel
+        FROM tb_customer
+        WHERE id = #{customerId};
+    </select>
 </mapper>

@@ -14,4 +14,6 @@ public interface CustomerDao {
     String login(String openId);
 
     HashMap searchCustomerInfoInOrder(long customerId);
+
+    HashMap searchCustomerBriefInfo(long customerId);
 }

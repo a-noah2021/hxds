@@ -1,6 +1,8 @@
 package com.example.hxds.odr.service.impl;
 
 import cn.hutool.core.map.MapUtil;
+import cn.hutool.json.JSONObject;
+import cn.hutool.json.JSONUtil;
 import com.codingapi.txlcn.tc.annotation.LcnTransaction;
 import com.example.hxds.common.exception.HxdsException;
 import com.example.hxds.common.util.PageUtils;
@@ -236,6 +238,16 @@ public class OrderServiceImpl implements OrderService {
         Integer length = (Integer) param.get("length");
         PageUtils pageUtils = new PageUtils(list, count, start, length);
         return pageUtils;
+    }
+
+    @Override
+    public HashMap searchOrderContent(long orderId) {
+        HashMap map = orderDao.searchOrderContent(orderId);
+        JSONObject startPlaceLocation = JSONUtil.parseObj(MapUtil.getStr(map, "startPlaceLocation"));
+        JSONObject endPlaceLocation = JSONUtil.parseObj(MapUtil.getStr(map, "endPlaceLocation"));
+        map.put("startPlaceLocation", startPlaceLocation);
+        map.put("endPlaceLocation", endPlaceLocation);
+        return map;
     }
 
 }

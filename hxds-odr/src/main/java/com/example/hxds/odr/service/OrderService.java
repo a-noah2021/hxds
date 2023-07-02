@@ -42,4 +42,6 @@ public interface OrderService {
     int updateOrderStatus(Map param);
 
     PageUtils searchOrderByPage(Map param);
+
+    HashMap searchOrderContent(long orderId);
 }
