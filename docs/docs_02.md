@@ -3037,4 +3037,43 @@ public R searchCustomerBriefInfo(@RequestBody @Valid SearchCustomerBriefInfoForm
      return R.ok().put("result", map);
 }
 ```
-3. 写 
+3. 写 hxds-dr/src/main/resources/mapper/DriverDao.xml 及其对应接口
+   写 hxds-dr/src/main/java/com/example/hxds/dr/service/CustomerService.java#searchDriverBriefInfo 及其实现类
+   写 hxds-dr/src/main/java/com/example/hxds/dr/controller/form/SearchDriverBriefInfoForm.java
+   写 hxds-dr/src/main/java/com/example/hxds/dr/controller/DriverController.java#searchDriverBriefInfo
+```java
+HashMap searchDriverBriefInfo(long driverId);
+
+<select id="searchDriverBriefInfo" parameterType="long" resultType="HashMap">
+     SELECT CAST(id AS CHAR) AS id,
+     `name`,
+     tel,
+     photo
+     FROM tb_driver
+     WHERE id = #{driverId}
+</select>
+
+HashMap searchDriverBriefInfo(long driverId);
+
+@Override
+public HashMap searchDriverBriefInfo(long driverId) {
+     HashMap map = driverDao.searchDriverBriefInfo(driverId);
+     return map;
+}
+
+@Data
+@Schema(description = "查询司机简明信息的表单")
+public class SearchDriverBriefInfoForm {
+   @NotNull(message = "driverId不能为空")
+   @Min(value = 1, message = "driverId不能小于1")
+   @Schema(description = "司机ID")
+   private Long driverId;
+}
+
+@PostMapping("/searchDriverBriefInfo")
+@Operation(summary = "查询司机简明信息")
+public R searchDriverBriefInfo(@RequestBody @Valid SearchDriverBriefInfoForm form) {
+     HashMap map = driverService.searchDriverBriefInfo(form.getDriverId());
+     return R.ok().put("result", map);
+}
+```

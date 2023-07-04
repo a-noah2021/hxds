@@ -211,4 +211,10 @@ public class DriverServiceImpl implements DriverService {
         return rows;
     }
 
+    @Override
+    public HashMap searchDriverBriefInfo(long driverId) {
+        HashMap map = driverDao.searchDriverBriefInfo(driverId);
+        return map;
+    }
+
 }
