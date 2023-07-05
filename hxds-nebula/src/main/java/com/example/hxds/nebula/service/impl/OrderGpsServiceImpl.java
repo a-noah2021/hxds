@@ -8,6 +8,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import javax.annotation.Resource;
+import java.util.HashMap;
 import java.util.List;
 
 /**
@@ -30,5 +31,17 @@ public class OrderGpsServiceImpl implements OrderGpsService {
             rows += orderGpsDao.insert(entity);
         }
         return rows;
+    }
+
+    @Override
+    public List<HashMap> searchOrderGps(long orderId) {
+        List<HashMap> list = orderGpsDao.searchOrderGps(orderId);
+        return list;
+    }
+
+    @Override
+    public HashMap searchOrderLastGps(long orderId) {
+        HashMap map = orderGpsDao.searchOrderLastGps(orderId);
+        return map;
     }
 }

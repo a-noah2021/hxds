@@ -3077,3 +3077,80 @@ public R searchDriverBriefInfo(@RequestBody @Valid SearchDriverBriefInfoForm for
      return R.ok().put("result", map);
 }
 ```
+4. 写 hxds-nebula/src/main/resources/mapper/OrderGpsDao.xml 及其对应接口
+   写 hxds-nebula/src/main/java/com/example/hxds/nebula/service/OrderGpsService.java 及其实现类
+   写 hxds-nebula/src/main/java/com/example/hxds/nebula/controller/form/SearchOrderGpsForm.java
+   写 hxds-nebula/src/main/java/com/example/hxds/nebula/controller/form/SearchOrderLastGpsForm.java
+   写 hxds-nebula/src/main/java/com/example/hxds/nebula/controller/OrderGpsController.java
+```java
+List<HashMap> searchOrderGps(long orderId);
+
+HashMap searchOrderLastGps(long orderId);
+
+<select id="searchOrderGps" parameterType="long" resultType="HashMap">
+        SELECT "id",
+        "latitude",
+        "longitude",
+        TO_CHAR("create_time",'yyyy-MM-dd HH:mm:ss') AS "createTime"
+        FROM hxds.order_gps
+        WHERE "order_id" = #{orderId}
+</select>
+<select id="searchOrderLastGps" parameterType="long" resultType="HashMap">
+        SELECT "id",
+        "latitude",
+        "longitude",
+        TO_CHAR("create_time",'yyyy-MM-dd HH:mm:ss') AS "createTime"
+        FROM hxds.order_gps
+        WHERE "order_id" = #{orderId}
+        ORDER BY "id" DESC
+        LIMIT 1
+</select>
+
+List<HashMap> searchOrderGps(long orderId);
+
+HashMap searchOrderLastGps(long orderId);
+
+@Override
+public List<HashMap> searchOrderGps(long orderId) {
+    List<HashMap> list = orderGpsDao.searchOrderGps(orderId);
+     return list;
+}
+
+@Override
+public HashMap searchOrderLastGps(long orderId) {
+     HashMap map = orderGpsDao.searchOrderLastGps(orderId);
+     return map;
+}
+
+@Data
+@Schema(description = "获取某个订单的GPS定位的表单")
+public class SearchOrderGpsForm {
+   @NotNull(message = "orderId不能为空")
+   @Min(value = 1, message = "orderId不能小于1")
+   @Schema(description = "订单ID")
+   private Long orderId;
+}
+
+@Data
+@Schema(description = "获取某个订单最后的GPS定位的表单")
+public class SearchOrderLastGpsForm {
+   @NotNull(message = "orderId不能为空")
+   @Min(value = 1, message = "orderId不能小于1")
+   @Schema(description = "订单ID")
+   private Long orderId;
+}
+
+@PostMapping("/searchOrderGps")
+@Operation(summary = "获取某个订单所有的GPS定位")
+public R searchOrderGps(@RequestBody @Valid SearchOrderGpsForm form){
+   ArrayList<HashMap> list = orderGpsService.searchOrderGps(form.getOrderId());
+   return R.ok().put("result",list);
+}
+
+@PostMapping("/searchOrderLastGps")
+@Operation(summary = "获取某个订单最后的GPS定位")
+public R searchOrderLastGps(@RequestBody @Valid SearchOrderLastGpsForm form){
+   HashMap map = orderGpsService.searchOrderLastGps(form.getOrderId());
+   return R.ok().put("result",map);
+}
+```

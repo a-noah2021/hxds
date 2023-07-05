@@ -2,6 +2,7 @@ package com.example.hxds.nebula.service;
 
 import com.example.hxds.nebula.controller.vo.InsertOrderGpsVO;
 
+import java.util.HashMap;
 import java.util.List;
 
 /**
@@ -13,4 +14,8 @@ import java.util.List;
 public interface OrderGpsService {
 
     int insertOrderGps(List<InsertOrderGpsVO> list);
+
+    List<HashMap> searchOrderGps(long orderId);
+
+    HashMap searchOrderLastGps(long orderId);
 }
