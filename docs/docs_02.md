@@ -3154,3 +3154,33 @@ public R searchOrderLastGps(@RequestBody @Valid SearchOrderLastGpsForm form){
    return R.ok().put("result",map);
 }
 ```
+5. 写 hxds-mis-api/src/main/java/com/example/hxds/mis/api/controller/form/SearchOrderContentForm.java
+   写 hxds-mis-api/src/main/java/com/example/hxds/mis/api/feign/OdrServiceApi.java#searchOrderContent
+   写 hxds-mis-api/src/main/java/com/example/hxds/mis/api/controller/form/SearchCustomerBriefInfoForm.java
+   写 hxds-mis-api/src/main/java/com/example/hxds/mis/api/feign/CstServiceApi.java#searchCustomerBriefInfo
+```java
+@Data
+@Schema(description = "查询订单详情的表单")
+public class SearchOrderContentForm {
+    @NotNull(message = "orderId不能为空")
+    @Min(value = 1, message = "orderId不能小于1")
+    @Schema(description = "订单ID")
+    private Long orderId;
+}
+
+@PostMapping("/order/searchOrderContent")
+R searchOrderContent(SearchOrderContentForm form);
+
+@Data
+@Schema(description = "查询客户简明信息的表单")
+public class SearchCustomerBriefInfoForm {
+   @NotNull(message = "customerId不能为空")
+   @Min(value = 1, message = "customerId不能小于1")
+   @Schema(description = "客户ID")
+   private Long customerId;
+}
+
+@PostMapping("/customer/searchCustomerBriefInfo")
+R searchCustomerBriefInfo(SearchCustomerBriefInfoForm form);
+
+```
