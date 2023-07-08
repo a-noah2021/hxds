@@ -3158,6 +3158,8 @@ public R searchOrderLastGps(@RequestBody @Valid SearchOrderLastGpsForm form){
    写 hxds-mis-api/src/main/java/com/example/hxds/mis/api/feign/OdrServiceApi.java#searchOrderContent
    写 hxds-mis-api/src/main/java/com/example/hxds/mis/api/controller/form/SearchCustomerBriefInfoForm.java
    写 hxds-mis-api/src/main/java/com/example/hxds/mis/api/feign/CstServiceApi.java#searchCustomerBriefInfo
+   写 hxds-mis-api/src/main/java/com/example/hxds/mis/api/controller/form/SearchDriverBriefInfoForm.java
+   写 hxds-mis-api/src/main/java/com/example/hxds/mis/api/feign/CstServiceApi.java#searchDriverBriefInfo
 ```java
 @Data
 @Schema(description = "查询订单详情的表单")
@@ -3183,4 +3185,15 @@ public class SearchCustomerBriefInfoForm {
 @PostMapping("/customer/searchCustomerBriefInfo")
 R searchCustomerBriefInfo(SearchCustomerBriefInfoForm form);
 
+@Data
+@Schema(description = "查询司机简明信息的表单")
+public class SearchDriverBriefInfoForm {
+   @NotNull(message = "driverId不能为空")
+   @Min(value = 1, message = "driverId不能小于1")
+   @Schema(description = "司机ID")
+   private Long driverId;
+}
+
+@PostMapping("/driver/searchDriverBriefInfo")
+R searchDriverBriefInfo(SearchDriverBriefInfoForm form);
 ```

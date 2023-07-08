@@ -24,4 +24,7 @@ public interface DrServiceApi {
 
     @PostMapping("/driver/updateDriverRealAuth")
     R updateDriverRealAuth(UpdateDriverRealAuthForm form);
+
+    @PostMapping("/driver/searchDriverBriefInfo")
+    R searchDriverBriefInfo(SearchDriverBriefInfoForm form);
 }
