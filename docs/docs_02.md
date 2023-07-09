@@ -3159,7 +3159,7 @@ public R searchOrderLastGps(@RequestBody @Valid SearchOrderLastGpsForm form){
    写 hxds-mis-api/src/main/java/com/example/hxds/mis/api/controller/form/SearchCustomerBriefInfoForm.java
    写 hxds-mis-api/src/main/java/com/example/hxds/mis/api/feign/CstServiceApi.java#searchCustomerBriefInfo
    写 hxds-mis-api/src/main/java/com/example/hxds/mis/api/controller/form/SearchDriverBriefInfoForm.java
-   写 hxds-mis-api/src/main/java/com/example/hxds/mis/api/feign/CstServiceApi.java#searchDriverBriefInfo
+   写 hxds-mis-api/src/main/java/com/example/hxds/mis/api/feign/DrServiceApi.java#searchDriverBriefInfo
 ```java
 @Data
 @Schema(description = "查询订单详情的表单")
@@ -3196,4 +3196,217 @@ public class SearchDriverBriefInfoForm {
 
 @PostMapping("/driver/searchDriverBriefInfo")
 R searchDriverBriefInfo(SearchDriverBriefInfoForm form);
+```
+6. 写 hxds-mis-api/src/main/java/com/example/hxds/mis/api/controller/form/SearchChargeRuleByIdForm.java
+   写 hxds-mis-api/src/main/java/com/example/hxds/mis/api/controller/form/SearchCancelRuleByIdForm.java
+   写 hxds-mis-api/src/main/java/com/example/hxds/mis/api/controller/form/SearchProfitsharingRuleByIdForm.java
+   写 hxds-mis-api/src/main/java/com/example/hxds/mis/api/feign/RuleServiceApi.java
+```java
+@Data
+@Schema(description = "根据ID查询费用规则的表单")
+public class SearchChargeRuleByIdForm {
+    @NotNull(message = "ruleId不为空")
+    @Min(value = 1, message = "ruleId不能小于1")
+    @Schema(description = "规则ID")
+    private Long ruleId;
+}
+
+@Data
+@Schema(description = "根据ID查询取消规则的表单")
+public class SearchCancelRuleByIdForm {
+   @NotNull(message = "ruleId不为空")
+   @Min(value = 1, message = "ruleId不能小于1")
+   @Schema(description = "规则ID")
+   private Long ruleId;
+}
+
+@Data
+@Schema(description = "根据ID查询分账规则的表单")
+public class SearchProfitsharingRuleByIdForm {
+   @NotNull(message = "ruleId不为空")
+   @Min(value = 1, message = "ruleId不能小于1")
+   @Schema(description = "规则ID")
+   private Long ruleId;
+}
+
+@FeignClient(value = "hxds-rule")
+public interface RuleServiceApi {
+   @PostMapping("/charge/searchChargeRuleById")
+   R searchChargeRuleById(SearchChargeRuleByIdForm form);
+
+   @PostMapping("/cancel/searchCancelRuleById")
+   R searchCancelRuleById(SearchCancelRuleByIdForm form);
+
+   @PostMapping("/profitsharing/searchProfitsharingRuleById")
+   R searchProfitsharingRuleById(SearchProfitsharingRuleByIdForm form);
+}
+```
+7. 写 hxds-mis-api/src/main/java/com/example/hxds/mis/api/controller/form/CalculateDriveLineForm.java
+   写 hxds-mis-api/src/main/java/com/example/hxds/mis/api/feign/MpsServiceApi.java
+```java
+@Data
+@Schema(description = "计算行驶路线的表单")
+public class CalculateDriveLineForm {
+    @NotBlank(message = "startPlaceLatitude不能为空")
+    @Pattern(regexp = "^(([1-8]\\d?)|([1-8]\\d))(\\.\\d{1,18})|90|0(\\.\\d{1,18})?$", message = "startPlaceLatitude内容不正确")
+    @Schema(description = "订单起点的纬度")
+    private String startPlaceLatitude;
+
+    @NotBlank(message = "startPlaceLongitude不能为空")
+    @Pattern(regexp = "^(([1-9]\\d?)|(1[0-7]\\d))(\\.\\d{1,18})|180|0(\\.\\d{1,18})?$", message = "startPlaceLongitude内容不正确")
+    @Schema(description = "订单起点的经度")
+    private String startPlaceLongitude;
+
+    @NotBlank(message = "endPlaceLatitude不能为空")
+    @Pattern(regexp = "^(([1-8]\\d?)|([1-8]\\d))(\\.\\d{1,18})|90|0(\\.\\d{1,18})?$", message = "endPlaceLatitude内容不正确")
+    @Schema(description = "订单终点的纬度")
+    private String endPlaceLatitude;
+
+    @NotBlank(message = "endPlaceLongitude不能为空")
+    @Pattern(regexp = "^(([1-9]\\d?)|(1[0-7]\\d))(\\.\\d{1,18})|180|0(\\.\\d{1,18})?$", message = "endPlaceLongitude内容不正确")
+    @Schema(description = "订单起点的经度")
+    private String endPlaceLongitude;
+}
+
+@FeignClient(value = "hxds-mps")
+public interface MpsServiceApi {
+   @PostMapping("/map/calculateDriveLine")
+   R calculateDriveLine(CalculateDriveLineForm form);
+}
+```
+8. 写 hxds-mis-api/src/main/java/com/example/hxds/mis/api/controller/form/SearchOrderGpsForm.java
+   写 hxds-mis-api/src/main/java/com/example/hxds/mis/api/controller/form/SearchOrderLastGpsForm.java
+   写 hxds-mis-api/src/main/java/com/example/hxds/mis/api/feign/NebulaServiceApi.java
+```java
+@Data
+@Schema(description = "获取某个订单的GPS定位的表单")
+public class SearchOrderGpsForm {
+    @NotNull(message = "orderId不能为空")
+    @Min(value = 1, message = "orderId不能小于1")
+    @Schema(description = "订单ID")
+    private Long orderId;
+}
+
+@Data
+@Schema(description = "获取某个订单最后的GPS定位的表单")
+public class SearchOrderLastGpsForm {
+   @NotNull(message = "orderId不能为空")
+   @Min(value = 1, message = "orderId不能小于1")
+   @Schema(description = "订单ID")
+   private Long orderId;
+}
+
+@FeignClient(value = "hxds-nebula")
+public interface NebulaServiceApi {
+   @PostMapping("/order/gps/searchOrderGps")
+   R searchOrderGps(SearchOrderGpsForm form);
+
+   @PostMapping("/order/gps/searchOrderLastGps")
+   R searchOrderLastGps(SearchOrderLastGpsForm form);
+}
+```
+9. 写 hxds-mis-api/src/main/java/com/example/hxds/mis/api/service/OrderService.java#searchOrderComprehensiveInfo 及其实现类
+   写 hxds-mis-api/src/main/java/com/example/hxds/mis/api/controller/form/SearchOrderComprehensiveInfoForm.java
+   写 hxds-mis-api/src/main/java/com/example/hxds/mis/api/controller/OrderController.java#searchOrderComprehensiveInfo
+```java
+Map searchOrderComprehensiveInfo(long orderId);
+
+@Override
+public Map searchOrderComprehensiveInfo(long orderId) {
+    Map map = new HashMap();
+
+    SearchOrderContentForm form_1 = new SearchOrderContentForm();
+    form_1.setOrderId(orderId);
+    R r = odrServiceApi.searchOrderContent(form_1);
+    if (!r.containsKey("result")) {
+        throw new HxdsException("不存在订单记录");
+    }
+    HashMap content = (HashMap) r.get("result");
+    map.put("content", content);
+
+    long customerId = MapUtil.getLong(content, "customerId");
+    SearchCustomerBriefInfoForm form_2 = new SearchCustomerBriefInfoForm();
+    form_2.setCustomerId(customerId);
+    r = cstServiceApi.searchCustomerBriefInfo(form_2);
+    HashMap customerInfo = (HashMap) r.get("result");
+    map.put("customerInfo", customerInfo);
+
+    long driverId = MapUtil.getLong(content, "driverId");
+    SearchDriverBriefInfoForm form_3 = new SearchDriverBriefInfoForm();
+    form_3.setDriverId(driverId);
+    r = drServiceApi.searchDriverBriefInfo(form_3);
+    HashMap driverInfo = (HashMap) r.get("result");
+    map.put("driverInfo", driverInfo);
+
+    if (content.containsKey("chargeRuleId")) {
+        long chargeRuleId = MapUtil.getLong(content, "chargeRuleId");
+        SearchChargeRuleByIdForm form_4 = new SearchChargeRuleByIdForm();
+        form_4.setRuleId(chargeRuleId);
+        r = ruleServiceApi.searchChargeRuleById(form_4);
+        HashMap chargeRule = (HashMap) r.get("result");
+        map.put("chargeRule", chargeRule);
+    }
+
+    if (content.containsKey("cancelRuleId")) {
+        long cancelRuleId = MapUtil.getLong(content, "cancelRuleId");
+        SearchCancelRuleByIdForm form_5 = new SearchCancelRuleByIdForm();
+        form_5.setRuleId(cancelRuleId);
+        r = ruleServiceApi.searchCancelRuleById(form_5);
+        HashMap cancelRule = (HashMap) r.get("result");
+        map.put("cancelRule", cancelRule);
+    }
+
+    if (content.containsKey("profitsharingRuleId")) {
+        long profitsharingRuleId = MapUtil.getLong(content, "profitsharingRuleId");
+        SearchProfitsharingRuleByIdForm form_6 = new SearchProfitsharingRuleByIdForm();
+        form_6.setRuleId(profitsharingRuleId);
+        r = ruleServiceApi.searchProfitsharingRuleById(form_6);
+        HashMap profitsharingRule = (HashMap) r.get("result");
+        map.put("profitsharingRule", profitsharingRule);
+    }
+
+    CalculateDriveLineForm form_7 = new CalculateDriveLineForm();
+    HashMap startPlaceLocation = (HashMap) content.get("startPlaceLocation");
+    HashMap endPlaceLocation = (HashMap) content.get("endPlaceLocation");
+    form_7.setStartPlaceLatitude(MapUtil.getStr(startPlaceLocation, "latitude"));
+    form_7.setStartPlaceLongitude(MapUtil.getStr(startPlaceLocation, "longitude"));
+    form_7.setEndPlaceLatitude(MapUtil.getStr(endPlaceLocation, "latitude"));
+    form_7.setEndPlaceLongitude(MapUtil.getStr(endPlaceLocation, "longitude"));
+    r = mpsServiceApi.calculateDriveLine(form_7);
+    HashMap driveLine = (HashMap) r.get("result");
+    map.put("driveLine", driveLine);
+
+    int status = MapUtil.getInt(content, "status");
+    if (status >= 5 && status <= 8) {
+        SearchOrderGpsForm form_8 = new SearchOrderGpsForm();
+        form_8.setOrderId(orderId);
+        r = nebulaServiceApi.searchOrderGps(form_8);
+        ArrayList<HashMap> orderGps = (ArrayList<HashMap>) r.get("result");
+        map.put("orderGps", orderGps);
+    } else if (status == 4) {
+        SearchOrderLastGpsForm form_9 = new SearchOrderLastGpsForm();
+        form_9.setOrderId(orderId);
+        r = nebulaServiceApi.searchOrderLastGps(form_9);
+        HashMap lastGps = (HashMap) r.get("result");
+        map.put("lastGps", lastGps);
+    }
+    return map;
+}
+
+@Data
+@Schema(description = "查询订单综合信息")
+public class SearchOrderComprehensiveInfoForm {
+   @NotNull(message = "orderId不能为空")
+   @Min(value = 1, message = "orderId不能小于1")
+   @Schema(description = "订单ID")
+   private Long orderId;
+}
+
+@PostMapping("/searchOrderComprehensiveInfo")
+@SaCheckPermission(value = {"ROOT", "ORDER:SELECT"}, mode = SaMode.OR)
+@Operation(summary = "查询订单")
+public R searchOrderComprehensiveInfo(@RequestBody @Valid SearchOrderComprehensiveInfoForm form){
+   Map map = orderService.searchOrderComprehensiveInfo(form.getOrderId());
+   return R.ok().put("result",map);
+}
 ```
