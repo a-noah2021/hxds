@@ -6,10 +6,10 @@ import com.example.hxds.common.util.PageUtils;
 import com.example.hxds.common.util.R;
 import com.example.hxds.mis.api.controller.form.SearchOrderByPageForm;
 import com.example.hxds.mis.api.controller.form.SearchOrderComprehensiveInfoForm;
+import com.example.hxds.mis.api.controller.form.SearchOrderLastGpsForm;
 import com.example.hxds.mis.api.service.OrderService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
-import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -46,6 +46,14 @@ public class OrderController {
     @Operation(summary = "查询订单")
     public R searchOrderComprehensiveInfo(@RequestBody @Valid SearchOrderComprehensiveInfoForm form){
         Map map = orderService.searchOrderComprehensiveInfo(form.getOrderId());
+        return R.ok().put("result",map);
+    }
+
+    @PostMapping("/searchOrderLastGps")
+    @SaCheckPermission(value = {"ROOT", "ORDER:SELECT"}, mode = SaMode.OR)
+    @Operation(summary = "获取某个订单最后的GPS定位")
+    public R searchOrderLastGps(@RequestBody @Valid SearchOrderLastGpsForm form){
+        Map map = orderService.searchOrderLastGps(form);
         return R.ok().put("result",map);
     }
 }

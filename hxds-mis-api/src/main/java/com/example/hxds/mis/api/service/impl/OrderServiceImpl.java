@@ -130,4 +130,21 @@ public class OrderServiceImpl implements OrderService {
         }
         return map;
     }
+
+    @Override
+    public Map searchOrderLastGps(SearchOrderLastGpsForm form) {
+        SearchOrderStatusForm statusForm=new SearchOrderStatusForm();
+        statusForm.setOrderId(form.getOrderId());
+        R r = odrServiceApi.searchOrderStatus(statusForm);
+        if (!r.containsKey("result")) {
+            throw new HxdsException("没有对应的订单记录");
+        }
+        int status = MapUtil.getInt(r, "result");
+        if(status==4){
+            r=nebulaServiceApi.searchOrderLastGps(form);
+            HashMap lastGps = (HashMap) r.get("result");
+            return lastGps;
+        }
+        return null;
+    }
 }

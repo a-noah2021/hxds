@@ -3410,3 +3410,55 @@ public R searchOrderComprehensiveInfo(@RequestBody @Valid SearchOrderComprehensi
    return R.ok().put("result",map);
 }
 ```
+10. 写 hxds-mis-api/src/main/java/com/example/hxds/mis/api/controller/form/SearchOrderStatusForm.java
+    写 hxds-mis-api/src/main/java/com/example/hxds/mis/api/feign/OdrServiceApi.java#searchOrderStatus
+    写 hxds-mis-api/src/main/java/com/example/hxds/mis/api/service/OrderService.java#searchOrderLastGps 及其实现类
+    写 hxds-mis-api/src/main/java/com/example/hxds/mis/api/controller/OrderController.java#searchOrderLastGps
+```java
+@Data
+@Schema(description = "查询订单状态的表单")
+public class SearchOrderStatusForm {
+   @NotNull(message = "orderId不能为空")
+   @Min(value = 1, message = "orderId不能小于1")
+   @Schema(description = "订单ID")
+   private Long orderId;
+
+   @Min(value = 1, message = "driverId不能小于1")
+   @Schema(description = "司机ID")
+   private Long driverId;
+
+   @Min(value = 1, message = "customerId不能小于1")
+   @Schema(description = "客户ID")
+   private Long customerId;
+}
+
+@PostMapping("/order/searchOrderStatus")
+R searchOrderStatus(SearchOrderStatusForm form);
+
+Map searchOrderLastGps(SearchOrderLastGpsForm form);
+
+@Override
+public Map searchOrderLastGps(SearchOrderLastGpsForm form) {
+   SearchOrderStatusForm statusForm=new SearchOrderStatusForm();
+   statusForm.setOrderId(form.getOrderId());
+   R r = odrServiceApi.searchOrderStatus(statusForm);
+   if (!r.containsKey("result")) {
+      throw new HxdsException("没有对应的订单记录");
+   }
+   int status = MapUtil.getInt(r, "result");
+   if(status==4){
+      r=nebulaServiceApi.searchOrderLastGps(form);
+      HashMap lastGps = (HashMap) r.get("result");
+      return lastGps;
+   }
+   return null;
+}
+
+@PostMapping("/searchOrderLastGps")
+@SaCheckPermission(value = {"ROOT", "ORDER:SELECT"}, mode = SaMode.OR)
+@Operation(summary = "获取某个订单最后的GPS定位")
+public R searchOrderLastGps(@RequestBody @Valid SearchOrderLastGpsForm form){
+   Map map = orderService.searchOrderLastGps(form);
+   return R.ok().put("result",map);
+}
+```
