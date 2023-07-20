@@ -1,6 +1,7 @@
 package com.example.hxds.odr.service.impl;
 
 import cn.hutool.core.map.MapUtil;
+import cn.hutool.json.JSON;
 import cn.hutool.json.JSONObject;
 import cn.hutool.json.JSONUtil;
 import com.codingapi.txlcn.tc.annotation.LcnTransaction;
@@ -12,6 +13,7 @@ import com.example.hxds.odr.db.pojo.OrderBillEntity;
 import com.example.hxds.odr.db.pojo.OrderEntity;
 import com.example.hxds.odr.service.OrderService;
 import com.google.common.collect.Lists;
+import com.google.common.collect.Maps;
 import org.springframework.dao.DataAccessException;
 import org.springframework.data.redis.connection.RedisConnection;
 import org.springframework.data.redis.core.RedisCallback;
@@ -22,6 +24,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import javax.annotation.Resource;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -248,6 +251,26 @@ public class OrderServiceImpl implements OrderService {
         map.put("startPlaceLocation", startPlaceLocation);
         map.put("endPlaceLocation", endPlaceLocation);
         return map;
+    }
+
+    @Override
+    public List<Map> searchOrderStartLocationIn30Days() {
+        List<String> list = orderDao.searchOrderStartLocationIn30Days();
+        List<Map> result = Lists.newArrayList();
+        list.forEach(location -> {
+            JSONObject json = JSONUtil.parseObj(location);
+            String latitude = json.getStr("latitude");
+            String longitude = json.getStr("longitude");
+            latitude = latitude.substring(0, latitude.length() - 4);
+            latitude += "0001";
+            longitude = longitude.substring(0, longitude.length() - 4);
+            longitude += "0001";
+            Map map = Maps.newHashMap();
+            map.put("latitude", latitude);
+            map.put("longitude", longitude);
+            result.add(map);
+        });
+        return result;
     }
 
 }

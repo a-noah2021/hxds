@@ -3462,3 +3462,50 @@ public R searchOrderLastGps(@RequestBody @Valid SearchOrderLastGpsForm form){
    return R.ok().put("result",map);
 }
 ```
+### 分析订单执行的热点区域
+1. 写 hxds-odr/src/main/java/com/example/hxds/odr/db/dao/OrderDao.xml 及其对应接口
+   写 hxds-odr/src/main/java/com/example/hxds/mis/api/service/OrderService.java#searchOrderStartLocationIn30Days 及其实现类
+   写 hxds-odr/src/main/java/com/example/hxds/odr/controller/OrderController#searchOrderStartLocationIn30Days
+```java
+List<String> searchOrderStartLocationIn30Days();
+
+<select id="searchOrderStartLocationIn30Days" resultType="String">
+        SELECT start_place_location
+        FROM tb_order
+        WHERE start_time IS NOT NULL
+        AND start_time BETWEEN TIMESTAMPADD(DAY, -30, NOW()) AND NOW();
+</select>
+
+List<Map> searchOrderStartLocationIn30Days();
+
+@Override
+public List<Map> searchOrderStartLocationIn30Days() {
+     List<String> list = orderDao.searchOrderStartLocationIn30Days();
+     List<Map> result = Lists.newArrayList();
+     list.forEach(location -> {
+        JSONObject json = JSONUtil.parseObj(location);
+        String latitude = json.getStr("latitude");
+        String longitude = json.getStr("longitude");
+        latitude = latitude.substring(0, latitude.length() - 4);
+        latitude += "0001";
+        longitude = longitude.substring(0, longitude.length() - 4);
+        longitude += "0001";
+        Map map = Maps.newHashMap();
+        map.put("latitude", latitude);
+        map.put("longitude", longitude);
+        result.add(map);
+     });
+     return result;
+}
+
+@PostMapping("/searchOrderStartLocationIn30Days")
+@Operation(summary = "查询30天以内订单上车定点位")
+public R searchOrderStartLocationIn30Days() {
+     List<Map> result = orderService.searchOrderStartLocationIn30Days();
+     return R.ok().put("result", result);
+}
+```
+【说明】在com.example.hxds.odr.service.impl 包 OrderServiceImpl.java 接口中,实现抽象方法。为了能把相 邻的代驾上车点坐标合并到一起,于是我们要
+抹掉上车点坐标的后四位立小数。因为腾讯位置服务要求经纬度坐标必须精确到小数点后6位,于是有人就想给经纬度坐标补上0000,这是不行的。由于生成热力图的时候,我们
+需要先把数据导出成Excel文件,在Excel文件中1233.790000这样的数字就自动被转换成123.79了,并不能满足腾讯位置服务的要求。所以我们给经纬度坐标补上的是0001,
+形成的数字例如123.790001,这样导出到Excel文件就不会丢失数据了。
