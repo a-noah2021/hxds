@@ -233,4 +233,10 @@
                  LEFT JOIN tb_order_profitsharing p ON o.id = p.order_id
         WHERE o.id = #{orderId}
     </select>
+    <select id="searchOrderStartLocationIn30Days" resultType="String">
+        SELECT start_place_location
+        FROM tb_order
+        WHERE start_time IS NOT NULL
+          AND start_time BETWEEN TIMESTAMPADD(DAY, -30, NOW()) AND NOW();
+    </select>
 </mapper>

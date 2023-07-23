@@ -5,6 +5,7 @@ import com.example.hxds.odr.db.pojo.OrderBillEntity;
 import com.example.hxds.odr.db.pojo.OrderEntity;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -44,4 +45,6 @@ public interface OrderService {
     PageUtils searchOrderByPage(Map param);
 
     HashMap searchOrderContent(long orderId);
+
+    List<Map> searchOrderStartLocationIn30Days();
 }

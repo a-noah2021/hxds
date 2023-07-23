@@ -19,6 +19,7 @@ import javax.annotation.Resource;
 import javax.validation.Valid;
 import java.math.BigDecimal;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import static com.example.hxds.common.constants.HxdsConstants.*;
@@ -184,5 +185,12 @@ public class OrderController {
     public R searchOrderContent(@RequestBody @Valid SearchOrderContentForm form) {
         HashMap map = orderService.searchOrderContent(form.getOrderId());
         return R.ok().put("result", map);
+    }
+
+    @PostMapping("/searchOrderStartLocationIn30Days")
+    @Operation(summary = "查询30天以内订单上车定点位")
+    public R searchOrderStartLocationIn30Days() {
+        List<Map> result = orderService.searchOrderStartLocationIn30Days();
+        return R.ok().put("result", result);
     }
 }
