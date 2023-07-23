@@ -3462,3 +3462,250 @@ public R searchOrderLastGps(@RequestBody @Valid SearchOrderLastGpsForm form){
    return R.ok().put("result",map);
 }
 ```
+11. 写 hxds-mis-vue/src/views/order.vue#loadPanelData
+    写 hxds-mis-vue/src/views/order.vue#expand
+```vue
+ loadPanelData: function(ref, row) {
+   let data = {
+     orderId: row.id
+   };
+   ref.$http('order/searchOrderComprehensiveInfo', 'POST', data, true, function(resp) {
+     let result = resp.result;
+     let content = result.content;
+
+     let customerInfo = result.customerInfo;
+     ref.panel.customer.id = customerInfo.id;
+     ref.panel.customer.sex = customerInfo.sex;
+     ref.panel.customer.tel = customerInfo.tel;
+
+     let driverInfo = result.driverInfo;
+     ref.panel.driver.id = driverInfo.id;
+     ref.panel.driver.name = driverInfo.name;
+     ref.panel.driver.tel = driverInfo.tel;
+
+     ref.panel.order.carPlate = content.carPlate;
+     ref.panel.order.carType = content.carType;
+     let city = calculateCarPlateCity(content.carPlate);
+     ref.panel.order.city = city;
+
+     if (content.hasOwnProperty('acceptTime')) {
+       ref.panel.order.acceptTime = content.acceptTime;
+     } else {
+       ref.panel.order.acceptTime = '--';
+     }
+     if (content.hasOwnProperty('arriveTime')) {
+       ref.panel.order.arriveTime = content.arriveTime;
+     } else {
+       ref.panel.order.arriveTime = '--';
+     }
+     if (content.hasOwnProperty('startTime')) {
+       ref.panel.order.startTime = content.startTime;
+     } else {
+       ref.panel.order.startTime = '--';
+     }
+     if (content.hasOwnProperty('endTime')) {
+       ref.panel.order.endTime = content.endTime;
+     } else {
+       ref.panel.order.endTime = '--';
+     }
+     if (content.hasOwnProperty('waitingMinute')) {
+       ref.panel.order.waitingMinute = content.waitingMinute + '分钟';
+     } else {
+       ref.panel.order.waitingMinute = '--';
+     }
+     if (content.hasOwnProperty('driveMinute')) {
+       ref.panel.order.driveMinute = content.driveMinute + '分钟';
+     } else {
+       ref.panel.order.driveMinute = '--';
+     }
+     if (content.hasOwnProperty('realMileage')) {
+       ref.panel.order.realMileage = content.realMileage + '公里';
+       row.realMileage = content.realMileage;
+     } else {
+       ref.panel.order.realMileage = '--';
+       row.realMileage = '--';
+     }
+     if (content.hasOwnProperty('realFee')) {
+       ref.panel.order.realFee = content.realFee + '元';
+       row.realFee = content.realFee;
+     } else {
+       ref.panel.order.realFee = '--';
+       row.realFee = '--';
+     }
+     ref.panel.order.status = status[content.status + ''];
+     row.status = status[content.status + ''];
+     if (result.hasOwnProperty('chargeRule')) {
+       ref.panel.order.chargeRule = result.chargeRule.code;
+     } else {
+       ref.panel.order.chargeRule = '--';
+     }
+     if (result.hasOwnProperty('cancelRule')) {
+       ref.panel.order.cancelRule = result.cancelRule.code;
+     } else {
+       ref.panel.order.cancelRule = '--';
+     }
+     if (result.hasOwnProperty('profitsharingRule')) {
+       ref.panel.order.profitsharingRule = result.profitsharingRule.code;
+     } else {
+       ref.panel.order.profitsharingRule = '--';
+     }
+
+     ref.$nextTick(function() {
+       let startPlaceLocation = content.startPlaceLocation;
+       let endPlaceLocation = content.endPlaceLocation;
+       let mapCenter = new TMap.LatLng(startPlaceLocation.latitude, startPlaceLocation.longitude);
+       let map = new TMap.Map($(`.el-table__expanded-cell #order_${row.id}`)[0], {
+         center: mapCenter, //地图显示中心点
+         zoom: 13,
+         viewMode: '2D',
+         baseMap: {
+           type: 'vector',
+           features: ['base', 'label']
+         }
+       });
+
+       let driveLine = result.driveLine;
+       let coors = driveLine.routes[0].polyline;
+       let pl = [];
+       //坐标解压（返回的点串坐标，通过前向差分进行压缩，因此需要解压）
+       let kr = 1000000;
+       for (let i = 2; i < coors.length; i++) {
+         coors[i] = Number(coors[i - 2]) + Number(coors[i]) / kr;
+       }
+       //将解压后的坐标生成LatLng数组
+       for (let i = 0; i < coors.length; i += 2) {
+         pl.push(new TMap.LatLng(coors[i], coors[i + 1]));
+       }
+
+       let polylineLayer = new TMap.MultiPolyline({
+         id: 'polyline-layer', //图层唯一标识
+         map: map, //绘制到目标地图
+         styles: {
+           style_blue: new TMap.PolylineStyle({
+             color: 'rgba(190,188,188,1)',
+             width: 6,
+             lineCap: 'round' //线端头方式
+           })
+         },
+         geometries: [
+           {
+             id: 'pl_1',
+             styleId: 'style_blue',
+             paths: pl
+           }
+         ]
+       });
+
+       let markerLayer = new TMap.MultiMarker({
+         map: map,
+         styles: {
+           startStyle: new TMap.MarkerStyle({
+             width: 24,
+             height: 36,
+             anchor: { x: 16, y: 32 },
+             src: 'https://mapapi.qq.com/web/lbs/javascriptGL/demo/img/start.png'
+           }),
+           endStyle: new TMap.MarkerStyle({
+             width: 24,
+             height: 36,
+             anchor: { x: 16, y: 32 },
+             src: 'https://mapapi.qq.com/web/lbs/javascriptGL/demo/img/end.png'
+           }),
+           carStyle: new TMap.MarkerStyle({
+             width: 30,
+             height: 30,
+             src: '../order/driver-icon.png',
+             anchor: { x: 16, y: 32 }
+           })
+         },
+         geometries: [
+           //起点标记
+           {
+             id: '1',
+             styleId: 'startStyle',
+             position: new TMap.LatLng(startPlaceLocation.latitude, startPlaceLocation.longitude)
+           },
+           //终点标记
+           {
+             id: '2',
+             styleId: 'endStyle',
+             position: new TMap.LatLng(endPlaceLocation.latitude, endPlaceLocation.longitude)
+           }
+         ]
+       });
+       if (content.status == 4) {
+         let lastGps = result.lastGps;
+         markerLayer.add([
+           {
+             id: '3',
+             styleId: 'carStyle', //指定样式id
+             position: new TMap.LatLng(lastGps.latitude, lastGps.longitude)
+           }
+         ]);
+         ref.gpsTimer = setInterval(function() {
+           let data = {
+             orderId: row.id
+           };
+           ref.$http('order/searchOrderLastGps', 'POST', data, true, function(resp) {
+             if (resp.hasOwnProperty('result')) {
+               let lastGps = resp.result;
+               markerLayer.updateGeometries([
+                 {
+                   id: '3',
+                   styleId: 'carStyle',
+                   position: new TMap.LatLng(lastGps.latitude, lastGps.longitude)
+                 }
+               ]);
+             } else {
+               //重新加载面板数据
+               $(`.el-table__expanded-cell #order_${row.id}`).empty();
+               ref.loadPanelData(ref, row);
+               clearInterval(ref.gpsTimer);
+             }
+           });
+         }, 15 * 1000);
+       } else if (content.status >= 5 && content.status <= 8) {
+         let orderGps = result.orderGps;
+         let paths = [];
+         for (let one of orderGps) {
+           let temp = new TMap.LatLng(one.latitude, one.longitude);
+           paths.push(temp);
+         }
+         let polylineLayer = new TMap.MultiPolyline({
+           id: 'drive-polyline-layer', //图层唯一标识
+           map: map,
+           //折线样式定义
+           styles: {
+             style_blue: new TMap.PolylineStyle({
+               color: '#3777FF', //线填充色
+               width: 6 //折线宽度
+             })
+           },
+           //折线数据定义
+           geometries: [
+             {
+               id: 'pl_1',
+               styleId: 'style_blue',
+               paths: paths
+             }
+           ]
+         });
+       }
+     });
+   });
+ },
+
+expand: function(row, expandedRows) {
+   let that = this;
+   if (expandedRows.length > 0) {
+      that.expands = [];
+      if (row) {
+         that.expands.push(row.id);
+         that.panel.id = `order_${row.id}`;
+         that.loadPanelData(that, row);
+      } else {
+         that.expands = [];
+      }
+   }
+}
+```
