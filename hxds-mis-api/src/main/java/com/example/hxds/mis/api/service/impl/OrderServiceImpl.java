@@ -13,6 +13,7 @@ import org.springframework.stereotype.Service;
 import javax.annotation.Resource;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -145,6 +146,12 @@ public class OrderServiceImpl implements OrderService {
             HashMap lastGps = (HashMap) r.get("result");
             return lastGps;
         }
+        return null;
+    }
+
+    @Override
+    public List<Map> searchOrderStartLocationIn30Days() {
+
         return null;
     }
 }

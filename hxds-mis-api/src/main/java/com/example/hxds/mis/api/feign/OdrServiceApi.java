@@ -24,4 +24,7 @@ public interface OdrServiceApi {
 
     @PostMapping("/order/searchOrderStatus")
     R searchOrderStatus(SearchOrderStatusForm form);
+
+    @PostMapping("/order/searchOrderStartLocationIn30Days")
+    R searchOrderStartLocationIn30Days();
 }

@@ -4,6 +4,7 @@ import com.example.hxds.common.util.PageUtils;
 import com.example.hxds.mis.api.controller.form.SearchOrderByPageForm;
 import com.example.hxds.mis.api.controller.form.SearchOrderLastGpsForm;
 
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -19,4 +20,6 @@ public interface OrderService {
     Map searchOrderComprehensiveInfo(long orderId);
 
     Map searchOrderLastGps(SearchOrderLastGpsForm form);
+
+    List<Map> searchOrderStartLocationIn30Days();
 }

@@ -3757,3 +3757,12 @@ public R searchOrderStartLocationIn30Days() {
 需要先把数据导出成Excel文件,在Excel文件中1233.790000这样的数字就自动被转换成123.79了,并不能满足腾讯位置服务的要求。所以我们给经纬度坐标补上的是0001,
 形成的数字例如123.790001,这样导出到Excel文件就不会丢失数据了
 2. 写 hxds-mis-api/src/main/java/com/example/hxds/mis/api/feign/OdrServiceApi.java#searchOrderStartLocationIn30Days
+   写 hxds-mis-api/src/main/java/com/example/hxds/mis/api/service/OrderService.java 及其实现类
+```java
+@PostMapping("/order/searchOrderStartLocationIn30Days")
+R searchOrderStartLocationIn30Days();
+
+List<Map> searchOrderStartLocationIn30Days();
+
+
+```
