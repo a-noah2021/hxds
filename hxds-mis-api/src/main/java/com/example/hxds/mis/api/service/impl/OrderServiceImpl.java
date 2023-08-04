@@ -1,6 +1,7 @@
 package com.example.hxds.mis.api.service.impl;
 
 import cn.hutool.core.bean.BeanUtil;
+import cn.hutool.core.collection.CollectionUtil;
 import cn.hutool.core.map.MapUtil;
 import com.example.hxds.common.exception.HxdsException;
 import com.example.hxds.common.util.PageUtils;
@@ -8,7 +9,9 @@ import com.example.hxds.common.util.R;
 import com.example.hxds.mis.api.controller.form.*;
 import com.example.hxds.mis.api.feign.*;
 import com.example.hxds.mis.api.service.OrderService;
+import com.google.common.collect.Lists;
 import org.springframework.stereotype.Service;
+import org.springframework.util.CollectionUtils;
 
 import javax.annotation.Resource;
 import java.util.ArrayList;
@@ -151,7 +154,19 @@ public class OrderServiceImpl implements OrderService {
 
     @Override
     public List<Map> searchOrderStartLocationIn30Days() {
-
-        return null;
+        R r = odrServiceApi.searchOrderStartLocationIn30Days();
+        // 此时result中的元素是Map,每个Map中有latitude,longitude两个元素
+        List<Map> list = (List<Map>) r.get("result");
+        List<Map> result = Lists.newArrayList();
+        // 调用Collectionutil.countMap()函数就能得到结果,返回值是HashMap对象,Kev是原来的元素,Value是数量
+        Map<Map, Integer> map = CollectionUtil.countMap(list);
+        map.forEach((keyMap, value) -> {
+            keyMap.replace("latitude", MapUtil.getDouble(keyMap, "latitude"));
+            keyMap.replace("longitude", MapUtil.getDouble(keyMap, "longitude"));
+            keyMap.put("count", value);
+            result.add(keyMap);
+        });
+        // 此时result中的元素是Map,每个Map中有latitude,longitude,count三个元素
+        return result;
     }
 }
