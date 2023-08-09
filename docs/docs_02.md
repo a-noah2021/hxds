@@ -3709,7 +3709,7 @@ expand: function(row, expandedRows) {
    }
 }
 ```
-### 分析订单执行的热点区域
+### 分析订单执行的热点地区
 1. 写 hxds-odr/src/main/java/com/example/hxds/odr/db/dao/OrderDao.xml 及其对应接口
    写 hxds-odr/src/main/java/com/example/hxds/mis/api/service/OrderService.java#searchOrderStartLocationIn30Days 及其实现类
    写 hxds-odr/src/main/java/com/example/hxds/odr/controller/OrderController#searchOrderStartLocationIn30Days
@@ -3752,20 +3752,52 @@ public R searchOrderStartLocationIn30Days() {
      return R.ok().put("result", result);
 }
 ```
-【说明】在com.example.hxds.odr.service.impl 包 OrderServiceImpl.java 接口中,实现抽象方法。为了能把相 邻的代驾上车点坐标合并到一起,于是我们要
-抹掉上车点坐标的后四位立小数。因为腾讯位置服务要求经纬度坐标必须精确到小数点后6位,于是有人就想给经纬度坐标补上0000,这是不行的。由于生成热力图的时候,我们
+【说明】在com.example.hxds.odr.service.impl 包 OrderServiceImpl.java 接口中，实现抽象方法。为了能把相邻的代驾上车点坐标合并到一起,于是我们要
+抹掉上车点坐标的后四位小数。因为腾讯位置服务要求经纬度坐标必须精确到小数点后6位,于是有人就想给经纬度坐标补上0000,这是不行的。由于生成热力图的时候,我们
 需要先把数据导出成Excel文件,在Excel文件中1233.790000这样的数字就自动被转换成123.79了,并不能满足腾讯位置服务的要求。所以我们给经纬度坐标补上的是0001,
 形成的数字例如123.790001,这样导出到Excel文件就不会丢失数据了
 2. 写 hxds-mis-api/src/main/java/com/example/hxds/mis/api/feign/OdrServiceApi.java#searchOrderStartLocationIn30Days
    写 hxds-mis-api/src/main/java/com/example/hxds/mis/api/service/OrderService.java 及其实现类
+   写 hxds-mis-api/src/main/java/com/example/hxds/mis/api/controller/OrderController.java#downloadOrderStartLocationIn30Days
 ```java
 @PostMapping("/order/searchOrderStartLocationIn30Days")
 R searchOrderStartLocationIn30Days();
 
 List<Map> searchOrderStartLocationIn30Days();
 
+public List<Map> searchOrderStartLocationIn30Days() {
+     R r = odrServiceApi.searchOrderStartLocationIn30Days();
+     // 此时result中的元素是Map,每个Map中有latitude,longitude两个元素
+     List<Map> list = (List<Map>) r.get("result");
+     List<Map> result = Lists.newArrayList();
+     // 调用Collectionutil.countMap()函数就能得到结果,返回值是HashMap对象,Kev是原来的元素,Value是数量
+     Map<Map, Integer> map = CollectionUtil.countMap(list);
+     map.forEach((keyMap, value) -> {
+        keyMap.replace("latitude", MapUtil.getDouble(keyMap, "latitude"));
+        keyMap.replace("longitude", MapUtil.getDouble(keyMap, "longitude"));
+        keyMap.put("count", value);
+        result.add(keyMap);
+     });
+     // 此时result中的元素是Map,每个Map中有latitude,longitude,count三个元素
+     return result;
+}
 
-
-
-
+@PostMapping("/downloadOrderStartLocationIn30Days")
+@SaCheckPermission(value = {"ROOT", "ORDER:SELECT"}, mode = SaMode.OR)
+@Operation(summary = "查询最近30天内订单的上车点定位记录")
+public void downloadOrderStartLocationIn30Days(HttpServletResponse response){
+     List<Map> result = orderService.searchOrderStartLocationIn30Days();
+     response.setCharacterEncoding("UTF-8");
+     response.setContentType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+     response.setHeader("Content-Disposition","attachment;filename=heat_data.xls");
+     try (ServletOutputStream out = response.getOutputStream();
+        BufferedOutputStream bff = new BufferedOutputStream(out);) {
+        ExcelWriter writer = ExcelUtil.getWriter();
+        writer.write(result, true);
+        writer.flush(bff);
+        writer.close();
+     } catch (IOException e) {
+        throw new HxdsException("Excel文件下载失败");
+     }
+}
 ```
