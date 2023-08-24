@@ -39,6 +39,8 @@ public interface OrderDao {
     HashMap searchOrderContent(long orderId);
 
     List<String> searchOrderStartLocationIn30Days();
+
+    int updateOrderMileageAndFee(Map param);
 }
 
 

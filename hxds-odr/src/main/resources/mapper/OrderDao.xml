@@ -239,4 +239,12 @@
         WHERE start_time IS NOT NULL
           AND start_time BETWEEN TIMESTAMPADD(DAY, -30, NOW()) AND NOW();
     </select>
+    <update id="updateOrderMileageAndFee" parameterType="Map">
+        UPDATE tb_order
+        SET real_mileage   = #{realMileage},
+            return_mileage = #{returnMileage},
+            incentive_fee  = #{incentiveFee},
+            real_fee       = #{total}
+        WHERE id = #{orderId}
+    </update>
 </mapper>

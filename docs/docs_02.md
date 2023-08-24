@@ -3808,7 +3808,6 @@ public void downloadOrderStartLocationIn30Days(HttpServletResponse response){
      }
 }
 ```
-
 3. 创建 hxds-driver-wx/pages/heat_chart/heat_chart.vue
    写 hxds-driver-wx/pages.json
    写 hxds-driver-wx/main/main.vue
@@ -3873,4 +3872,184 @@ public void downloadOrderStartLocationIn30Days(HttpServletResponse response){
 
 <u-cell-item icon="eye-fill" :icon-style="icon" title="接单热点地区" @click="this.toPage('../heat_chart/heat_chart')" />
 ```
+### 订单微服务更新订单、账单和分账记录
+1. 写 hxds-odr/src/main/java/com/example/hxds/odr/db/dao/OrderBillDao.xml#updateBillFee 及其对应接口
+   写 hxds-odr/src/main/java/com/example/hxds/odr/db/dao/OrderDao.xml#updateOrderMileageAndFee 及其对应接口
+   写 hxds-odr/src/main/java/com/example/hxds/odr/db/dao/OrderProfitsharingDao.xml#updateOrderMileageAndFee 及其对应接口
+   写 hxds-odr/src/main/java/com/example/hxds/odr/service/OrderBillService.java#updateBillFee 及其实现类
+   写 hxds-odr/src/main/java/com/example/hxds/odr/controller/form/UpdateBillFeeForm.java
+   写 hxds-odr/src/main/java/com/example/hxds/odr/controller/OrderBillController.java#updateBillFee
+```java
+ <update id="updateBillFee" parameterType="Map">
+     UPDATE tb_order_bill
+     SET total = #{total},
+         mileage_fee = #{mileageFee},
+         waiting_fee = #{waitingFee},
+         other_fee = #{otherFee},
+         return_fee = #{returnFee},
+         incentive_fee = #{incentiveFee},
+     WHERE order_id = #{orderId}
+ </update>
 
+int updateBillFee(Map param);
+
+<update id="updateOrderMileageAndFee" parameterType="Map">
+        UPDATE tb_order
+        SET real_mileage   = #{realMileage},
+        return_mileage = #{returnMileage},
+        incentive_fee  = #{incentiveFee},
+        real_fee       = #{total}
+        WHERE id = #{orderId}
+</update>
+
+int updateOrderMileageAndFee(Map param);
+
+<insert id="insert" parameterType="com.example.hxds.odr.db.pojo.OrderProfitsharingEntity">
+        INSERT INTO tb_order_profitsharing
+        SET order_id = #{orderId},
+        rule_id = #{ruleId},
+        amount_fee = #{amountFee},
+        payment_rate = #{paymentRate},
+        payment_fee = #{paymentFee},
+        tax_rate = #{taxRate},
+        tax_fee = #{taxFee},
+        system_income = #{systemIncome},
+        driver_income = #{driverIncome},
+        `status` = 1
+</insert>
+
+int updateBillFee(Map param);
+
+@Override
+@Transactional
+@LcnTransaction
+public int updateBillFee(Map param) {
+     int rows = orderBillDao.updateBillFee(param);
+     if (rows != 1) {
+        throw new HxdsException("更新账单费用详情失败");
+     }
+     rows = orderDao.updateOrderMileageAndFee(param);
+     if (rows != 1) {
+        throw new HxdsException("更新订单费用详情失败");
+     }
+     OrderProfitsharingEntity entity = new OrderProfitsharingEntity();
+     entity.setOrderId(MapUtil.getLong(param, "orderId"));
+     entity.setRuleId(MapUtil.getLong(param, "ruleId"));
+     entity.setAmountFee(new BigDecimal((String) param.get("total")));
+     entity.setPaymentRate(new BigDecimal((String) param.get("paymentRate")));
+     entity.setPaymentFee(new BigDecimal((String) param.get("paymentFee")));
+     entity.setTaxRate(new BigDecimal((String) param.get("taxRate")));
+     entity.setTaxFee(new BigDecimal((String) param.get("taxFee")));
+     entity.setSystemIncome(new BigDecimal((String) param.get("systemIncome")));
+     entity.setDriverIncome(new BigDecimal((String) param.get("driverIncome")));
+
+     rows = orderProfitsharingDao.insert(entity);
+     if (rows != 1) {
+        throw new HxdsException("添加分账记录失败");
+     }
+     return rows;
+}
+
+@Data
+@Schema(description = "更新账单的表单")
+public class UpdateBillFeeForm {
+
+   @NotBlank(message = "total不能为空")
+   @Pattern(regexp = "^[1-9]\\d*\\.\\d{1,2}$|^0\\.\\d{1,2}$|^[1-9]\\d*$", message = "total内容不正确")
+   @Schema(description = "总金额")
+   private String total;
+
+   @NotBlank(message = "mileageFee不能为空")
+   @Pattern(regexp = "^[1-9]\\d*\\.\\d{1,2}$|^0\\.\\d{1,2}$|^[1-9]\\d*$", message = "mileageFee内容不正确")
+   @Schema(description = "里程费")
+   private String mileageFee;
+
+   @NotBlank(message = "waitingFee不能为空")
+   @Pattern(regexp = "^[1-9]\\d*\\.\\d{1,2}$|^0\\.\\d{1,2}$|^[1-9]\\d*$", message = "waitingFee内容不正确")
+   @Schema(description = "等时费")
+   private String waitingFee;
+
+   @NotBlank(message = "tollFee不能为空")
+   @Pattern(regexp = "^[1-9]\\d*\\.\\d{1,2}$|^0\\.\\d{1,2}$|^[1-9]\\d*$", message = "tollFee内容不正确")
+   @Schema(description = "路桥费")
+   private String tollFee;
+
+   @NotBlank(message = "parkingFee不能为空")
+   @Pattern(regexp = "^[1-9]\\d*\\.\\d{1,2}$|^0\\.\\d{1,2}$|^[1-9]\\d*$", message = "parkingFee内容不正确")
+   @Schema(description = "路桥费")
+   private String parkingFee;
+
+   @NotBlank(message = "otherFee不能为空")
+   @Pattern(regexp = "^[1-9]\\d*\\.\\d{1,2}$|^0\\.\\d{1,2}$|^[1-9]\\d*$", message = "otherFee内容不正确")
+   @Schema(description = "其他费用")
+   private String otherFee;
+
+   @NotBlank(message = "returnFee不能为空")
+   @Pattern(regexp = "^[1-9]\\d*\\.\\d{1,2}$|^0\\.\\d{1,2}$|^[1-9]\\d*$", message = "returnFee内容不正确")
+   @Schema(description = "返程费用")
+   private String returnFee;
+
+   @NotBlank(message = "incentiveFee不能为空")
+   @Pattern(regexp = "^[1-9]\\d*\\.\\d{1,2}$|^0\\.\\d{1,2}$|^[1-9]\\d*$", message = "incentiveFee内容不正确")
+   @Schema(description = "系统奖励费用")
+   private String incentiveFee;
+
+   @NotNull(message = "orderId不能为空")
+   @Min(value = 1, message = "orderId不能小于1")
+   @Schema(description = "订单ID")
+   private Long orderId;
+
+   @NotBlank(message = "realMileage不能为空")
+   @Pattern(regexp = "^[1-9]\\d*\\.\\d+$|^0\\.\\d+$|^[1-9]\\d*$", message = "realMileage内容不正确")
+   @Schema(description = "代驾公里数")
+   private String realMileage;
+
+   @NotBlank(message = "returnMileage不能为空")
+   @Pattern(regexp = "^[1-9]\\d*\\.\\d+$|^0\\.\\d+$|^[1-9]\\d*$", message = "returnMileage内容不正确")
+   @Schema(description = "返程公里数")
+   private String returnMileage;
+
+   @NotNull(message = "ruleId不能为空")
+   @Min(value = 1, message = "ruleId不能小于1")
+   @Schema(description = "规则ID")
+   private Long ruleId;
+
+   @NotBlank(message = "paymentRate不能为空")
+   @Pattern(regexp = "^0\\.\\d+$|^[1-9]\\d*$|^0$", message = "paymentRate内容不正确")
+   @Schema(description = "支付手续费率")
+   private String paymentRate;
+
+   @NotBlank(message = "paymentFee不能为空")
+   @Pattern(regexp = "^[1-9]\\d*\\.\\d{1,2}$|^0\\.\\d{1,2}$|^[1-9]\\d*$", message = "paymentFee内容不正确")
+   @Schema(description = "支付手续费")
+   private String paymentFee;
+
+   @NotBlank(message = "taxRate不能为空")
+   @Pattern(regexp = "^0\\.\\d+$|^[1-9]\\d*$|^0$", message = "taxRate内容不正确")
+   @Schema(description = "代缴个税费率")
+   private String taxRate;
+
+   @NotBlank(message = "taxFee不能为空")
+   @Pattern(regexp = "^[1-9]\\d*\\.\\d{1,2}$|^0\\.\\d{1,2}$|^[1-9]\\d*$", message = "taxFee内容不正确")
+   @Schema(description = "代缴个税")
+   private String taxFee;
+
+   @NotBlank(message = "systemIncome不能为空")
+   @Pattern(regexp = "^[1-9]\\d*\\.\\d{1,2}$|^0\\.\\d{1,2}$|^[1-9]\\d*$", message = "systemIncome内容不正确")
+   @Schema(description = "代驾系统分账收入")
+   private String systemIncome;
+
+   @NotBlank(message = "driverIncome不能为空")
+   @Pattern(regexp = "^[1-9]\\d*\\.\\d{1,2}$|^0\\.\\d{1,2}$|^[1-9]\\d*$", message = "driverIncome内容不正确")
+   @Schema(description = "司机分账收入")
+   private String driverIncome;
+
+}
+
+@Operation(summary = "更新订单账单费用")
+public R updateBillFee(@RequestBody @Valid UpdateBillFeeForm form) {
+   Map param = BeanUtil.beanToMap(form);
+   int rows = orderBillService.updateBillFee(param);
+   return R.ok().put("rows", rows);
+}
+```

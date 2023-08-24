@@ -4,5 +4,18 @@
         "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.example.hxds.odr.db.dao.OrderProfitsharingDao">
 
+    <insert id="insert" parameterType="com.example.hxds.odr.db.pojo.OrderProfitsharingEntity">
+        INSERT INTO tb_order_profitsharing
+        SET order_id = #{orderId},
+            rule_id = #{ruleId},
+            amount_fee = #{amountFee},
+            payment_rate = #{paymentRate},
+            payment_fee = #{paymentFee},
+            tax_rate = #{taxRate},
+            tax_fee = #{taxFee},
+            system_income = #{systemIncome},
+            driver_income = #{driverIncome},
+            `status` = 1
+    </insert>
 
 </mapper>

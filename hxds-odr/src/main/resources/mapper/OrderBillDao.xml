@@ -20,4 +20,14 @@
         DELETE FROM tb_order_bill WHERE order_id = #{orderId}
     </delete>
 
+    <update id="updateBillFee" parameterType="Map">
+        UPDATE tb_order_bill
+        SET total = #{total},
+            mileage_fee = #{mileageFee},
+            waiting_fee = #{waitingFee},
+            other_fee = #{otherFee},
+            return_fee = #{returnFee},
+            incentive_fee = #{incentiveFee},
+            WHERE order_id = #{orderId}
+    </update>
 </mapper>
