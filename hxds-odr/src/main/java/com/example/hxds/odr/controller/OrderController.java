@@ -193,4 +193,19 @@ public class OrderController {
         List<Map> result = orderService.searchOrderStartLocationIn30Days();
         return R.ok().put("result", result);
     }
+
+    @PostMapping("/validDriverOwnOrder")
+    @Operation(summary = "查询司机是否关联某订单")
+    public R validDriverOwnOrder(@RequestBody @Valid ValidDriverOwnOrderForm form) {
+        Map param = BeanUtil.beanToMap(form);
+        boolean bool = orderService.validDriverOwnOrder(param);
+        return R.ok().put("result", bool);
+    }
+
+    @PostMapping("/searchSettlementNeedData")
+    @Operation(summary = "查询订单的开始和等时")
+    public R searchSettlementNeedData(@RequestBody @Valid SearchSettlementNeedDataForm form) {
+        Map map = orderService.searchSettlementNeedData(form.getOrderId());
+        return R.ok().put("result", map);
+    }
 }

@@ -4053,3 +4053,79 @@ public R updateBillFee(@RequestBody @Valid UpdateBillFeeForm form) {
    return R.ok().put("rows", rows);
 }
 ```
+### 大数据微服务计算实际代驾里程
+1. 写 hxds-odr/src/main/java/com/example/hxds/odr/db/dao/OrderDao.xml#validDriverOwnOrder 及其对应接口
+   写 hxds-odr/src/main/java/com/example/hxds/odr/db/dao/OrderDao.xml#searchSettlementNeedData 及其对应接口
+   写 hxds-odr/src/main/java/com/example/hxds/odr/service/OrderService.java/validDriverOwnOrder 及其实现类
+   写 hxds-odr/src/main/java/com/example/hxds/odr/service/OrderService.java/searchSettlementNeedData 及其实现类
+   写 hxds-odr/src/main/java/com/example/hxds/odr/controller/form/ValidDriverOwnOrderForm.java
+   写 hxds-odr/src/main/java/com/example/hxds/odr/controller/form/SearchSettlementNeedDataForm.java
+   写 hxds-odr/src/main/java/com/example/hxds/odr/controller/OrderController.java
+```java
+ <select id="validDriverOwnOrder" resultType="long" parameterType="Map">
+     SELECT COUNT(*) FROM tb_order
+     WHERE id = #{orderId} AND driver_id = #{driverId}
+ </select>
+ <select id="searchSettlementNeedData" resultType="Map" parameterType="long">
+     SELECT DATE_FORMAT(accept_time, '%Y-%m-%d %H:%i:%s') AS acctptTime,
+            DATE_FORMAT(start_time, '%Y-%m-%d %H:%i:%s')  AS startTime,
+            waiting_minute                                AS waitingMinute,
+            CAST(favour_fee AS CHAR)                      AS favourFee
+     FROM tb_order
+     WHERE id = #{orderId}
+ </select>
+
+boolean validDriverOwnOrder(Map param);
+
+Map searchSettlementNeedData(long orderId);
+
+@Override
+public boolean validDriverOwnOrder(Map param) {
+     long count = orderDao.validDriverOwnOrder(param);
+     return count == 1? true:false;
+}
+
+@Override
+public Map searchSettlementNeedData(long orderId) {
+     Map map = orderDao.searchSettlementNeedData(orderId);
+     return map;
+}
+
+@Data
+@Schema(description = "查询司机是否关联某订单的表单")
+public class ValidDriverOwnOrderForm {
+   @NotNull(message = "driverId不能为空")
+   @Min(value = 1, message = "driverId不能小于1")
+   @Schema(description = "司机ID")
+   private Long driverId;
+
+   @NotNull(message = "orderId不能为空")
+   @Min(value = 1, message = "orderId不能小于1")
+   @Schema(description = "订单ID")
+   private Long orderId;
+}
+
+@Data
+@Schema(description = "查询订单的开始和等时的表单")
+public class SearchSettlementNeedDataForm {
+   @NotNull(message = "orderId不能为空")
+   @Min(value = 1, message = "orderId不能小于1")
+   @Schema(description = "订单ID")
+   private Long orderId;
+}
+
+@PostMapping("/validDriverOwnOrder")
+@Operation(summary = "查询司机是否关联某订单")
+public R validDriverOwnOrder(@RequestBody @Valid ValidDriverOwnOrderForm form) {
+   Map param = BeanUtil.beanToMap(form);
+   boolean bool = orderService.validDriverOwnOrder(param);
+   return R.ok().put("result", bool);
+}
+
+@PostMapping("/searchSettlementNeedData")
+@Operation(summary = "查询订单的开始和等时")
+public R searchSettlementNeedData(@RequestBody @Valid SearchSettlementNeedDataForm form) {
+   Map map = orderService.searchSettlementNeedData(form.getOrderId());
+   return R.ok().put("result", map);
+}
+```

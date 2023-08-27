@@ -41,6 +41,10 @@ public interface OrderDao {
     List<String> searchOrderStartLocationIn30Days();
 
     int updateOrderMileageAndFee(Map param);
+
+    long validDriverOwnOrder(Map param);
+
+    Map searchSettlementNeedData(long orderId);
 }
 
 
