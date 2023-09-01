@@ -4723,9 +4723,690 @@ onLoad: function(options) {
 更加的适合,毕竟SQL语句写起来很容易。反之,就可以用MongoDB。恰好系统消息无非就是分页查询、按照主键值查询,没有什么复杂的条件,所以我们用MongoDB就可以了。MongoDB
 中没有数据表的概念,而是采用集合(Collectioon)存储数据,每条数据就是一个文档(Document)。文档结构很好理解,其实就是我们常用的JSOIN,一个JSON就是一条记录。
 
+创建message集合：集合相当于MySQL中的数据表，但是没有固定的表结构。集合有什么字段,取决于保存在其中的数据。
+创建message_ref集合：虽然message集合记录的是消息，里面有接收者ID，但是如果是群发消息，那么接受者ID是空值。这时候
+就需要用上message_ ref 集合来记录接收人和已读状态。
+比如说小程序每隔5分钟轮询是否有新的消息，如果积压的消息太多，Java系统没有接收完消息，这时候新的轮询到来，就会产生两个消费者共同接收同一个消息的情况，
+这会造成数据库中添加了重复的记录, 如果每条MQ消息都有唯一的UUID值， 第一个消费者把消息保存到数据库，那么第二个消费者就无法再 把这条消息保存到数据库，
+解决了消息的重复消费问题。
+很多时候系统消息是群发的，也就是存在大量的接收人。假设网站有100万注册用户，我们要发送广播消息，理论上向message集合插入1条记录，然后向message_ref
+集合添加100万条记录。如果有80万用户常年不登录，我们在 message_ref 表中一直保存他们的通知消息，有天太浪费存储空间了，最好能给消息 记录设置个过期时间，
+自动销毁。很遗憾MongoDB没有过期时间这个机制，于是我们想到了RabbitMQ, 消息队列里面的消息是有过期时间的。当系统要发送消息了，先把消息记录保存到
+message集合里面，然后向收件人的队列中发送消息。假设过期时间是1个月。这期间如果用户没有登陆系统查收消息，那么队列中的消息就自动销毁了。
 
+如果用户在消息过期之前登陆了系统，Java程序会从RabbitMQ的队列中接收消息，然后把消息保存到message_ref集合中。你看用消息队列，我们就可以为活跃用户
+持久化存储消息通知了。对于不活跃的用 户，为了节省存储空间，我们不会为他们存储消息通知。
 ### 消息微服务封装收发系统消息的接口
+1. 写 hxds-snm/src/main/java/com/example/hxds/snm/service/MessageService.java
+   写 hxds-snm/src/main/java/com/example/hxds/snm/service/impl/MessageServiceImpl.java
+   写 hxds-snm/src/main/java/com/example/hxds/snm/task/MessageTask.java
+```java
+public interface MessageService {
+    String insertMessage(MessageEntity entity);
+
+    HashMap searchMessageById(String id);
+
+    String insertRef(MessageRefEntity entity);
+
+    long searchUnreadCount(long userId, String identity);
+
+    long searchLastCount(long userId, String identity);
+
+    long updateUnreadMessage(String id);
+
+    long deleteMessageRefById(String id);
+
+    long deleteUserMessageRef(long userId, String identity);
+}
+
+@Service
+public class MessageServiceImpl implements MessageService {
+   @Resource
+   private MessageDao messageDao;
+
+   @Resource
+   private MessageRefDao messageRefDao;
+
+   @Override
+   public String insertMessage(MessageEntity entity) {
+      String id = messageDao.insert(entity);
+      return id;
+   }
+
+   @Override
+   public HashMap searchMessageById(String id) {
+      HashMap map = messageDao.searchMessageById(id);
+      return map;
+   }
+
+   @Override
+   public String insertRef(MessageRefEntity entity) {
+      String id = messageRefDao.insert(entity);
+      return id;
+   }
+
+   @Override
+   public long searchUnreadCount(long userId, String identity) {
+      long count = messageRefDao.searchUnreadCount(userId, identity);
+      return count;
+   }
+
+   @Override
+   public long searchLastCount(long userId, String identity) {
+      long count = messageRefDao.searchLastCount(userId, identity);
+      return count;
+   }
+
+   @Override
+   public long updateUnreadMessage(String id) {
+      long rows = messageRefDao.updateUnreadMessage(id);
+      return rows;
+   }
+
+   @Override
+   public long deleteMessageRefById(String id) {
+      long rows = messageRefDao.deleteMessageRefById(id);
+      return rows;
+   }
+
+   @Override
+   public long deleteUserMessageRef(long userId, String identity) {
+      long rows = messageRefDao.deleteUserMessageRef(userId, identity);
+      return rows;
+   }
+}
+
+@Component
+@Slf4j
+public class MessageTask {
+
+   @Resource
+   private ConnectionFactory factory;
+
+   @Resource
+   private MessageService messageService;
+
+   /**
+    * 同步发送私有消息
+    */
+   public void sendPrivateMessage(String identify, long userId, Integer ttl, MessageEntity entity) {
+      String id = messageService.insertMessage(entity);
+      String exchangeName = identify + "_private";
+      String queueName = "queue_" + userId;
+      String routingKey = userId + "";
+      try (Connection connection = factory.newConnection();
+           Channel channel = connection.createChannel();
+      ) {
+         channel.exchangeDeclare(exchangeName, BuiltinExchangeType.DIRECT);
+         HashMap param = Maps.newHashMap();
+         channel.queueDeclare(queueName, true, false, false, param);
+         HashMap map = Maps.newHashMap();
+         map.put("messageId", id);
+         AMQP.BasicProperties properties;
+         if (ttl != null && ttl > 0) {
+            properties = new AMQP.BasicProperties().builder().contentEncoding("UTF-8")
+                    .headers(map).expiration(ttl + "").build();
+         } else {
+            properties = new AMQP.BasicProperties().builder().contentEncoding("UTF-8")
+                    .headers(map).build();
+         }
+         channel.basicPublish(exchangeName, routingKey, properties, entity.getMsg().getBytes());
+         log.debug("消息发送成功");
+      } catch (Exception e) {
+         log.error("执行异常", e);
+         throw new HxdsException("向MQ发送消息失败");
+      }
+   }
+
+   /**
+    * 异步发送私有消息
+    */
+   @Async
+   public void sendPrivateMessageAsync(String identity, long userId, Integer ttl, MessageEntity entity) {
+      sendPrivateMessage(identity, userId, ttl, entity);
+   }
+
+   public void sendBroadcastMessage(String identity, Integer ttl, MessageEntity entity) {
+      String id = messageService.insertMessage(entity);
+      String exchangeName = identity + "_broadcast";
+
+      try (Connection connection = factory.newConnection();
+           Channel channel = connection.createChannel();
+      ) {
+         HashMap map = new HashMap();
+         map.put("messageId", id);
+         AMQP.BasicProperties.Builder builder = new AMQP.BasicProperties().builder();
+         builder.deliveryMode(MessageDeliveryMode.toInt(MessageDeliveryMode.PERSISTENT));//消息持久化存储
+         builder.expiration(ttl.toString());//设置消息有效期
+         AMQP.BasicProperties properties = builder.headers(map).build();
+
+         channel.exchangeDeclare(exchangeName, BuiltinExchangeType.FANOUT);
+         channel.basicPublish(exchangeName, "", properties, entity.getMsg().getBytes());
+         log.debug("消息发送成功");
+      } catch (Exception e) {
+         log.error("执行异常", e);
+         throw new HxdsException("向MQ发送消息失败");
+      }
+   }
+
+   @Async
+   public void sendBroadcastMessageAsync(String identity, Integer ttl, MessageEntity entity) {
+      this.sendBroadcastMessage(identity, ttl, entity);
+   }
+
+   /**
+    * 同步接收消息
+    */
+   public int receive(String identity, long userId) {
+      String privateExchangeName = identity + "_private";
+      String broadcastExchangeName = identity + "_broadcast";
+      String queueName = "queue_" + userId;
+      String routingKey = userId + "";
+
+      int i = 0;
+      try (Connection connection = factory.newConnection();
+           Channel privateChannel = connection.createChannel();
+           Channel broadcastChannel = connection.createChannel();
+      ) {
+         //接收私有消息
+         privateChannel.exchangeDeclare(privateExchangeName, BuiltinExchangeType.DIRECT);
+         privateChannel.queueDeclare(queueName, true, false, false, null);
+         privateChannel.queueBind(queueName, privateExchangeName, routingKey);
+         while (true) {
+            GetResponse response = privateChannel.basicGet(queueName, false);
+            if (response != null) {
+               AMQP.BasicProperties properties = response.getProps();
+               Map<String, Object> map = properties.getHeaders();
+               String messageId = map.get("messageId").toString();
+               byte[] body = response.getBody();
+               String message = new String(body);
+               log.debug("从RabbitMQ接收的私有消息：" + message);
+
+               MessageRefEntity entity = new MessageRefEntity();
+               entity.setMessageId(messageId);
+               entity.setReceiverId(userId);
+               entity.setReceiverIdentity(identity);
+               entity.setReadFlag(false);
+               entity.setLastFlag(true);
+               messageService.insertRef(entity);
+               long deliveryTag = response.getEnvelope().getDeliveryTag();
+               privateChannel.basicAck(deliveryTag, false);
+               i++;
+            } else {
+               break;
+            }
+         }
+         //接收公有消息
+         broadcastChannel.exchangeDeclare(broadcastExchangeName, BuiltinExchangeType.FANOUT);
+         broadcastChannel.queueDeclare(queueName, true, false, false, null);
+         broadcastChannel.queueBind(queueName, broadcastExchangeName, "");
+         while (true) {
+            GetResponse response = broadcastChannel.basicGet(queueName, false);
+            if (response != null) {
+               AMQP.BasicProperties properties = response.getProps();
+               Map<String, Object> map = properties.getHeaders();
+               String messageId = map.get("messageId").toString();
+               byte[] body = response.getBody();
+               String message = new String(body);
+               log.debug("从RabbitMQ接收的广播消息：" + message);
+               MessageRefEntity entity = new MessageRefEntity();
+               entity.setMessageId(messageId);
+               entity.setReceiverId(userId);
+               entity.setReceiverIdentity(identity);
+               entity.setReadFlag(false);
+               entity.setLastFlag(true);
+               messageService.insertRef(entity);
+               long deliveryTag = response.getEnvelope().getDeliveryTag();
+               broadcastChannel.basicAck(deliveryTag, false);
+               i++;
+            } else {
+               break;
+            }
+         }
+      } catch (Exception e) {
+         log.error("执行异常", e);
+         throw new HxdsException("接收消息失败");
+      }
+      return i;
+
+   }
+
+   /**
+    * 异步接收消息
+    */
+   @Async
+   public void receiveAsync(String identity, long userId) {
+      receiveAsync(identity, userId);
+   }
+
+   /**
+    * 同步删除消息队列
+    */
+   public void deleteQueue(String identity, long userId) {
+      String privateExchangeName = identity + "_private";
+      String broadcastExchangeName = identity + "_broadcast";
+      String queueName = "queue_" + userId;
+      try (Connection connection = factory.newConnection();
+           Channel privateChannel = connection.createChannel();
+           Channel broadcastChannel = connection.createChannel();
+      ) {
+         privateChannel.exchangeDeclare(privateExchangeName, BuiltinExchangeType.DIRECT);
+         privateChannel.queueDelete(queueName);
+
+         broadcastChannel.exchangeDeclare(broadcastExchangeName, BuiltinExchangeType.FANOUT);
+         broadcastChannel.queueDelete(queueName);
+
+         log.debug("消息队列成功删除");
+      } catch (Exception e) {
+         log.error("删除队列失败", e);
+         throw new HxdsException("删除队列失败");
+      }
+   }
+
+   /**
+    * 异步删除消息队列
+    */
+   @Async
+   public void deleteQueueAsync(String identity, long userId) {
+      deleteQueue(identity, userId);
+   }
+
+}
+```
+2. 写 hxds-snm/src/main/java/com/example/hxds/snm/controller/form/RefreshMessageForm.java
+   写 hxds-snm/src/main/java/com/example/hxds/snm/controller/form/DeleteMessageRefByIdForm.java
+   写 hxds-snm/src/main/java/com/example/hxds/snm/controller/form/UpdateUnreadMessageForm.java
+   写 hxds-snm/src/main/java/com/example/hxds/snm/controller/form/SearchMessageByIdForm.java
+   写 hxds-snm/src/main/java/com/example/hxds/snm/controller/form/SendPrivateMessageForm.java
+   写 hxds-snm/src/main/java/com/example/hxds/snm/controller/MessageController.java
+```java
+@Data
+@Schema(description = "刷新用户消息的表单")
+public class RefreshMessageForm {
+    
+    @NotNull(message = "userId不能为空")
+    @Min(value = 1, message = "userId不能小于1")
+    @Schema(description = "用户ID")
+    private Long userId;
+
+    @NotBlank(message = "identity不能为空")
+    @Pattern(regexp = "^driver$|^mis$|^customer$",message = "identity内容不正确")
+    @Schema(description = "用户身份")
+    private String identity;
+
+}
+
+@Data
+@Schema(description = "根据消息ID删除消息的表单")
+public class DeleteMessageRefByIdForm {
+   @NotBlank(message = "id不能为空")
+   @Schema(description = "Ref消息的ID")
+   private String id;
+}
+
+@Data
+@Schema(description = "把未读消息更新成已读的表单")
+public class UpdateUnreadMessageForm {
+   @NotBlank(message = "id不能为空")
+   @Schema(description = "ref消息ID")
+   private String id;
+}
+
+@Data
+@Schema(description = "根据消息ID查询消息的表单")
+public class SearchMessageByIdForm {
+   @NotBlank(message = "id不能为空")
+   @Schema(description = "消息的ID")
+   private String id;
+}
+
+@Data
+@Schema(description = "同步发送私有消息的表单")
+public class SendPrivateMessageForm {
+
+   @NotBlank(message = "receiverIdentity不能为空")
+   @Schema(description = "接收人exchange")
+   private String receiverIdentity;
+
+   @NotNull(message = "receiverId不能为空")
+   @Min(value = 1, message = "receiverId不能小于1")
+   @Schema(description = "接收人ID")
+   private Long receiverId;
+
+   @Min(value = 1, message = "ttl不能小于1")
+   @Schema(description = "消息过期时间")
+   private Integer ttl;
+
+   @Min(value = 0, message = "senderId不能小于0")
+   @Schema(description = "发送人ID")
+   private Long senderId;
+
+   @NotBlank(message = "senderIdentity不能为空")
+   @Schema(description = "发送人exchange")
+   private String senderIdentity;
+
+   @Schema(description = "发送人头像")
+   private String senderPhoto = "http://static-1258386385.cos.ap-beijing.myqcloud.com/img/System.jpg";
+
+   @NotNull(message = "senderName不能为空")
+   @Schema(description = "发送人名称")
+   private String senderName;
+
+   @NotNull(message = "消息不能为空")
+   @Schema(description = "消息内容")
+   private String msg;
+}
+
+@PostMapping("/searchMessageById")
+@Operation(summary = "根据ID查询消息")
+public R searchMessageById(@Valid @RequestBody SearchMessageByIdForm form) {
+   HashMap map = messageService.searchMessageById(form.getId());
+   return R.ok().put("result", map);
+}
+
+@PostMapping("/updateUnreadMessage")
+@Operation(summary = "未读消息更新成已读消息")
+public R updateUnreadMessage(@Valid @RequestBody UpdateUnreadMessageForm form) {
+   long rows = messageService.updateUnreadMessage(form.getId());
+   return R.ok().put("rows", rows);
+}
+
+@PostMapping("/deleteMessageRefById")
+@Operation(summary = "删除消息")
+public R deleteMessageRefById(@Valid @RequestBody DeleteMessageRefByIdForm form) {
+   long rows = messageService.deleteMessageRefById(form.getId());
+   return R.ok().put("rows", rows);
+}
+
+@PostMapping("/refreshMessage")
+@Operation(summary = "刷新用户消息")
+public R refreshMessage(@Valid @RequestBody RefreshMessageForm form) {
+   messageTask.receive(form.getIdentity(), form.getUserId());
+   long lastRows = messageService.searchLastCount(form.getUserId(), form.getIdentity());
+   long unreadRows = messageService.searchUnreadCount(form.getUserId(), form.getIdentity());
+   HashMap map = new HashMap() {{
+      put("lastRows", lastRows + "");
+      put("unreadRows", unreadRows + "");
+   }};
+   return R.ok().put("result", map);
+}
+
+@PostMapping("/sendPrivateMessage")
+@Operation(summary = "同步发送私有消息")
+public R sendPrivateMessage(@RequestBody @Valid SendPrivateMessageForm form) {
+   MessageEntity entity = new MessageEntity();
+   entity.setSenderId(form.getSenderId());
+   entity.setSenderIdentity(form.getSenderIdentity());
+   entity.setSenderPhoto(form.getSenderPhoto());
+   entity.setSenderName(form.getSenderName());
+   entity.setMsg(form.getMsg());
+   entity.setSendTime(new Date());
+   messageTask.sendPrivateMessage(form.getReceiverIdentity(), form.getReceiverId(), form.getTtl(), entity);
+   return R.ok();
+}
+
+@PostMapping("/sendPrivateMessageAsync")
+@Operation(summary = "异步发送私有消息")
+public R sendPrivateMessageAsync(@RequestBody @Valid SendPrivateMessageForm form) {
+   MessageEntity entity = new MessageEntity();
+   entity.setSenderId(form.getSenderId());
+   entity.setSenderIdentity(form.getSenderIdentity());
+   entity.setSenderPhoto(form.getSenderPhoto());
+   entity.setSenderName(form.getSenderName());
+   entity.setMsg(form.getMsg());
+   entity.setSendTime(new Date());
+   messageTask.sendPrivateMessageAsync(form.getReceiverIdentity(), form.getReceiverId(), form.getTtl(), entity);
+   return R.ok();
+}
+```
+### 司机确认账单推送给乘客
+1. 写 bff-driver/src/main/java/com/example/hxds/bff/driver/controller/form/SendPrivateMessageForm.java
+   写 bff-driver/src/main/java/com/example/hxds/bff/driver/feign/SnmServiceApi.java
+   补全 bff-driver/src/main/java/com/example/hxds/bff/driver/service/impl/OrderServiceImpl.java#updateOrderStatus
+```java
+@Data
+@Schema(description = "同步发送私有消息的表单")
+public class SendPrivateMessageForm {
+
+    @NotBlank(message = "receiverIdentity不能为空")
+    @Schema(description = "接收人exchange")
+    private String receiverIdentity;
+
+    @NotNull(message = "receiverId不能为空")
+    @Min(value = 1, message = "receiverId不能小于1")
+    @Schema(description = "接收人ID")
+    private Long receiverId;
+
+    @Min(value = 1, message = "ttl不能小于1")
+    @Schema(description = "消息过期时间")
+    private Integer ttl;
+
+    @Min(value = 0, message = "senderId不能小于0")
+    @Schema(description = "发送人ID")
+    private Long senderId;
+
+    @NotBlank(message = "senderIdentity不能为空")
+    @Schema(description = "发送人exchange")
+    private String senderIdentity;
+
+    @Schema(description = "发送人头像")
+    private String senderPhoto = "http://static-1258386385.cos.ap-beijing.myqcloud.com/img/System.jpg";
+
+    @NotNull(message = "senderName不能为空")
+    @Schema(description = "发送人名称")
+    private String senderName;
+
+    @NotNull(message = "消息不能为空")
+    @Schema(description = "消息内容")
+    private String msg;
+}
+
+@PostMapping("/message/sendPrivateMessage")
+@Operation(summary = "同步发送私有消息")
+R sendPrivateMessage(SendPrivateMessageForm form);
+
+@PostMapping("/message/sendPrivateMessageSync")
+@Operation(summary = "异步发送私有消息")
+R sendPrivateMessageSync(SendPrivateMessageForm form);
+
+@Override
+@Transactional
+@LcnTransaction
+public int updateOrderStatus(UpdateOrderStatusForm form) {
+   R r = odrServiceApi.updateOrderStatus(form);
+   int rows = MapUtil.getInt(r, "rows");
+   // TODO:判断订单的状态，然后实现后续业务
+   if (rows != 1) {
+      throw new HxdsException("订单状态修改失败");
+   }
+   if (form.getStatus() == 6) {
+      SendPrivateMessageForm messageForm = new SendPrivateMessageForm();
+      messageForm.setReceiverIdentity("customer_bill");
+      messageForm.setReceiverId(form.getCustomerId());
+      messageForm.setTtl(3 * 24 * 3600 * 1000);
+      // 如果这条消息是系统发出的，那么senderId为0
+      messageForm.setSenderId(0L);
+      messageForm.setSenderIdentity("system");
+      messageForm.setSenderName("华夏代驾");
+      messageForm.setMsg("您有代驾订单待支付");
+      snmServiceApi.sendPrivateMessage(messageForm);
+   }
+   return rows;
+}
+```
+2. 写 hxds-driver-wx/order/order_bill/order_bill.vue#updateOrderBill
+```vue
+sendOrderBill: function() {
+	let that = this;
+	uni.showModal({
+		title: '提示消息',
+		content: '是否发送代驾账单给客户？',
+		success: function(resp) {
+			if (resp.confirm) {
+				let data = {
+					orderId: that.orderId,
+					customerId: that.customerId,
+					status: 6
+				};
+				that.ajax(that.url.updateOrderStatus, 'POST', data, function(resp) {
+					that.workStatus = '等待付款';
+					uni.setStorageSync('workStatus', '等待付款');
+					uni.navigateTo({
+						url: '../waiting_payment/waiting_payment?orderId=' + that.orderId
+					});
+				});
+			}
+		}
+	});
+}
+```
+### 乘客接收订单消息
+1. 写 hxds-snm/src/main/java/com/example/hxds/snm/task/MessageTask.java#receiveBillMessage
+   写 hxds-snm/src/main/java/com/example/hxds/snm/controller/form/ReceiveBillMessageForm.java
+   写 hxds-snm/src/main/java/com/example/hxds/snm/controller/MessageController.java#receiveBillMessage
+```java
+ public String receiveBillMessage(String identity, long userId) {
+     String exchangeName = identity + "_private"; //交换机名字
+     String queueName = "queue_" + userId; //队列名字
+     String routingKey = userId + ""; //routing key
+     try (
+             Connection connection = factory.newConnection();
+             Channel channel = connection.createChannel();
+     ) {
+         channel.exchangeDeclare(exchangeName, BuiltinExchangeType.DIRECT);
+         channel.queueDeclare(queueName, true, false, false, null);
+         channel.queueBind(queueName, exchangeName, routingKey);
+         channel.basicQos(0, 1, true);
+         GetResponse response = channel.basicGet(queueName, false);
+         if (response != null) {
+             AMQP.BasicProperties properties = response.getProps();
+             Map<String, Object> map = properties.getHeaders();
+             String messageId = map.get("messageId").toString();
+             byte[] body = response.getBody();
+             String msg = new String(body);
+             log.debug("从RabbitMQ接收的订单消息：" + msg);
+
+             MessageRefEntity entity = new MessageRefEntity();
+             entity.setMessageId(messageId);
+             entity.setReceiverId(userId);
+             entity.setReceiverIdentity(identity);
+             entity.setReadFlag(true);
+             entity.setLastFlag(true);
+             messageService.insertRef(entity);
+
+             long deliveryTag = response.getEnvelope().getDeliveryTag();
+             channel.basicAck(deliveryTag, false);
+
+             return msg;
+         }
+         return "";
+     } catch (Exception e) {
+         log.error("执行异常", e);
+         throw new HxdsException("接收新订单失败");
+     }
+ }
+
+@Data
+@Schema(description = "接收新订单消息的表单")
+public class ReceiveBillMessageForm {
+   @NotNull(message = "userId不能为空")
+   @Min(value = 1, message = "userId不能小于1")
+   @Schema(description = "用户ID")
+   private Long userId;
+
+   @NotBlank(message = "identity不能为空")
+   @Pattern(regexp = "^driver$|^mis$|^customer$|^customer_bill$",message = "identity内容不正确")
+   @Schema(description = "用户身份")
+   private String identity;
+}
+
+@PostMapping("/receiveBillMessage")
+@Operation(summary = "同步接收新订单消息")
+public R receiveBillMessage(@RequestBody @Valid ReceiveBillMessageForm form){
+   String msg = messageTask.receiveBillMessage(form.getIdentity(), form.getUserId());
+   return R.ok().put("result",msg);
+}
+```
+2. 写 bff-customer/src/main/java/com/example/hxds/bff/customer/controller/form/ReceiveBillMessageForm.java
+   写 bff-customer/src/main/java/com/example/hxds/bff/customer/feign/SnmServiceApi.java#receiveBillMessage
+   写 bff-customer/src/main/java/com/example/hxds/bff/customer/service/MessageService.java#receiveBillMessage 及其实现类
+   写 bff-customer/src/main/java/com/example/hxds/bff/customer/controller/MessageController.java#receiveBillMessage
+```java
+@Data
+@Schema(description = "接收新订单消息的表单")
+public class ReceiveBillMessageForm {
+
+    @Schema(description = "用户ID")
+    private Long userId;
+
+    @Schema(description = "用户身份")
+    private String identity;
+}
+
+@PostMapping("/message/receiveBillMessage")
+R receiveBillMessage(ReceiveBillMessageForm form);
+
+String receiveBillMessage(ReceiveBillMessageForm form);
+
+@Override
+public String receiveBillMessage(ReceiveBillMessageForm form) {
+   R r = snmServiceApi.receiveBillMessage(form);
+   String map = MapUtil.getStr(r, "result");
+   return map;
+}
+
+@PostMapping("/receiveBillMessage")
+@SaCheckLogin
+@Operation(summary = "同步接收新订单消息")
+public R receiveBillMessage(@RequestBody @Valid ReceiveBillMessageForm form){
+   long customerId = StpUtil.getLoginIdAsLong();
+   form.setUserId(customerId);
+   form.setIdentity("customer_bill");
+   String msg = messageService.receiveBillMessage(form);
+   return R.ok().put("result",msg);
+}
+```
+3. 写 hxds-customer-wx/main.js#Vue.prototype.url
+   写 hxds-customer-wx/execution/move/move.vue
+```vue
+receiveBillMessage: `${baseUrl}/order/receiveBillMessage`,
+
+data() {
+  return {
+  // ...
+  messageTimer: null
+}
+
+onShow: function() {
+   // ...
+   if(status == 4 || status == 5){
+      that.messageTimer=setInterval(function(){
+         that.ajax(that.url.receiveBillMessage,"POST",{},function(resp){
+               if(resp.data.result=="您有代驾订单待支付"){
+                  uni.redirectTo({
+                      url:"../order/order?orderId="+that.orderId
+                  })
+               }
+         },false)
+      },5000)
+   }
+}
+
+onHide: function() {
+   // ...
+   clearInterval(that.messageTimer)
+   that.messageTimer = null
+}
+```
+4. 【测试】1.到Navicat上面把订单记录的status改成4状态，然后把后端各个子系统运行起来。
+   2.在手机上面运行乘客端的小程序，因为有正在执行的订单，所以小程序会跳转到move.vue页面。
+   3.用Navicat把订单的status改成5状态。或许有同学说想说为什么不调用updateOrderStatus()函数, 把订单修改成5状态?这是因为我们之前运行程序的时候，
+   在司机端小程序上面测试过结束代驾，所以订单表和账单表的记录都更新过了，并且分账表也有记录。故此，我们不用再重新执行结束代驾流程，只改订单状态即可。
+   4.接下来用FastRequest插件,调用bff-driver子系统的updateOrderStatus()函数,把订单修改成6状态。观察乘客端小程序的效果，应该是收到通知消息之后，
+   立即跳转到order.vue页面
+### 乘客端显示待付款账单信息
 1. 写 
 ```java
+
 
 ```

@@ -4,10 +4,7 @@ import cn.hutool.core.map.MapUtil;
 import cn.hutool.core.util.NumberUtil;
 import com.codingapi.txlcn.tc.annotation.LcnTransaction;
 import com.example.hxds.bff.driver.controller.form.*;
-import com.example.hxds.bff.driver.feign.CstServiceApi;
-import com.example.hxds.bff.driver.feign.NebulaServiceApi;
-import com.example.hxds.bff.driver.feign.OdrServiceApi;
-import com.example.hxds.bff.driver.feign.RuleServiceApi;
+import com.example.hxds.bff.driver.feign.*;
 import com.example.hxds.bff.driver.service.OrderService;
 import com.example.hxds.common.exception.HxdsException;
 import com.example.hxds.common.util.R;
@@ -39,6 +36,9 @@ public class OrderServiceImpl implements OrderService {
 
     @Resource
     private RuleServiceApi ruleServiceApi;
+
+    @Resource
+    private SnmServiceApi snmServiceApi;
 
     @Override
     @Transactional
@@ -113,7 +113,7 @@ public class OrderServiceImpl implements OrderService {
     public int startDriving(StartDrivingForm form) {
         R r = odrServiceApi.startDriving(form);
         int rows = MapUtil.getInt(r, "rows");
-        if (rows == 1){
+        if (rows == 1) {
             InsertOrderMonitoringForm monitoringForm = new InsertOrderMonitoringForm();
             monitoringForm.setOrderId(form.getOrderId());
             nebulaServiceApi.insertOrderMonitoring(monitoringForm);
@@ -129,6 +129,21 @@ public class OrderServiceImpl implements OrderService {
         R r = odrServiceApi.updateOrderStatus(form);
         int rows = MapUtil.getInt(r, "rows");
         // TODO:判断订单的状态，然后实现后续业务
+        if (rows != 1) {
+            throw new HxdsException("订单状态修改失败");
+        }
+        if (form.getStatus() == 6) {
+            SendPrivateMessageForm messageForm = new SendPrivateMessageForm();
+            messageForm.setReceiverIdentity("customer_bill");
+            messageForm.setReceiverId(form.getCustomerId());
+            messageForm.setTtl(3 * 24 * 3600 * 1000);
+            // 如果这条消息是系统发出的，那么senderId为0
+            messageForm.setSenderId(0L);
+            messageForm.setSenderIdentity("system");
+            messageForm.setSenderName("华夏代驾");
+            messageForm.setMsg("您有代驾订单待支付");
+            snmServiceApi.sendPrivateMessage(messageForm);
+        }
         return rows;
     }
 
