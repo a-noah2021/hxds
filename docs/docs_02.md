@@ -4208,3 +4208,275 @@ public R calculateOrderMileage(@RequestBody @Valid CalculateOrderMileageForm for
    return R.ok().put("result",mileage);
 }
 ```
+### 规则微服务计算代驾费和系统奖励费
+1. 写 bff-driver/src/main/java/com/example/hxds/bff/driver/controller/form/ValidDriverOwnOrderForm.java
+   写 bff-driver/src/main/java/com/example/hxds/bff/driver/controller/form/SearchSettlementNeedDataForm.java
+   写 bff-driver/src/main/java/com/example/hxds/bff/driver/controller/form/UpdateBillFeeForm.java
+   写 bff-driver/src/main/java/com/example/hxds/bff/driver/controller/form/CalculateOrderMileageForm.java
+   写 bff-driver/src/main/java/com/example/hxds/bff/driver/controller/form/CalculateOrderChargeForm.java
+   写 bff-driver/src/main/java/com/example/hxds/bff/driver/controller/form/CalculateIncentiveFeeForm.java
+   写 bff-driver/src/main/java/com/example/hxds/bff/driver/controller/form/CalculateProfitsharingForm.java
+   写 bff-driver/src/main/java/com/example/hxds/bff/driver/feign/OdrServiceApi.java#validDriverOwnOrder
+   写 bff-driver/src/main/java/com/example/hxds/bff/driver/feign/OdrServiceApi.java#searchSettlementNeedData
+   写 bff-driver/src/main/java/com/example/hxds/bff/driver/feign/NebulaServiceApi.java#calculateOrderMileage
+   写 bff-driver/src/main/java/com/example/hxds/bff/driver/feign/RuleServiceApi.java#calculateOrderCharge
+   写 bff-driver/src/main/java/com/example/hxds/bff/driver/feign/RuleServiceApi.java#calculateIncentiveFee
+   写 bff-driver/src/main/java/com/example/hxds/bff/driver/feign/RuleServiceApi.java#calculateProfitsharing
+   写 bff-driver/src/main/java/com/example/hxds/bff/driver/service/OrderService.java#updateOrderBill 及其实现类
+   写 bff-driver/src/main/java/com/example/hxds/bff/driver/controller/OrderController.java#updateOrderBill
+```java
+@Data
+@Schema(description = "查询司机是否关联某订单的表单")
+public class ValidDriverOwnOrderForm {
+
+    @Schema(description = "司机ID")
+    private Long driverId;
+
+    @NotNull(message = "orderId不能为空")
+    @Min(value = 1, message = "orderId不能小于1")
+    @Schema(description = "订单ID")
+    private Long orderId;
+}
+
+@Data
+@Schema(description = "查询订单的开始和等时的表单")
+public class SearchSettlementNeedDataForm {
+   @NotNull(message = "orderId不能为空")
+   @Min(value = 1, message = "orderId不能小于1")
+   @Schema(description = "订单ID")
+   private Long orderId;
+}
+
+@Data
+@Schema(description = "更新订单账单费用的表单")
+public class UpdateBillFeeForm {
+
+   @Schema(description = "总金额")
+   private String total;
+
+   @Schema(description = "里程费")
+   private String mileageFee;
+
+   @Schema(description = "等时费")
+   private String waitingFee;
+
+   @NotBlank(message = "tollFee不能为空")
+   @Pattern(regexp = "^[1-9]\\d*\\.\\d{1,2}$|^0\\.\\d{1,2}$|^[1-9]\\d*$", message = "tollFee内容不正确")
+   @Schema(description = "路桥费")
+   private String tollFee;
+
+   @NotBlank(message = "parkingFee不能为空")
+   @Pattern(regexp = "^[1-9]\\d*\\.\\d{1,2}$|^0\\.\\d{1,2}$|^[1-9]\\d*$", message = "parkingFee内容不正确")
+   @Schema(description = "路桥费")
+   private String parkingFee;
+
+   @NotBlank(message = "otherFee不能为空")
+   @Pattern(regexp = "^[1-9]\\d*\\.\\d{1,2}$|^0\\.\\d{1,2}$|^[1-9]\\d*$", message = "otherFee内容不正确")
+   @Schema(description = "其他费用")
+   private String otherFee;
+
+   @Schema(description = "返程费用")
+   private String returnFee;
+
+   @Schema(description = "系统奖励费用")
+   private String incentiveFee;
+
+   @NotNull(message = "orderId不能为空")
+   @Min(value = 1, message = "orderId不能小于1")
+   @Schema(description = "订单ID")
+   private Long orderId;
+
+   @Schema(description = "司机ID")
+   private Long driverId;
+
+   @Schema(description = "代驾公里数")
+   private String realMileage;
+
+   @Schema(description = "返程公里数")
+   private String returnMileage;
+
+   @Schema(description = "规则ID")
+   private Long ruleId;
+
+   @Schema(description = "支付手续费率")
+   private String paymentRate;
+
+   @Schema(description = "支付手续费")
+   private String paymentFee;
+
+   @Schema(description = "代缴个税费率")
+   private String taxRate;
+
+   @Schema(description = "代缴个税")
+   private String taxFee;
+
+   @Schema(description = "代驾系统分账收入")
+   private String systemIncome;
+
+   @Schema(description = "司机分账收入")
+   private String driverIncome;
+
+}
+
+@Data
+@Schema(description = "查询某订单的全部GPS数据的表单")
+public class CalculateOrderMileageForm {
+   @NotNull(message = "orderId不能为空")
+   @Min(value = 1, message = "orderId不能小于1")
+   @Schema(description = "订单ID")
+   private Long orderId;
+}
+
+@Data
+@Schema(description = "计算代驾费用的表单")
+public class CalculateOrderChargeForm {
+
+   @Schema(description = "代驾公里数")
+   private String mileage;
+
+   @Schema(description = "代驾开始时间")
+   private String time;
+
+   @Schema(description = "等时分钟")
+   private Integer minute;
+}
+
+@Data
+@Schema(description = "计算系统奖励的表单")
+public class CalculateIncentiveFeeForm {
+
+   @Schema(description = "司机ID")
+   private long driverId;
+
+   @NotBlank(message = "acceptTime不能为空")
+   @Pattern(regexp = "^((((1[6-9]|[2-9]\\d)\\d{2})-(0?[13578]|1[02])-(0?[1-9]|[12]\\d|3[01]))|(((1[6-9]|[2-9]\\d)\\d{2})-(0?[13456789]|1[012])-(0?[1-9]|[12]\\d|30))|(((1[6-9]|[2-9]\\d)\\d{2})-0?2-(0?[1-9]|1\\d|2[0-8]))|(((1[6-9]|[2-9]\\d)(0[48]|[2468][048]|[13579][26])|((16|[2468][048]|[3579][26])00))-0?2-29-))\\s(20|21|22|23|[0-1]\\d):[0-5]\\d:[0-5]\\d$",
+           message = "acceptTime内容不正确")
+   @Schema(description = "接单时间")
+   private String acceptTime;
+}
+
+@Data
+@Schema(description = "计算订单分账的表单")
+public class CalculateProfitsharingForm {
+
+   @Schema(description = "订单ID")
+   private Long orderId;
+
+   @Schema(description = "待分账费用")
+   private String amount;
+}
+
+@PostMapping("/order/validDriverOwnOrder")
+R validDriverOwnOrder(ValidDriverOwnOrderForm form);
+
+@PostMapping("/order/searchSettlementNeedData")
+R searchSettlementNeedData(SearchSettlementNeedDataForm form);
+
+@PostMapping("/bill/updateBillFee")
+R updateBillFee(UpdateBillFeeForm form);
+   
+@PostMapping("/order/gps/calculateOrderMileage")
+R calculateOrderMileage(CalculateOrderMileageForm form);
+
+@PostMapping("/charge/calculateOrderCharge")
+R calculateOrderCharge(CalculateOrderChargeForm form);
+
+@PostMapping("/award/calculateIncentiveFee")
+R calculateIncentiveFee(CalculateIncentiveFeeForm form);
+
+@PostMapping("/profitsharing/calculateProfitsharing")
+R calculateProfitsharing(CalculateProfitsharingForm form);
+
+int updateOrderBill(UpdateBillFeeForm form);
+
+@Override
+public int updateOrderBill(UpdateBillFeeForm form) {
+   // 1. 判断司机是否关联该订单
+   ValidDriverOwnOrderForm form_1 = new ValidDriverOwnOrderForm();
+   form_1.setOrderId(form.getOrderId());
+   form_1.setDriverId(form.getDriverId());
+   R r = odrServiceApi.validDriverOwnOrder(form_1);
+   Boolean bool = MapUtil.getBool(r, "result");
+   if (!bool) {
+      throw new HxdsException("司机未关联该订单");
+   }
+   // 2. 计算订单里程数据
+   CalculateOrderMileageForm form_2 = new CalculateOrderMileageForm();
+   form_2.setOrderId(form.getOrderId());
+   r = nebulaServiceApi.calculateOrderMileage(form_2);
+   String mileage = (String) r.get("result");
+   mileage = NumberUtil.div(mileage, "1000", 1, RoundingMode.CEILING).toString();
+   // 3. 查询订单消息
+   SearchSettlementNeedDataForm form_3 = new SearchSettlementNeedDataForm();
+   form_3.setOrderId(form.getOrderId());
+   r = odrServiceApi.searchSettlementNeedData(form_3);
+   HashMap map = (HashMap) r.get("result");
+   String acceptTime = MapUtil.getStr(map, "acceptTime");
+   String startTime = MapUtil.getStr(map, "startTime");
+   int waitingMinute = MapUtil.getInt(map, "waitingMinute");
+   String favourFee = MapUtil.getStr(map, "favourFee");
+   // 4. 计算代驾费
+   CalculateOrderChargeForm form_4 = new CalculateOrderChargeForm();
+   form_4.setMileage(mileage);
+   form_4.setTime(startTime.split(" ")[1]);
+   form_4.setMinute(waitingMinute);
+   r = ruleServiceApi.calculateOrderCharge(form_4);
+   map = (HashMap) r.get("result");
+   String mileageFee = MapUtil.getStr(map, "mileageFee");
+   String returnFee = MapUtil.getStr(map, "returnFee");
+   String waitingFee = MapUtil.getStr(map, "waitingFee");
+   String amount = MapUtil.getStr(map, "amount");
+   String returnMileage = MapUtil.getStr(map, "returnMileage");
+   // 5. 计算系统奖励费用
+   CalculateIncentiveFeeForm form_5 = new CalculateIncentiveFeeForm();
+   form_5.setDriverId(form.getDriverId());
+   form_5.setAcceptTime(acceptTime);
+   r = ruleServiceApi.calculateIncentiveFee(form_5);
+   String incentiveFee = (String) r.get("result");
+
+   form.setMileageFee(mileageFee);
+   form.setReturnFee(returnFee);
+   form.setWaitingFee(waitingFee);
+   form.setIncentiveFee(incentiveFee);
+   form.setRealMileage(mileage);
+   form.setReturnMileage(returnMileage);
+   //计算总费用
+   String total = NumberUtil.add(amount, form.getTollFee(), form.getParkingFee(), form.getOtherFee(), favourFee).toString();
+   form.setTotal(total);
+   // 6. 计算分账数据
+   CalculateProfitsharingForm form_6 = new CalculateProfitsharingForm();
+   form_6.setOrderId(form.getOrderId());
+   form_6.setAmount(total);
+   r = ruleServiceApi.calculateProfitsharing(form_6);
+   map = (HashMap) r.get("result");
+   long ruleId = MapUtil.getLong(map, "ruleId");
+   String systemIncome = MapUtil.getStr(map, "systemIncome");
+   String driverIncome = MapUtil.getStr(map, "driverIncome");
+   String paymentRate = MapUtil.getStr(map, "paymentRate");
+   String paymentFee = MapUtil.getStr(map, "paymentFee");
+   String taxRate = MapUtil.getStr(map, "taxRate");
+   String taxFee = MapUtil.getStr(map, "taxFee");
+
+   form.setRuleId(ruleId);
+   form.setPaymentRate(paymentRate);
+   form.setPaymentFee(paymentFee);
+   form.setTaxRate(taxRate);
+   form.setTaxFee(taxFee);
+   form.setSystemIncome(systemIncome);
+   form.setDriverIncome(driverIncome);
+   // 7. 更新代驾费账单数据
+   r = odrServiceApi.updateBillFee(form);
+   int rows = MapUtil.getInt(r, "rows");
+   return rows;
+}
+
+@PostMapping("/updateBillFee")
+@SaCheckLogin
+@Operation(summary = "更新订单账单费用")
+public R updateBillFee(@RequestBody @Valid UpdateBillFeeForm form) {
+   long driverId = StpUtil.getLoginIdAsLong();
+   form.setDriverId(driverId);
+   int rows = orderService.updateOrderBill(form);
+   return R.ok().put("rows", rows);
+}
+```
