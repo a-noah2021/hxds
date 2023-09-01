@@ -18,4 +18,6 @@ public interface OrderGpsService {
     List<HashMap> searchOrderGps(long orderId);
 
     HashMap searchOrderLastGps(long orderId);
+
+    String calculateOrderMileage(long orderId);
 }

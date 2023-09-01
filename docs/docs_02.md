@@ -4129,3 +4129,82 @@ public R searchSettlementNeedData(@RequestBody @Valid SearchSettlementNeedDataFo
    return R.ok().put("result", map);
 }
 ```
+2. 写 hxds-nebula/src/main/resources/mapper/OrderGpsDao.xml/searchOrderAllGps 及其对应接口
+   写 hxds-nebula/src/main/java/com/example/hxds/nebula/util/LocationUtil.java
+   写 hxds-nebula/src/main/java/com/example/hxds/nebula/service/OrderGpsService.java#calculateOrderMileage 及其实现类
+   写 hxds-nebula/src/main/java/com/example/hxds/nebula/controller/form/CalculateOrderMileageForm.java
+   写 hxds-nebula/src/main/java/com/example/hxds/nebula/controller/OrderGpsController.java#calculateOrderMileage
+```java
+ <select id="searchOrderAllGps" parameterType="long" resultType="HashMap">
+     SELECT "latitude", "longitude"
+     FROM hxds.order_gps
+     WHERE "order_id" = #{orderId}
+     ORDER BY "id"
+ </select>
+
+List<HashMap> searchOrderAllGps(long orderId);
+
+public class LocationUtil {
+
+   //地球半径
+   private final static double EARTH_RADIUS = 6378.137;
+
+   private static double rad(double d) {
+      return d * Math.PI / 180.0;
+   }
+
+   /**
+    * 计算两点间距离
+    *
+    * @return double 距离 单位公里,精确到米
+    */
+   public static double getDistance(double lat1, double lng1, double lat2, double lng2) {
+      double radLat1 = rad(lat1);
+      double radLat2 = rad(lat2);
+      double a = radLat1 - radLat2;
+      double b = rad(lng1) - rad(lng2);
+      double s = 2 * Math.asin(Math.sqrt(Math.pow(Math.sin(a / 2), 2) +
+              Math.cos(radLat1) * Math.cos(radLat2) * Math.pow(Math.sin(b / 2), 2)));
+      s = s * EARTH_RADIUS;
+      s = new BigDecimal(s).setScale(3, RoundingMode.HALF_UP).doubleValue();
+      return s;
+   }
+}
+
+String calculateOrderMileage(long orderId);
+
+@Override
+public String calculateOrderMileage(long orderId) {
+   List<HashMap> list = orderGpsDao.searchOrderAllGps(orderId);
+   double mileage = 0;
+   for (int i = 0; i < list.size(); i++) {
+      if (i != list.size() - 1) {
+         HashMap map_1 = list.get(i);
+         HashMap map_2 = list.get(i + 1);
+         double latitude_1 = MapUtil.getDouble(map_1, "latitude");
+         double longitude_1 = MapUtil.getDouble(map_1, "longitude");
+         double latitude_2 = MapUtil.getDouble(map_2, "latitude");
+         double longitude_2 = MapUtil.getDouble(map_2, "longitude");
+         double distance = LocationUtil.getDistance(latitude_1, longitude_1, latitude_2, longitude_2);
+         mileage += distance;
+      }
+   }
+   return mileage + "";
+}
+
+@Data
+@Schema(description = "计算订单里程的表单")
+public class CalculateOrderMileageForm {
+   @NotNull(message = "orderId不能为空")
+   @Min(value = 1, message = "orderId不能小于1")
+   @Schema(description = "订单ID")
+   private Long orderId;
+}
+
+@PostMapping("/calculateOrderMileage")
+@Operation(summary = "计算订单里程")
+public R calculateOrderMileage(@RequestBody @Valid CalculateOrderMileageForm form){
+   String mileage = orderGpsService.calculateOrderMileage(form.getOrderId());
+   return R.ok().put("result",mileage);
+}
+```

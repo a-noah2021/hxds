@@ -25,4 +25,10 @@
         ORDER BY "id" DESC
             LIMIT 1
     </select>
+    <select id="searchOrderAllGps" parameterType="long" resultType="HashMap">
+        SELECT "latitude", "longitude"
+        FROM hxds.order_gps
+        WHERE "order_id" = #{orderId}
+        ORDER BY "id"
+    </select>
 </mapper>
