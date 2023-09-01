@@ -2,16 +2,19 @@ package com.example.hxds.odr.controller;
 
 import cn.hutool.core.bean.BeanUtil;
 import com.example.hxds.common.util.R;
+import com.example.hxds.odr.controller.form.SearchReviewDriverOrderBillForm;
 import com.example.hxds.odr.controller.form.UpdateBillFeeForm;
 import com.example.hxds.odr.service.OrderBillService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import javax.annotation.Resource;
 import javax.validation.Valid;
+import java.util.HashMap;
 import java.util.Map;
 
 /**
@@ -31,6 +34,14 @@ public class OrderBillController {
         Map param = BeanUtil.beanToMap(form);
         int rows = orderBillService.updateBillFee(param);
         return R.ok().put("rows", rows);
+    }
+
+    @PostMapping("/searchReviewDriverOrderBill")
+    @Operation(summary = "查询司机预览账单")
+    public R searchReviewDriverOrderBill(@RequestBody @Valid SearchReviewDriverOrderBillForm form){
+        Map param = BeanUtil.beanToMap(form);
+        HashMap map = orderBillService.searchReviewDriverOrderBill(param);
+        return R.ok().put("result",map);
     }
 
 }

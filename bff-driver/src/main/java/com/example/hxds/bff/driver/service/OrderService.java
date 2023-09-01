@@ -27,4 +27,6 @@ public interface OrderService {
     int updateOrderStatus(UpdateOrderStatusForm form);
 
     int updateOrderBill(UpdateBillFeeForm form);
+
+    HashMap searchReviewDriverOrderBill(SearchReviewDriverOrderBillForm form);
 }

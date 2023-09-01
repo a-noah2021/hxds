@@ -4480,3 +4480,252 @@ public R updateBillFee(@RequestBody @Valid UpdateBillFeeForm form) {
    return R.ok().put("rows", rows);
 }
 ```
+### 司机端手动添加路桥费等相关费用
+1. 写 hxds-driver-wx/main.js#Vue.prototype.url
+   写 hxds-driver-wx/order/enter_fee/enter_fee.vue
+```java
+updateBillFee: `${baseUrl}/order/updateBillFee`,
+  
+methods: {
+  enterFee: function (type) {
+    let that = this;
+    if (type == 'toll') {
+      uni.showModel({
+        title: '路桥费',
+        content: that.tollFee,
+        editable: true,
+        placeholderText: '输入路桥费',
+        showCancel: false,
+        success: function (resp) {
+          if (that.checkValidFee(resp.content, '路桥费')) {
+            that.tollFee = resp.content;
+          }
+        }
+      });
+    } else if (type == 'parking') {
+      uni.showModel({
+        title: '停车费',
+        content: that.tollFee,
+        editable: true,
+        placeholderText: '输入停车费',
+        showCancel: false,
+        success: function (resp) {
+          if (that.checkValidFee(resp.content, '停车费')) {
+            that.parkingFee = resp.content;
+          }
+        }
+      });
+    } else if (type == 'other') {
+      uni.showModel({
+        title: '其他费用',
+        content: that.tollFee,
+        editable: true,
+        placeholderText: '输入其他费用',
+        showCancel: false,
+        success: function (resp) {
+          if (that.checkValidFee(resp.content, '其他费用')) {
+            that.otherFee = resp.content;
+          }
+        }
+      });
+    }
+  },
+  submit: function () {
+    let that = this;
+    if (that.checkValidFee(that.tollFee, '路桥费')
+        && that.checkValidFee(that.parkingFee, '停车费')
+        && that.checkValidFee(that.otherFee, '其他费用')) {
+      uni.showModal({
+        title: '提示消息',
+        content: '您确认要提交以上相关费用？',
+        success: function(resp) {
+          if (resp.confirm) {
+            let data = {
+              tollFee: that.tollFee,
+              parkingFee: that.parkingFee,
+              otherFee: that.otherFee,
+              orderId: that.orderId
+            };
+            that.ajax(that.url.updateBillFee, 'POST', data, function(resp) {
+              uni.navigateTo({
+                url: `/order/order_bill/order_bill?orderId=${that.orderId}&customerId=${that.customerId}`
+              });
+            });
+          }
+        }
+      });
+    }
+  }
+},
+// 携带orderId和customerId，从workbench页面跳转过来
+onLoad: function (options) {
+  this.orderId = options.orderId;
+  this.customerId = options.customerId;
+},
+```
+2. 【测试】首先测试 Web 方法，向 tb_order_profitsharing 表添加的分账记录给删除掉，把订单的 status 改成4状态。接下来启动后端各个子系统，运行司机端小程序。
+    结束代驾，然后输入相关费用，测试一下程序运行的效果。
+### 司机端预览代驾账单
+1. 写 hxds-odr/src/main/resources/mapper/OrderBillDao.xml#searchReviewDriverOrderBill 及其对应接口
+   写 hxds-odr/src/main/java/com/example/hxds/odr/service/OrderService.java#searchDriverCurrentOrder 及其对应实现类
+   写 hxds-odr/src/main/java/com/example/hxds/odr/controller/form/SearchReviewDriverOrderBillForm.java
+   写 hxds-odr/src/main/java/com/example/hxds/odr/controller/OrderBillController.java#searchReviewDriverOrderBill
+```java
+ <select id="searchReviewDriverOrderBill" parameterType="Map" resultType="HashMap">
+     SELECT CAST(b.total AS CHAR)                AS total,
+            CAST(b.real_pay AS CHAR)             AS realPay,
+            CAST(b.mileage_fee AS CHAR)          AS mileageFee,
+            CAST(o.favour_fee AS CHAR)           AS favourFee,
+            CAST(o.incentive_fee AS CHAR)        AS incentiveFee,
+            CAST(b.waiting_fee AS CHAR)          AS waitingFee,
+            CAST(o.real_mileage AS CHAR)         AS realMileage,
+            CAST(b.return_fee AS CHAR)           AS returnFee,
+            CAST(b.parking_fee AS CHAR)          AS parkingFee,
+            CAST(b.toll_fee AS CHAR)             AS tollFee,
+            CAST(b.other_fee AS CHAR)           AS otherFee,
+            CAST(b.voucher_fee AS CHAR)          AS voucherFee,
+            o.waiting_minute                     AS waitingMinute,
+            b.base_mileage                       AS baseMileage,
+            CAST(b.base_mileage_price AS CHAR)   AS baseMileagePrice,
+            CAST(b.exceed_mileage_price AS CHAR) AS exceedMileagePrice,
+            b.base_minute                        AS baseMinute,
+            CAST(b.exceed_minute_price AS CHAR)  AS exceedMinutePrice,
+            b.base_return_mileage                AS baseReturnMileage,
+            CAST(b.exceed_return_price AS CHAR)  AS exceedReturnPrice,
+            CAST(o.return_mileage AS CHAR)       AS returnMileage,
+            CAST(p.tax_fee AS CHAR)              AS taxFee,
+            CAST(p.driver_income AS CHAR)        AS driverIncome
+     FROM tb_order o
+              JOIN tb_order_bill b ON o.id = b.order_id
+              JOIN tb_order_profitsharing p ON o.id = p.order_id
+     WHERE o.id = #{orderId}
+       AND o.driver_id = #{driverId}
+       AND o.`status` = 5
+ </select>
+
+HashMap searchReviewDriverOrderBill(Map param);
+
+HashMap searchReviewDriverOrderBill(Map param);
+
+@Override
+public HashMap searchReviewDriverOrderBill(Map param) {
+     HashMap map = orderBillDao.searchReviewDriverOrderBill(param);
+     return map;
+}
+
+@Data
+@Schema(description = "查询司机预览账单的表单")
+public class SearchReviewDriverOrderBillForm {
+
+   @NotNull(message = "orderId不能为空")
+   @Min(value = 1, message = "orderId不能小于1")
+   @Schema(description = "订单ID")
+   private Long orderId;
+
+   @NotNull(message = "driverId不能为空")
+   @Min(value = 1, message = "driverId不能小于1")
+   @Schema(description = "司机ID")
+   private Long driverId;
+
+}
+
+@PostMapping("/searchReviewDriverOrderBill")
+@Operation(summary = "查询司机预览账单")
+public R searchReviewDriverOrderBill(@RequestBody @Valid SearchReviewDriverOrderBillForm form){
+   Map param = BeanUtil.beanToMap(form);
+   HashMap map = orderBillService.searchReviewDriverOrderBill(param);
+   return R.ok().put("result",map);
+}
+```
+2. 写 bff-driver/src/main/java/com/example/hxds/bff/driver/controller/form/SearchReviewDriverOrderBillForm.java
+   写 bff-driver/src/main/java/com/example/hxds/bff/driver/feign/OdrServiceApi.java#searchReviewDriverOrderBill
+   写 bff-driver/src/main/java/com/example/hxds/bff/driver/service/OrderService.java#searchReviewDriverOrderBill 及其实现类
+   写 bff-driver/src/main/java/com/example/hxds/bff/driver/controller/OrderController.java#searchReviewDriverOrderBill
+```java
+@Data
+@Schema(description = "查询司机预览账单的表单")
+public class SearchReviewDriverOrderBillForm {
+
+    @NotNull(message = "orderId不能为空")
+    @Min(value = 1, message = "orderId不能小于1")
+    @Schema(description = "订单ID")
+    private Long orderId;
+
+    @Schema(description = "司机ID")
+    private Long driverId;
+
+}
+
+@PostMapping("/bill/searchReviewDriverOrderBill")
+R searchReviewDriverOrderBill(SearchReviewDriverOrderBillForm form);
+
+HashMap searchReviewDriverOrderBill(SearchReviewDriverOrderBillForm form);
+
+@Override
+public HashMap searchReviewDriverOrderBill(SearchReviewDriverOrderBillForm form) {
+   R r = odrServiceApi.searchReviewDriverOrderBill(form);
+   HashMap map = (HashMap) r.get("result");
+   return map;
+}
+
+@PostMapping("/searchReviewDriverOrderBill")
+@SaCheckLogin
+@Operation(summary = "查询司机预览订单")
+public R searchReviewDriverOrderBill(@RequestBody @Valid SearchReviewDriverOrderBillForm form) {
+   long driverId = StpUtil.getLoginIdAsLong();
+   form.setDriverId(driverId);
+   HashMap map = orderService.searchReviewDriverOrderBill(form);
+   return R.ok().put("result", map);
+}
+```
+3. 写 hxds-driver-wx/main.js#Vue.prototype.url
+   写 hxds-driver-wx/order/order_bill/order_bill.vue#onLoad
+```java
+searchReviewDriverOrderBill: `${baseUrl}/order/searchReviewDriverOrderBill`,
+
+onLoad: function(options) {
+  let that = this;
+  that.orderId = options.orderId;
+  that.customerId = options.customerId;
+  let data = {
+    orderId: that.orderId
+  };
+  that.ajax(that.url.searchReviewDriverOrderBill, 'POST', data, function(resp) {
+    let result = resp.data.result;
+    that.favourFee = result.favourFee;
+    that.incentiveFee = result.incentiveFee;
+    that.realMileage = result.realMileage;
+    that.mileageFee = result.mileageFee;
+    that.baseMileagePrice = result.baseMileagePrice;
+    that.baseMileage = result.baseMileage;
+    that.exceedMileagePrice = result.exceedMileagePrice;
+    that.waitingFee = result.waitingFee;
+    that.baseMinute = result.baseMinute;
+    that.waitingMinute = result.waitingMinute;
+    that.exceedMinutePrice = result.exceedMinutePrice;
+    that.returnFee = result.returnFee;
+    that.baseReturnMileage = result.baseReturnMileage;
+    that.exceedReturnPrice = result.exceedReturnPrice;
+    that.returnMileage = result.returnMileage;
+    that.parkingFee = result.parkingFee;
+    that.tollFee = result.tollFee;
+    that.otherFee = result.otherFee;
+    that.total = result.total;
+    that.driverIncome = result.driverIncome;
+    that.taxFee = result.taxFee;
+  });
+},
+```
+### 系统消息模块的设计原理
+【说明】之前我们做司机抢单功能的时候,用到了RabbitMQ消息队列。但是抢单消息被司机接收之后,消息就被队列给删除了,并不会持久化存储。毕竟抢单信息都是临时性的消息,
+并不需要持久化存储。但是其他的一些系统通知,无论司机或者乘客是否收到该消息,都要持久化存储。比如说钱包充值成功的通知,这样的消息就应该持久存储,除非司机手动删除消息。
+持久化存储系统消息,数据量很大,而且又不是高价值的数据,好像用MongoDB和HBase都可以,到底应该选用哪一个呢?如果数据的检索需要用上复杂的查询条件和表达式,那么用HBase
+更加的适合,毕竟SQL语句写起来很容易。反之,就可以用MongoDB。恰好系统消息无非就是分页查询、按照主键值查询,没有什么复杂的条件,所以我们用MongoDB就可以了。MongoDB
+中没有数据表的概念,而是采用集合(Collectioon)存储数据,每条数据就是一个文档(Document)。文档结构很好理解,其实就是我们常用的JSOIN,一个JSON就是一条记录。
+
+
+### 消息微服务封装收发系统消息的接口
+1. 写 
+```java
+
+```
