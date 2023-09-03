@@ -15,6 +15,8 @@ public interface OrderBillDao {
     int updateBillFee(Map param);
 
     HashMap searchReviewDriverOrderBill(Map param);
+
+    int updateBillPayment(Map param);
 }
 
 

@@ -6,11 +6,11 @@ import com.example.hxds.vhr.db.pojo.VoucherCustomerEntity;
 import java.util.Map;
 
 public interface VoucherCustomerDao {
-    public int insert(VoucherCustomerEntity entity);
+    int insert(VoucherCustomerEntity entity);
 
-    public String validCanUseVoucher(Map param);
+    String validCanUseVoucher(Map param);
 
-    public int bindVoucher(Map param);
+    int bindVoucher(Map param);
 }
 
 

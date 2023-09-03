@@ -1,18 +1,27 @@
 package com.example.hxds.odr.service.impl;
 
+import cn.hutool.core.date.DateField;
+import cn.hutool.core.date.DateTime;
 import cn.hutool.core.map.MapUtil;
+import cn.hutool.core.util.IdUtil;
 import cn.hutool.json.JSONObject;
 import cn.hutool.json.JSONUtil;
 import com.codingapi.txlcn.tc.annotation.LcnTransaction;
 import com.example.hxds.common.exception.HxdsException;
 import com.example.hxds.common.util.PageUtils;
+import com.example.hxds.odr.controller.form.TransferForm;
 import com.example.hxds.odr.db.dao.OrderBillDao;
 import com.example.hxds.odr.db.dao.OrderDao;
 import com.example.hxds.odr.db.pojo.OrderBillEntity;
 import com.example.hxds.odr.db.pojo.OrderEntity;
+import com.example.hxds.odr.feigin.DrServiceApi;
+import com.example.hxds.odr.quartz.QuartzUtil;
+import com.example.hxds.odr.quartz.job.HandleProfitsharingJob;
 import com.example.hxds.odr.service.OrderService;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
+import org.quartz.JobBuilder;
+import org.quartz.JobDetail;
 import org.springframework.dao.DataAccessException;
 import org.springframework.data.redis.core.RedisOperations;
 import org.springframework.data.redis.core.RedisTemplate;
@@ -21,9 +30,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import javax.annotation.Resource;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.math.BigDecimal;
+import java.util.*;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -42,7 +50,13 @@ public class OrderServiceImpl implements OrderService {
     private OrderBillDao orderBillDao;
 
     @Resource
+    private DrServiceApi drServiceApi;
+
+    @Resource
     private RedisTemplate redisTemplate;
+
+    @Resource
+    private QuartzUtil quartzUtil;
 
     @Override
     public HashMap searchDriverTodayBusinessData(long driverId) {
@@ -272,13 +286,103 @@ public class OrderServiceImpl implements OrderService {
     @Override
     public boolean validDriverOwnOrder(Map param) {
         long count = orderDao.validDriverOwnOrder(param);
-        return count == 1? true:false;
+        return count == 1 ? true : false;
     }
 
     @Override
     public Map searchSettlementNeedData(long orderId) {
         Map map = orderDao.searchSettlementNeedData(orderId);
         return map;
+    }
+
+
+    /**
+     * 将订单信息中的startPlaceLocation和endPlaceLocation字段的值从字符串转换为JSON对象
+     */
+    @Override
+    public HashMap searchOrderById(Map param) {
+        HashMap map = orderDao.searchOrderById(param);
+        String startPlaceLocation = MapUtil.getStr(map, "startPlaceLocation");
+        String endPlaceLocation = MapUtil.getStr(map, "endPlaceLocation");
+        map.replace("startPlaceLocation", JSONUtil.parse(startPlaceLocation));
+        map.replace("endPlaceLocation", JSONUtil.parse(endPlaceLocation));
+        return map;
+    }
+
+    @Override
+    public HashMap validCanPayOrder(Map param) {
+        HashMap map = orderDao.validCanPayOrder(param);
+        if (Objects.isNull(map) || map.size() == 0) {
+            throw new HxdsException("订单无法支付");
+        }
+        return map;
+    }
+
+    @Override
+    public int updateOrderPrepayId(Map param) {
+        int rows = orderDao.updateOrderPrepayId(param);
+        if (rows != 1) {
+            throw new HxdsException("更新预支付订单ID失败");
+        }
+        return rows;
+    }
+
+    @Override
+    @Transactional
+    @LcnTransaction
+    public void handlePayment(String uuid, String payId, String driverOpenId, String payTime) {
+        // 更新订单状态之前，先查询订单的状态
+        // 因为乘客端付款成功之后会主动发起Ajax请求，要求更新订单状态
+        // 所以后端接收到付款通知消息之后，不要着急修改订单状态，先看一下订单是否是7状态(已付款)
+        HashMap map = orderDao.searchOrderIdAndStatus(uuid);
+        int status = MapUtil.getInt(map, "status");
+        if (status == 7) {
+            return;
+        }
+        HashMap param = new HashMap() {{
+            put("uuid", uuid);
+            put("payId", payId);
+            put("payTime", payTime);
+        }};
+        // 更新订单记录的PayId、状态和付款时间
+        int rows = orderDao.updateOrderPayIdAndStatus(param);
+        if (rows != 1) {
+            throw new HxdsException("更新支付订单ID失败");
+        }
+        // 查询系统奖励
+        map = orderDao.searchDriverIdAndIncentiveFee(uuid);
+        String incentiveFee = MapUtil.getStr(map, "incentiveFee");
+        long driverId = MapUtil.getLong(map, "driverId");
+        // 判断系统奖励费是否大于0
+        if (new BigDecimal(incentiveFee).compareTo(new BigDecimal("0.00")) == 1) {
+            TransferForm form = new TransferForm();
+            form.setUuid(IdUtil.simpleUUID());
+            form.setAmount(incentiveFee);
+            form.setDriverId(driverId);
+            form.setType((byte) 2);
+            form.setRemark("系统奖励费");
+            // 给司机钱包转账奖励费
+            drServiceApi.transfer(form);
+        }
+        // 先判断是否有分账定时器
+        if (quartzUtil.checkExists(uuid, "代驾单分账任务组") || quartzUtil.checkExists(uuid, "查询代驾单分账任务组")){
+            // 存在分账定时器就不需要再继续分账
+            return;
+        }
+        // 执行分账
+        JobDetail jobDetail = JobBuilder.newJob(HandleProfitsharingJob.class).build();
+        Map dataMap = jobDetail.getJobDataMap();
+        dataMap.put("uuid", uuid);
+        dataMap.put("driverOpenId", driverOpenId);
+        dataMap.put("payId", payId);
+        // 2分钟之后执行分账定时器
+        Date executeDate = new DateTime().offset(DateField.MINUTE, 2);
+        quartzUtil.addJob(jobDetail, uuid, "代驾单分账任务组", executeDate);
+        // 更新订单状态为已完成状态(8)
+        rows = orderDao.finishOrder(uuid);
+        if (rows != 1) {
+            throw new HxdsException("更新订单结束状态失败");
+        }
     }
 
 }

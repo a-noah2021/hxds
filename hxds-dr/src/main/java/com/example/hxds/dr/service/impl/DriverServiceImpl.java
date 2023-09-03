@@ -217,4 +217,10 @@ public class DriverServiceImpl implements DriverService {
         return map;
     }
 
+    @Override
+    public String searchDriverOpenId(long driverId) {
+        String openId = driverDao.searchDriverOpenId(driverId);
+        return openId;
+    }
+
 }

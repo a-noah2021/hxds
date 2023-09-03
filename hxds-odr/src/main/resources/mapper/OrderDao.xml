@@ -259,5 +259,85 @@
         FROM tb_order
         WHERE id = #{orderId}
     </select>
-
+    <select id="searchOrderById" parameterType="Map" resultType="HashMap">
+        SELECT CAST(o.id AS CHAR) AS id,
+        CAST(o.driver_id AS CHAR) AS driverId,
+        CAST(o.customer_id AS CHAR) AS customerId,
+        o.start_place AS startPlace,
+        o.start_place_location AS startPlaceLocation,
+        o.end_place AS endPlace,
+        o.end_place_location AS endPlaceLocation,
+        CAST(b.total AS CHAR) AS total,
+        CAST(b.real_pay AS CHAR) AS realPay,
+        CAST(b.mileage_fee AS CHAR) AS mileageFee,
+        CAST(o.favour_fee AS CHAR) AS favourFee,
+        CAST(o.incentive_fee AS CHAR) AS incentiveFee,
+        CAST(b.waiting_fee AS CHAR) AS waitingFee,
+        CAST(b.return_fee AS CHAR) AS returnFee,
+        CAST(b.parking_fee AS CHAR) AS parkingFee,
+        CAST(b.toll_fee AS CHAR) AS tollFee,
+        CAST(b.other_fee AS CHAR) AS otherFee,
+        CAST(b.voucher_fee AS CHAR) AS voucherFee,
+        CAST(o.real_mileage AS CHAR) AS realMileage,
+        o.waiting_minute AS waitingMinute,
+        b.base_mileage AS baseMileage,
+        CAST(b.base_mileage_price AS CHAR) AS baseMileagePrice,
+        CAST(b.exceed_mileage_price AS CHAR) AS exceedMileagePrice,
+        b.base_minute AS baseMinute,
+        CAST(b.exceed_minute_price AS CHAR) AS exceedMinutePrice,
+        b.base_return_mileage AS baseReturnMileage,
+        CAST(b.exceed_return_price AS CHAR) AS exceedReturnPrice,
+        CAST(o.return_mileage AS CHAR) AS returnMileage,
+        o.car_plate AS carPlate,
+        o.car_type AS carType,
+        o.status,
+        DATE_FORMAT(o.create_time, '%Y-%m-%d %H:%i:%s') AS createTime
+        FROM tb_order o
+        JOIN tb_order_bill b ON o.id = b.order_id
+        WHERE o.id = #{orderId}
+        <if test="driverId!=null">
+            AND driver_id = #{driverId}
+        </if>
+        <if test="customerId!=null">
+            AND customer_id = #{customerId}
+        </if>
+    </select>
+    <select id="validCanPayOrder" parameterType="Map" resultType="HashMap">
+        SELECT CAST(real_fee AS CHAR)  AS realFee,
+               CAST(driver_id AS CHAR) AS driverId,
+               uuid
+        FROM tb_order
+        WHERE id = #{orderId}
+          AND customer_id = #{customerId}
+          AND `status` = 6
+    </select>
+    <update id="updateOrderPrepayId" parameterType="Map">
+        UPDATE tb_order
+        SET prepay_id = #{prepayId}
+        WHERE id = #{orderId}
+    </update>
+    <select id="searchOrderIdAndStatus" parameterType="String" resultType="HashMap">
+        SELECT CAST(id AS CHAR) AS id,
+               `status`
+        FROM tb_order
+        WHERE uuid = #{uuid}
+    </select>
+    <select id="searchDriverIdAndIncentiveFee" parameterType="String" resultType="HashMap">
+        SELECT CAST(driver_id AS CHAR)     AS driverId,
+               CAST(incentive_fee AS CHAR) AS incentiveFee
+        FROM tb_order
+        WHERE uuid = #{uuid}
+    </select>
+    <update id="updateOrderPayIdAndStatus" parameterType="Map">
+        UPDATE tb_order
+        SET pay_id   = #{payId},
+            `status` = 7,
+            pay_time = #{payTime}
+        WHERE uuid = #{uuid}
+    </update>
+    <update id="finishOrder" parameterType="String">
+        UPDATE tb_order
+        SET `status` = 8
+        WHERE uuid = #{uuid}
+    </update>
 </mapper>

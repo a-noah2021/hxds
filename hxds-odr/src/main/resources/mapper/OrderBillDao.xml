@@ -61,4 +61,16 @@
           AND o.driver_id = #{driverId}
           AND o.`status` = 5
     </select>
+
+    <update id="updateBillPayment" parameterType="Map">
+        UPDATE tb_order_bill
+        SET real_pay = #{realPay},
+        <if test="voucherFee==null">
+            voucherFee="0.00"
+        </if>
+        <if test="voucherFee!=null">
+            voucher_fee = #{voucherFee}
+        </if>
+        WHERE order_id = #{orderId}
+    </update>
 </mapper>

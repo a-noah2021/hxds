@@ -31,4 +31,16 @@ public interface OdrServiceApi {
 
     @PostMapping("/order/confirmArriveStartPlace")
     R confirmArriveStartPlace(ConfirmArriveStartPlaceForm form);
+
+    @PostMapping("/order/searchOrderById")
+    R searchOrderById(SearchOrderByIdForm form);
+
+    @PostMapping("/order/validCanPayOrder")
+    R validCanPayOrder(ValidCanPayOrderForm form);
+
+    @PostMapping("/bill/updateBillPayment")
+    R updateBillPayment(UpdateBillPaymentForm form);
+
+    @PostMapping("/order/updateOrderPrepayId")
+    R updateOrderPrepayId(UpdateOrderPrepayIdForm form);
 }

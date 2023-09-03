@@ -106,4 +106,11 @@ public class DriverController {
         HashMap map = driverService.searchDriverBriefInfo(form.getDriverId());
         return R.ok().put("result", map);
     }
+
+    @PostMapping("/searchDriverOpenId")
+    @Operation(summary = "查询司机的OpenId")
+    public R searchDriverOpenId(@RequestBody @Valid SearchDriverOpenIdForm form){
+        String openId = driverService.searchDriverOpenId(form.getDriverId());
+        return R.ok().put("result", openId);
+    }
 }

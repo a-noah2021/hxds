@@ -4,6 +4,7 @@ import cn.hutool.core.bean.BeanUtil;
 import com.example.hxds.common.util.R;
 import com.example.hxds.odr.controller.form.SearchReviewDriverOrderBillForm;
 import com.example.hxds.odr.controller.form.UpdateBillFeeForm;
+import com.example.hxds.odr.controller.form.UpdateBillPaymentForm;
 import com.example.hxds.odr.service.OrderBillService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -44,4 +45,11 @@ public class OrderBillController {
         return R.ok().put("result",map);
     }
 
+    @PostMapping("/updateBillPayment")
+    @Operation(summary = "更新账单实际支付费用")
+    public R updateBillPayment(@RequestBody @Valid UpdateBillPaymentForm form){
+        Map param = BeanUtil.beanToMap(form);
+        int rows = orderBillService.updateBillPayment(param);
+        return R.ok().put("rows",rows);
+    }
 }

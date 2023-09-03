@@ -28,6 +28,7 @@ import static com.example.hxds.common.constants.HxdsConstants.RESULT_MAP_KEY;
 @RequestMapping("/order")
 @Tag(name = "OrderController", description = "订单模块Web接口")
 public class OrderController {
+
     @Resource
     private OrderService orderService;
 
@@ -88,5 +89,25 @@ public class OrderController {
     public R confirmArriveStartPlace(@RequestBody @Valid ConfirmArriveStartPlaceForm form) {
         boolean result = orderService.confirmArriveStartPlace(form);
         return R.ok().put("result", result);
+    }
+
+    @PostMapping("/searchOrderById")
+    @SaCheckLogin
+    @Operation(summary = "根据ID查询订单信息")
+    public R searchOrderById(@RequestBody @Valid SearchOrderByIdForm form) {
+        long customerId = StpUtil.getLoginIdAsLong();
+        form.setCustomerId(customerId);
+        HashMap map = orderService.searchOrderById(form);
+        return R.ok().put("result", map);
+    }
+
+    @PostMapping("/createWxPayment")
+    @Operation(summary = "创建支付订单")
+    @SaCheckLogin
+    public R createWxPayment(@RequestBody @Valid CreateWxPaymentForm form) {
+        long customerId = StpUtil.getLoginIdAsLong();
+        form.setCustomerId(customerId);
+        HashMap map = orderService.createWxPayment(form.getOrderId(), form.getCustomerId(), form.getCustomerVoucherId(), form.getVoucherId());
+        return R.ok().put("result", map);
     }
 }

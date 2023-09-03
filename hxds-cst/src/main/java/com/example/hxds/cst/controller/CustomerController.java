@@ -2,10 +2,7 @@ package com.example.hxds.cst.controller;
 
 import cn.hutool.core.bean.BeanUtil;
 import com.example.hxds.common.util.R;
-import com.example.hxds.cst.controller.form.LoginForm;
-import com.example.hxds.cst.controller.form.RegisterNewCustomerForm;
-import com.example.hxds.cst.controller.form.SearchCustomerBriefInfoForm;
-import com.example.hxds.cst.controller.form.SearchCustomerInfoInOrderForm;
+import com.example.hxds.cst.controller.form.*;
 import com.example.hxds.cst.service.CustomerService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -53,6 +50,13 @@ public class CustomerController {
     public R searchCustomerBriefInfo(@RequestBody @Valid SearchCustomerBriefInfoForm form) {
         HashMap map = customerService.searchCustomerBriefInfo(form.getCustomerId());
         return R.ok().put("result", map);
+    }
+
+    @PostMapping("/searchCustomerOpenId")
+    @Operation(summary = "查询客户的OpenId")
+    public R searchCustomerOpenId(@RequestBody @Valid SearchCustomerOpenIdForm form){
+        String openId = customerService.searchCustomerOpenId(form.getCustomerId());
+        return R.ok().put("result",openId);
     }
 }
 

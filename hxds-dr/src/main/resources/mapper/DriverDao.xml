@@ -199,4 +199,9 @@
         FROM tb_driver
         WHERE id = #{driverId}
     </select>
+    <select id="searchDriverOpenId" parameterType="long" resultType="String">
+        SELECT open_id AS openId
+        FROM tb_driver
+        WHERE id = #{driverId}
+    </select>
 </mapper>

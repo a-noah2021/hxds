@@ -47,4 +47,9 @@
         FROM tb_customer
         WHERE id = #{customerId};
     </select>
+    <select id="searchCustomerOpenId" parameterType="long" resultType="String">
+        SELECT open_id AS openId
+        FROM tb_customer
+        WHERE id = #{customerId}
+    </select>
 </mapper>

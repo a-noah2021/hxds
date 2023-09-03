@@ -23,5 +23,7 @@ public interface CstServiceApi {
     @PostMapping("/customer/car/deleteCustomerCarById")
     R deleteCustomerCarById(DeleteCustomerCarByIdForm form);
 
+    @PostMapping("/customer/searchCustomerOpenId")
+    R searchCustomerOpenId(SearchCustomerOpenIdForm form);
 }
 

@@ -65,4 +65,13 @@ public class OrderBillServiceImpl implements OrderBillService {
         HashMap map = orderBillDao.searchReviewDriverOrderBill(param);
         return map;
     }
+
+    @Override
+    public int updateBillPayment(Map param) {
+        int rows = orderBillDao.updateBillPayment(param);
+        if (rows != 1) {
+            throw new HxdsException("更新账单实际支付费用失败");
+        }
+        return rows;
+    }
 }

@@ -47,6 +47,7 @@ public interface DriverDao {
 
     HashMap searchDriverBriefInfo(long driverId);
 
+    String searchDriverOpenId(long driverId);
 }
 
 

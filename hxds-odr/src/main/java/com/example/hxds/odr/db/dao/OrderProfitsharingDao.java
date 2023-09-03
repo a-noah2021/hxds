@@ -10,6 +10,9 @@ public interface OrderProfitsharingDao {
 
     int insert (OrderProfitsharingEntity entity);
 
+    HashMap searchDriverIncome(String uuid);
+
+    int updateProfitsharingStatus(long profitsharingId);
 }
 
 

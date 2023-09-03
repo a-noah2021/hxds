@@ -1,5 +1,7 @@
 # 搭建环境
 
+本章用Linux系统和Docker环境搭建4节点2分片的MySQL集群，以及部署一些与代驾项目相关NoSQL数据库和中间件。搭建好了微服务体系的开发和运行环境，我们还要从远程调用、分布式事务，以及鉴权来理解微服务的运行原理
+
 这个项目对硬件的要求还是不低的，最低需要 16G 内存。我的笔记本运行起来很勉强，所以买了两个云服务器来搭建环境。两个服务器都是 2C4G 的，其中 MySQL 集群和 NoSQL 部署在一台，云存储和其他中间件部署在另一台。
 
 ## 搭建MySQL集群
@@ -356,6 +358,9 @@ bladex/sentinel-dashboard
 
 # 代码实现
 ## 基于微服务的司机注册与实名认证
+
+代驾项目理应从司机子系统开始做起。新司机注册的过程中需要实名认证，我们利用OCR插件，快速扫描和提取身份证与驾驶证的信息，然后利用面部识别技术，采集司机的面部信息，为后续每天接单前的身份核验做准备。本章除了开发移动端之外，还要实现Web端的司机管理模块，可以对司机实名认证加以审核
+
 ### 司机微服务的用户注册功能上
 
 1. 写 hxds-dr 里面 dao#DriverDao/DriverSettingDao/WalletDao 五个 SQL 以及对应的 Mapper 文件
@@ -2794,7 +2799,9 @@ repealHandle:function(){
 
 略，和司机端类似，不过少了实名认证和面部录入反而更简单。记得要同时写 hxds、hxds-customer-wx 两个项目哦！
 
-## 乘客下单与司机抢单
+## 乘客下单与司机抢单（计算最佳线路，预估里程、定向接单、自动抢单）
+
+乘客下单前，系统自动计算最佳线路的里程和时长，规则引擎预估车费；顾客下单后，使用GEO计算出附近符合接单条件司机（包括定向接单）并推送。司机端采用RR轮询方式接收MQ订单，用语音引擎播报订单，自动或手动抢单。为避免出现抢单超售现象，使用Redis事务机制
 
 ### 开通腾讯位置服务，封装腾讯地图服务
 
@@ -5870,7 +5877,7 @@ callServiceHandle: function() {
    修改 hxds-odr/src/main/java/com/example/hxds/odr/service/OrderService.java#insertOrder
    写 hxds-odr/src/main/java/com/example/hxds/odr/controller/form/SearchOrderStatusForm.java、DeleteUnAcceptOrderForm.java
    写 hxds-odr/src/main/java/com/example/hxds/odr/controller/OrderController.java#searchOrderStatus、deleteUnAcceptOrder
-【说明】因为乘客端的等待司机接单的倒计时为15分钟，现在后端Redis里面的抢单缓存也是15分钟。如果移动端倒计时到15分钟恰好结束，这时候发起Ajax请求取消订单，那么就会给后端程序带来困难，因为在Redis里面已经不存在抢单缓存了，后端程序无法判断到底是司机抢单成功后删除了抢单缓存，还是因为没有司机抢单，缓存过期自动删除了。
+   【说明】因为乘客端的等待司机接单的倒计时为15分钟，现在后端Redis里面的抢单缓存也是15分钟。如果移动端倒计时到15分钟恰好结束，这时候发起Ajax请求取消订单，那么就会给后端程序带来困难，因为在Redis里面已经不存在抢单缓存了，后端程序无法判断到底是司机抢单成功后删除了抢单缓存，还是因为没有司机抢单，缓存过期自动删除了。
 
 有的同学觉得我们查询数据库的订单状态不就知道有没有人接单了么？这是不行的。因为恰好司机抢单成功之后，修改了订单的状态为2，但是事务还没来的及提交，这时候关闭订单的Ajax请求发过来了。Java程序通过查询数据库，发现订单的状态是1，以为没有司机接单，实际上已经有司机接单了。
 

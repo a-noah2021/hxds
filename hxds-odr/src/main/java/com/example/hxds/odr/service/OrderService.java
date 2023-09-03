@@ -51,4 +51,12 @@ public interface OrderService {
     boolean validDriverOwnOrder(Map param);
 
     Map searchSettlementNeedData(long orderId);
+
+    HashMap searchOrderById(Map param);
+
+    HashMap validCanPayOrder(Map param);
+
+    int updateOrderPrepayId(Map param);
+
+    void handlePayment(String uuid, String payId, String driverOpenId, String payTime);
 }

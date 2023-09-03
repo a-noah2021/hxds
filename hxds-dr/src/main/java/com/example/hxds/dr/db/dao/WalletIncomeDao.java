@@ -8,6 +8,8 @@ import java.util.Map;
 
 public interface WalletIncomeDao {
 
+    int insert(WalletIncomeEntity entity);
+
 }
 
 

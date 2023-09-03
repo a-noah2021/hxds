@@ -9,4 +9,13 @@
             balance = #{balance},
             password = #{password}
     </insert>
+    <update id="updateWalletBalance" parameterType="map">
+        UPDATE tb_wallet
+        SET balance=balance + #{amount}
+        WHERE driver_id = #{driverId}
+        <if test="amount &lt; 0 and password!=null">
+            AND balance >= ABS(#{amount})
+            AND password = MD5(CONCAT(MD5(driver_id),#{password}))
+        </if>
+    </update>
 </mapper>

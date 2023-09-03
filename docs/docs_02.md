@@ -1,4 +1,7 @@
 ## 订单执行与安全监控
+
+乘客下单后，司机端和乘客端都会有司乘同显功能。司机赶往代驾点和代驾线路都会实时显示，偏航后自动重新生成线路。代驾过程中，司机端使用同声传译技术，把录制的音频转换成对话本文，然后将音频和文本分时上传服务端。对话文本被保存到HBase大数据平台，录音被保存到私有云空间
+
 ### 订单微服务，司机端加载执行的订单
 1. 写 hxds-odr/src/main/resources/mapper/OrderDao.xml#searchDriverCurrentOrder 及其对应接口
    写 hxds-odr/src/main/java/com/example/hxds/odr/service/OrderService.java#searchDriverCurrentOrder 及其对应实现类
@@ -2027,6 +2030,9 @@ endDrivingHandle: function() {
 },
 ```
 ## AI分析与订单监控（AI智能分析司乘对话内容，如有危害自动告警）
+
+本章围绕订单监控来展开。代驾系统利用AI技术，分析司乘对话内容，如果存在暴力或者色情，系统自动告警或者转交人工处理。代驾系统的后台管理者，可以在Web端查验每笔订单的司乘对话内容，也可以收听具体的录音。无论后台报警还是移动端报警，Web系统会立即锁定司乘GPS定位，实时跟踪行进线路，并且把数据提交给警方
+
 ### 利用AI对司乘对话内容安全评级
 1. 写 hxds-nebula/src/main/resources/mapper/OrderMonitoringDao.xml#insert 及其对应接口
    写 hxds-nebula/src/main/java/com/example/hxds/nebula/service/MonitoringService.java#insertOrderMonitoring 及其实现类
@@ -3037,21 +3043,20 @@ public R searchCustomerBriefInfo(@RequestBody @Valid SearchCustomerBriefInfoForm
      return R.ok().put("result", map);
 }
 ```
-3. 写 hxds-dr/src/main/resources/mapper/DriverDao.xml 及其对应接口
+3. 写 hxds-dr/src/main/resources/mapper/DriverDao.xml#searchDriverBriefInfo 及其对应接口
    写 hxds-dr/src/main/java/com/example/hxds/dr/service/CustomerService.java#searchDriverBriefInfo 及其实现类
    写 hxds-dr/src/main/java/com/example/hxds/dr/controller/form/SearchDriverBriefInfoForm.java
    写 hxds-dr/src/main/java/com/example/hxds/dr/controller/DriverController.java#searchDriverBriefInfo
 ```java
-HashMap searchDriverBriefInfo(long driverId);
-
 <select id="searchDriverBriefInfo" parameterType="long" resultType="HashMap">
      SELECT CAST(id AS CHAR) AS id,
      `name`,
      tel,
-     photo
      FROM tb_driver
      WHERE id = #{driverId}
 </select>
+
+HashMap searchDriverBriefInfo(long driverId);
 
 HashMap searchDriverBriefInfo(long driverId);
 
@@ -3872,7 +3877,12 @@ public void downloadOrderStartLocationIn30Days(HttpServletResponse response){
 
 <u-cell-item icon="eye-fill" :icon-style="icon" title="接单热点地区" @click="this.toPage('../heat_chart/heat_chart')" />
 ```
+## 订单支付与分账（规则引擎自动计算分配比例，执行实时分账）
+
+当代驾结束后，大数据系统根据GPS定位计算行进里程，规则引擎计算出账单各项金额，系统把账单推送给乘客。乘客付款之后，后端系统和移动端系统分别核验支付结果，规则引擎自动计算给司机的分账比例和奖励，QuartZ定时器等待微信平台准备好分账状态后，调用API执行给司机实时分账
+
 ### 订单微服务更新订单、账单和分账记录
+
 1. 写 hxds-odr/src/main/java/com/example/hxds/odr/db/dao/OrderBillDao.xml#updateBillFee 及其对应接口
    写 hxds-odr/src/main/java/com/example/hxds/odr/db/dao/OrderDao.xml#updateOrderMileageAndFee 及其对应接口
    写 hxds-odr/src/main/java/com/example/hxds/odr/db/dao/OrderProfitsharingDao.xml#updateOrderMileageAndFee 及其对应接口
@@ -5405,8 +5415,887 @@ onHide: function() {
    4.接下来用FastRequest插件,调用bff-driver子系统的updateOrderStatus()函数,把订单修改成6状态。观察乘客端小程序的效果，应该是收到通知消息之后，
    立即跳转到order.vue页面
 ### 乘客端显示待付款账单信息
-1. 写 
+1. 写 hxds-odr/src/main/resources/mapper/OrderDao.xml#searchOrderById 及其对应接口
+   写 hxds-odr/src/main/java/com/example/hxds/odr/service/OrderService.java#searchOrderById 及其实现类
+   写 hxds-odr/src/main/java/com/example/hxds/odr/controller/form/SearchOrderByIdForm.java
+   写 hxds-odr/src/main/java/com/example/hxds/odr/controller/OrderController.java#searchOrderById
 ```java
+<select id="searchOrderById" parameterType="Map" resultType="HashMap">
+     SELECT CAST(o.id AS CHAR) AS id,
+     CAST(o.driver_id AS CHAR) AS driverId,
+     CAST(o.customer_id AS CHAR) AS customerId,
+     o.start_place AS startPlace,
+     o.start_place_location AS startPlaceLocation,
+     o.end_place AS endPlace,
+     o.end_place_location AS endPlaceLocation,
+     CAST(b.total AS CHAR) AS total,
+     CAST(b.real_pay AS CHAR) AS realPay,
+     CAST(b.mileage_fee AS CHAR) AS mileageFee,
+     CAST(o.favour_fee AS CHAR) AS favourFee,
+     CAST(o.incentive_fee AS CHAR) AS incentiveFee,
+     CAST(b.waiting_fee AS CHAR) AS waitingFee,
+     CAST(b.return_fee AS CHAR) AS returnFee,
+     CAST(b.parking_fee AS CHAR) AS parkingFee,
+     CAST(b.toll_fee AS CHAR) AS tollFee,
+     CAST(b.other_fee AS CHAR) AS otherFee,
+     CAST(b.voucher_fee AS CHAR) AS voucherFee,
+     CAST(o.real_mileage AS CHAR) AS realMileage,
+     o.waiting_minute AS waitingMinute,
+     b.base_mileage AS baseMileage,
+     CAST(b.base_mileage_price AS CHAR) AS baseMileagePrice,
+     CAST(b.exceed_mileage_price AS CHAR) AS exceedMileagePrice,
+     b.base_minute AS baseMinute,
+     CAST(b.exceed_minute_price AS CHAR) AS exceedMinutePrice,
+     b.base_return_mileage AS baseReturnMileage,
+     CAST(b.exceed_return_price AS CHAR) AS exceedReturnPrice,
+     CAST(o.return_mileage AS CHAR) AS returnMileage,
+     o.car_plate AS carPlate,
+     o.car_type AS carType,
+     o.status,
+     DATE_FORMAT(o.create_time, '%Y-%m-%d %H:%i:%s') AS createTime
+     FROM tb_order o
+     JOIN tb_order_bill b ON o.id = b.order_id
+     WHERE o.id = #{orderId}
+     <if test="driverId!=null">
+         AND driver_id = #{driverId}
+     </if>
+     <if test="customerId!=null">
+         AND customer_id = #{customerId}
+     </if>
+</select>
+
+HashMap searchOrderById(Map param);
+
+HashMap searchOrderById(Map param);
+
+@Override
+public HashMap searchOrderById(Map param) {
+     HashMap map = orderDao.searchOrderById(param);
+     String startPlaceLocation = MapUtil.getStr(map, "startPlaceLocation");
+     String endPlaceLocation = MapUtil.getStr(map, "endPlaceLocation");
+     map.replace("startPlaceLocation", JSONUtil.parse(startPlaceLocation));
+     map.replace("endPlaceLocation", JSONUtil.parse(endPlaceLocation));
+     return map;
+}
+
+@Data
+@Schema(description = "根据ID查询订单信息的表单")
+public class SearchOrderByIdForm {
+   @NotNull
+   @Min(value = 1, message = "orderId不能小于1")
+   @Schema(description = "订单ID")
+   private Long orderId;
+
+   @Min(value = 1, message = "customerId不能小于1")
+   @Schema(description = "客户ID")
+   private Long customerId;
+
+   @Min(value = 1, message = "driverId不能小于1")
+   @Schema(description = "司机ID")
+   private Long driverId;
+}
+
+@PostMapping("/searchOrderById")
+@Operation(summary = "根据id查询订单信息")
+public R searchOrderById(@RequestBody @Valid SearchOrderByIdForm form) {
+   Map param = BeanUtil.beanToMap(form);
+   Map map = orderService.searchOrderById(param);
+   return R.ok().put("result", map);
+}
+```
+2. 修改 hxds-dr/src/main/resources/mapper/DriverDao.xml#searchDriverBriefInfo
+```xml
+ <select id="searchDriverBriefInfo" parameterType="long" resultType="HashMap">
+     SELECT CAST(id AS CHAR) AS id,
+            `name`,
+            tel,
+            photo
+     FROM tb_driver
+     WHERE id = #{driverId}
+ </select>
+```
+3. 写 bff-customer/src/main/java/com/example/hxds/bff/customer/controller/form/SearchDriverBriefInfoForm.java
+   写 bff-customer/src/main/java/com/example/hxds/bff/customer/feign/DrServiceApi.java#searchDriverBriefInfo
+   写 bff-customer/src/main/java/com/example/hxds/bff/customer/controller/form/SearchOrderByIdForm.java
+   写 bff-customer/src/main/java/com/example/hxds/bff/customer/feign/OdrServiceApi.java#searchOrderById
+   写 bff-customer/src/main/java/com/example/hxds/bff/customer/service/OrderService.java#searchOrderById 及其实现类
+   写 bff-customer/src/main/java/com/example/hxds/bff/customer/service/impl/OrderServiceImpl.java#searchOrderById
+   写 bff-customer/src/main/java/com/example/hxds/bff/customer/controller/OrderController.java#searchOrderById
+```java
+@Data
+@Schema(description = "查询司机简明信息的表单")
+public class SearchDriverBriefInfoForm {
+    @NotNull(message = "driverId不能为空")
+    @Min(value = 1, message = "driverId不能小于1")
+    @Schema(description = "司机ID")
+    private Long driverId;
+}
+
+@PostMapping("/driver/searchDriverBriefInfo")
+R searchDriverBriefInfo(SearchDriverBriefInfoForm form);
+
+@Data
+@Schema(description = "根据ID查询订单信息的表单")
+public class SearchOrderByIdForm {
+   @NotNull
+   @Min(value = 1, message = "orderId不能小于1")
+   @Schema(description = "订单ID")
+   private Long orderId;
+
+   @Schema(description = "客户ID")
+   private Long customerId;
+
+}
+
+@PostMapping("/order/searchOrderById")
+R searchOrderById(SearchOrderByIdForm form);
+
+HashMap searchOrderById(SearchOrderByIdForm form);
+
+@Override
+public HashMap searchOrderById(SearchOrderByIdForm form) {
+   R r = odrServiceApi.searchOrderById(form);
+   HashMap map = (HashMap) r.get("result");
+   Long driverId = MapUtil.getLong(map, "driverId");
+   if (!Objects.isNull(driverId)) {
+      SearchDriverBriefInfoForm infoForm = new SearchDriverBriefInfoForm();
+      infoForm.setDriverId(driverId);
+      r = drServiceApi.searchDriverBriefInfo(infoForm);
+      HashMap temp = (HashMap) r.get("result");
+      map.putAll(temp);
+      return map;
+   }
+   return null;
+}
+
+@PostMapping("/searchOrderById")
+@SaCheckLogin
+@Operation(summary = "根据ID查询订单信息")
+public R searchOrderById(@RequestBody @Valid SearchOrderByIdForm form) {
+   long customerId = StpUtil.getLoginIdAsLong();
+   form.setCustomerId(customerId);
+   HashMap map = orderService.searchOrderById(form);
+   return R.ok().put("result", map);
+}
+```
+4. 写 hxds-customer-wx/main.js#Vue.prototype.url
+   写 hxds-customer-wx/execution/order/order.vue#onLoad
+   【说明】`status` tinyint NOT NULL DEFAULT '1' COMMENT '1等待接单，2已接单，3司机已到达，4开始代驾，5结束代驾，6未付款，7已付款，8订单已结束，9顾客撤单，10司机撤单，11事故关闭，12其他'
+```vue
+searchOrderById: `${baseUrl}/order/searchOrderById`,
+
+onLoad: function(options) {
+  let that = this;
+  let orderId = options.orderId;
+  that.orderId = orderId;
+  let data = {
+      orderId: orderId
+  };
+  that.ajax(that.url.searchOrderById, 'POST', data, function(resp) {
+      let result = resp.data.result;
+      // console.log(result);
+      that.driverId = result.driverId;
+      that.name = result.name;
+      that.photo = result.photo;
+      that.title = result.title;
+      that.tel = result.tel;
+      that.startPlace = result.startPlace;
+      that.endPlace = result.endPlace;
+      that.createTime = result.createTime;
+      that.favourFee = result.favourFee;
+      that.incentiveFee = result.incentiveFee;
+      that.carPlate = result.carPlate;
+      that.carType = result.carType;
+      let status = result.status;
+      that.status = status;
+      if ([5, 6, 7, 8].includes(status)) {
+          that.realMileage = result.realMileage;
+          that.mileageFee = result.mileageFee;
+          that.waitingFee = result.waitingFee;
+          that.waitingMinute = result.waitingMinute;
+          that.returnFee = result.returnFee;
+          that.returnMileage = result.returnMileage;
+          that.parkingFee = result.parkingFee;
+          that.tollFee = result.tollFee;
+          that.otherFee = result.otherFee;
+          that.total = result.total;
+          that.voucherFee = result.voucherFee;
+      }
+      that.baseMileagePrice = result.baseMileagePrice;
+      that.baseMileage = result.baseMileage;
+      that.exceedMileagePrice = result.exceedMileagePrice;
+      that.base_minute = result.baseMinute;
+      that.exceedMinutePrice = result.exceedMinutePrice;
+      that.baseReturnMileage = result.baseReturnMileage;
+      that.exceedReturnPrice = result.exceedReturnPrice;
+      that.realPay = '--';
+      if ([2, 3].includes(status)) {
+          that.img = '../../static/order/icon-1.png';
+      } else if ([4].includes(status)) {
+          that.img = '../../static/order/icon-2.png';
+      } else if ([5, 6].includes(status)) {
+          that.img = '../../static/order/icon-3.png';
+      } else if ([7].includes(status)) {
+          that.img = '../../static/order/icon-4.png';
+          that.realPay = result.realPay;
+      } else if ([8, 9, 10, 11, 12].includes(status)) {
+          that.img = '../../static/order/icon-5.png';
+          that.realPay = result.realPay;
+      }
+  }
+}
+```
+### 微信支付分账前，先查询司机和乘客OpenId
+1. 写 hxds-cst/src/main/resources/mapper/CustomerDao.xml#searchCustomerOpenId 及其对应接口
+   写 hxds-cst/src/main/java/com/example/hxds/cst/service/CustomerService.java#searchCustomerOpenId 及其实现类
+   写 hxds-cst/src/main/java/com/example/hxds/cst/controller/form/SearchCustomerOpenIdForm.java
+   写 hxds-cst/src/main/java/com/example/hxds/cst/controller/CustomerController.java#searchCustomerOpenId
+```java
+<select id="searchCustomerOpenId" parameterType="long" resultType="String">
+   SELECT open_id AS openId
+   FROM tb_customer
+   WHERE id = #{customerId}
+</select>
+
+String searchCustomerOpenId(long customerId);
+
+String searchCustomerOpenId(long customerId);
+
+@Override
+public String searchCustomerOpenId(long customerId) {
+     String openId = customerDao.searchCustomerOpenId(customerId);
+     return openId;
+}
+
+@Data
+@Schema(description = "查询客户OpenId的表单")
+public class SearchCustomerOpenIdForm {
+   @NotNull(message = "customerId不能为空")
+   @Min(value = 1, message = "customerId不能小于1")
+   @Schema(description = "客户ID")
+   private Long customerId;
+}
+
+@PostMapping("/searchCustomerOpenId")
+@Operation(summary = "查询客户的OpenId")
+public R searchCustomerOpenId(@RequestBody @Valid SearchCustomerOpenIdForm form){
+   String openId = customerService.searchCustomerOpenId(form.getCustomerId());
+   return R.ok().put("result",openId);
+}
+```
+2. 写 hxds-dr/src/main/resources/mapper/DriverDao.xml#searchDriverOpenId 及其对应接口
+   写 hxds-dr/src/main/java/com/example/hxds/dr/service/DriverService.java#searchDriverOpenId 及其实现类
+   写 hxds-dr/src/main/java/com/example/hxds/dr/controller/form/SearchDriverOpenIdForm.java
+   写 hxds-dr/src/main/java/com/example/hxds/dr/controller/DriverController.java#searchDriverOpenId
+```java
+<select id="searchDriverOpenId" parameterType="long" resultType="String">
+   SELECT open_id AS openId
+   FROM tb_driver
+   WHERE id = #{driverId}
+</select>
+
+String searchDriverOpenId(long driverId);
+
+String searchDriverOpenId(long driverId);
+
+@Override
+public String searchDriverOpenId(long driverId) {
+     String openId = driverDao.searchDriverOpenId(driverId);
+     return openId;
+}
+
+@Data
+@Schema(description = "查询司机OpenId的表单")
+public class SearchDriverOpenIdForm {
+   @NotNull(message = "driverId不能为空")
+   @Min(value = 1, message = "driverId不能小于1")
+   @Schema(description = "司机ID")
+   private Long driverId;
+}
+
+@PostMapping("/searchDriverOpenId")
+@Operation(summary = "查询司机的OpenId")
+public R searchDriverOpenId(@RequestBody @Valid SearchDriverOpenIdForm form){
+   String openId = driverService.searchDriverOpenId(form.getDriverId());
+   return R.ok().put("result", openId);
+}
+```
+3. 写 hxds-odr/src/main/resources/mapper/OrderDao.xml 及其对应接口
+   写 hxds-odr/src/main/java/com/example/hxds/odr/db/dao/OrderBillDao.java 及其对应接口
+   写 hxds-odr/src/main/java/com/example/hxds/odr/service/OrderService.java 及其实现类
+   写 hxds-odr/src/main/java/com/example/hxds/odr/service/OrderBillService.java 及其实现类
+   写 hxds-odr/src/main/java/com/example/hxds/odr/controller/form/ValidCanPayOrderForm.java
+   写 hxds-odr/src/main/java/com/example/hxds/odr/controller/form/UpdateOrderPrepayIdForm.java
+   写 hxds-odr/src/main/java/com/example/hxds/odr/controller/OrderController.java
+   写 hxds-odr/src/main/java/com/example/hxds/odr/controller/form/UpdateBillPaymentForm.java
+   写 hxds-odr/src/main/java/com/example/hxds/odr/controller/OrderBillController.java
+```java
+<select id="validCanPayOrder" parameterType="Map" resultType="HashMap">
+     SELECT CAST(real_fee AS CHAR)  AS realFee,
+     CAST(driver_id AS CHAR) AS driverId,
+     uuid
+     FROM tb_order
+     WHERE id = #{orderId}
+     AND customer_id = #{customerId}
+     AND `status` = 6
+</select>
+<update id="updateOrderPrepayId" parameterType="Map">
+        UPDATE tb_order
+        SET prepay_id = #{prepayId}
+        WHERE id = #{orderId}
+</update>
+
+HashMap validCanPayOrder(Map param);
+
+int updateOrderPrepayId(Map param);
+
+<update id="updateBillPayment" parameterType="Map">
+     UPDATE tb_order_bill
+     SET real_pay = #{realPay},
+     <if test="voucherFee==null">
+        voucherFee="0.00"
+     </if>
+     <if test="voucherFee!=null">
+        voucher_fee = #{voucherFee}
+     </if>
+     WHERE order_id = #{orderId}
+</update>
+
+int updateBillPayment(Map param);
+
+HashMap validCanPayOrder(Map param);
+
+int updateOrderPrepayId(Map param);
+
+@Override
+public HashMap validCanPayOrder(Map param) {
+     HashMap map = orderDao.validCanPayOrder(param);
+     if (Objects.isNull(map) || map.size() == 0) {
+        throw new HxdsException("订单无法支付");
+     }
+     return map;
+}
+
+@Override
+public int updateOrderPrepayId(Map param) {
+     int rows = orderDao.updateOrderPrepayId(param);
+     if (rows != 1) {
+        throw new HxdsException("更新预支付订单ID失败");
+     }
+     return rows;
+}
+
+int updateBillPayment(Map param);
+
+@Override
+public int updateBillPayment(Map param) {
+     int rows = orderBillDao.updateBillPayment(param);
+     if (rows != 1) {
+        throw new HxdsException("更新账单实际支付费用失败");
+     }
+     return rows;
+}
+
+@Data
+@Schema(description = "检查订单是否可以支付的表单")
+public class ValidCanPayOrderForm {
+   @NotNull(message = "orderId不能为空")
+   @Min(value = 1, message = "orderId不能小于1")
+   @Schema(description = "订单ID")
+   private Long orderId;
+
+   @NotNull(message = "customerId不能为空")
+   @Min(value = 1, message = "customerId不能小于1")
+   @Schema(description = "客户ID")
+   private Long customerId;
+}
+
+@Data
+@Schema(description = "更新预支付订单ID的表单")
+public class UpdateOrderPrepayIdForm {
+   @NotBlank(message = "prepayId不能为空")
+   @Schema(description = "预支付订单ID")
+   private String prepayId;
+
+   @NotNull(message = "orderId不能为空")
+   @Min(value = 1, message = "orderId不能小于1")
+   @Schema(description = "订单ID")
+   private Long orderId;
+}
+
+@PostMapping("/validCanPayOrder")
+@Operation(summary = "检查订单是否可以支付")
+public R validCanPayOrder(@RequestBody @Valid ValidCanPayOrderForm form) {
+   Map param = BeanUtil.beanToMap(form);
+   HashMap map = orderService.validCanPayOrder(param);
+   return R.ok().put("result", map);
+}
+
+@PostMapping("/updateOrderPrepayId")
+@Operation(summary = "更新预支付订单ID")
+public R updateOrderPrepayId(@RequestBody @Valid UpdateOrderPrepayIdForm form) {
+   Map param = BeanUtil.beanToMap(form);
+   int rows = orderService.updateOrderPrepayId(param);
+   return R.ok().put("rows", rows);
+}
+
+@Data
+@Schema(description = "更新账单实际支付费用的表单")
+public class UpdateBillPaymentForm {
+   @NotBlank(message = "realPay不能为空")
+   @Pattern(regexp = "^[1-9]\\d*\\.\\d{1,2}$|^0\\.\\d{1,2}$|^[1-9]\\d*$", message = "realPay内容不正确")
+   @Schema(description = "实际支付金额")
+   private String realPay;
+
+   @NotBlank(message = "voucherFee不能为空")
+   @Pattern(regexp = "^[1-9]\\d*\\.\\d{1,2}$|^0\\.\\d{1,2}$|^[1-9]\\d*$", message = "voucherFee内容不正确")
+   @Schema(description = "代金券面额")
+   private String voucherFee;
+
+   @NotNull(message = "orderId不能为空")
+   @Min(value = 1, message = "orderId不能小于1")
+   @Schema(description = "订单ID")
+   private Long orderId;
+}
+
+@PostMapping("/updateBillPayment")
+@Operation(summary = "更新账单实际支付费用")
+public R updateBillPayment(@RequestBody @Valid UpdateBillPaymentForm form){
+   Map param = BeanUtil.beanToMap(form);
+   int rows = orderBillService.updateBillPayment(param);
+   return R.ok().put("rows",rows);
+}
+```
+4. 写 hxds-vhr/src/main/resources/mapper/VoucherCustomerDao.xml#validCanUseVoucher/bindVoucher 及其对应接口
+   写 hxds-vhr/src/main/java/com/example/hxds/vhr/service/VoucherCustomerService.java#useVoucher 及其实现类
+   写 hxds-vhr/src/main/java/com/example/hxds/vhr/controller/form/UseVoucherForm.java
+   写 hxds-vhr/src/main/java/com/example/hxds/vhr/controller/VoucherCustomerController.java#useVoucher
+```java
+ <select id="validCanUseVoucher" parameterType="Map" resultType="String">
+     SELECT CAST(v.discount AS CHAR) AS discount
+     FROM tb_voucher_customer vc
+              JOIN tb_voucher v ON vc.voucher_id = v.id
+     WHERE vc.voucher_id = #{voucherId}
+       AND vc.customer_id = #{customerId}
+       AND v.with_amount &lt;= #{amount}
+       AND vc.`status` = 1
+       AND ((CURRENT_DATE BETWEEN vc.start_time AND vc.end_time)
+         OR (vc.start_time IS NULL AND vc.end_time IS NULL));
+ </select>
+ <update id="bindVoucher" parameterType="Map">
+     UPDATE tb_voucher_customer
+     SET order_id = #{orderId},
+         `status` = 2
+     WHERE voucher_id = #{voucherId}
+ </update>
+
+String validCanUseVoucher(Map param);
+
+int bindVoucher(Map param);
+
+String useVoucher(Map param);
+
+@Override
+@Transactional
+@LcnTransaction
+public String useVoucher(Map param) {
+     String discount = voucherCustomerDao.validCanUseVoucher(param);
+     if (!Objects.isNull(discount)) {
+        int rows = voucherCustomerDao.bindVoucher(param);
+        if (rows != 1) {
+            throw new HxdsException("代金券不可用");
+        }
+        return discount;
+     }
+     throw new HxdsException("代金券不可用");
+}
+
+@Data
+@Schema(description = "使用代金券的表单")
+public class UseVoucherForm {
+   @NotNull(message = "id不能为空")
+   @Min(value = 1, message = "id不能小于1")
+   @Schema(description = "领取代金券的ID")
+   private Long id;
+
+   @NotNull(message = "voucherId不能为空")
+   @Min(value = 1, message = "voucherId不能小于1")
+   @Schema(description = "代金券的ID")
+   private Long voucherId;
+
+   @NotNull(message = "customerId不能为空")
+   @Min(value = 1, message = "customerId不能小于1")
+   @Schema(description = "客户ID")
+   private Long customerId;
+
+   @NotNull(message = "orderId不能为空")
+   @Min(value = 1, message = "orderId不能小于1")
+   @Schema(description = "客户ID")
+   private Long orderId;
+
+   @NotBlank(message = "amount不能为空")
+   @Pattern(regexp = "^[1-9]\\d*\\.\\d{1,2}$|^0\\.\\d{1,2}$|^[1-9]\\d*$", message = "amount内容不正确")
+   @Schema(description = "订单金额")
+   private String amount;
+
+}
+
+@PostMapping("/useVoucher")
+@Operation(summary = "检查可否使用代金券")
+public R useVoucher(@RequestBody @Valid UseVoucherForm form){
+   Map param = BeanUtil.beanToMap(form);
+   String discount = voucherCustomerService.useVoucher(param);
+   return R.ok().put("result",discount);
+}
+```
+5. 写 bff-customer/src/main/java/com/example/hxds/bff/customer/controller/form/ValidCanPayOrderForm.java
+   写 bff-customer/src/main/java/com/example/hxds/bff/customer/controller/form/UpdateBillPaymentForm.java
+   写 bff-customer/src/main/java/com/example/hxds/bff/customer/controller/form/UpdateOrderPrepayIdForm.java
+   写 bff-customer/src/main/java/com/example/hxds/bff/customer/feign/OdrServiceApi.java
+   写 bff-customer/src/main/java/com/example/hxds/bff/customer/controller/form/UseVoucherForm.java
+   写 bff-customer/src/main/java/com/example/hxds/bff/customer/feign/VhrServiceApi.java
+   写 bff-customer/src/main/java/com/example/hxds/bff/customer/controller/form/SearchCustomerOpenIdForm.java
+   写 bff-customer/src/main/java/com/example/hxds/bff/customer/feign/CstServiceApi.java#searchCustomerOpenId
+   写 bff-customer/src/main/java/com/example/hxds/bff/customer/controller/form/SearchDriverOpenIdForm.java
+   写 bff-customer/src/main/java/com/example/hxds/bff/customer/feign/DrServiceApi.java#searchDriverOpenId
+   写 bff-customer/src/main/java/com/example/hxds/bff/customer/service/OrderService.java#createWxPayment 及其实现类
+   写 bff-customer/src/main/java/com/example/hxds/bff/customer/controller/form/CreateWxPaymentForm.java
+   写 bff-customer/src/main/java/com/example/hxds/bff/customer/controller/OrderController.java#createWxPayment
+```java
+@Data
+@Schema(description = "检查订单是否可以支付的表单")
+public class ValidCanPayOrderForm {
+
+   @Schema(description = "订单ID")
+   private Long orderId;
+
+   @Schema(description = "客户ID")
+   private Long customerId;
+}
+
+@Data
+@Schema(description = "更新账单实际支付费用的表单")
+public class UpdateBillPaymentForm {
+
+   @Schema(description = "实际支付金额")
+   private String realPay;
+
+   @Schema(description = "代金券面额")
+   private String voucherFee;
+
+   @Schema(description = "订单ID")
+   private Long orderId;
+}
+
+@Data
+@Schema(description = "更新支付订单ID的表单")
+public class UpdateOrderPrepayIdForm {
+
+    @Schema(description = "预支付订单ID")
+    private String prepayId;
+
+    @Schema(description = "订单ID")
+    private Long orderId;
+}
+
+@PostMapping("/order/validCanPayOrder")
+R validCanPayOrder(ValidCanPayOrderForm form);
+
+@PostMapping("/bill/updateBillPayment")
+R updateBillPayment(UpdateBillPaymentForm form);
+
+@PostMapping("/order/updateOrderPrepayId")
+R updateOrderPrepayId(UpdateOrderPrepayIdForm form);
+
+@Data
+@Schema(description = "使用代金券的表单")
+public class UseVoucherForm {
+   @NotNull(message = "id不能为空")
+   @Min(value = 1, message = "id不能小于1")
+   @Schema(description = "领取的代金券ID")
+   private Long id;
+
+   @NotNull(message = "voucherId不能为空")
+   @Min(value = 1, message = "voucherId不能小于1")
+   @Schema(description = "代金券的ID")
+   private Long voucherId;
+
+   @NotNull(message = "customerId不能为空")
+   @Min(value = 1, message = "customerId不能小于1")
+   @Schema(description = "客户ID")
+   private Long customerId;
+
+   @NotNull(message = "orderId不能为空")
+   @Min(value = 1, message = "orderId不能小于1")
+   @Schema(description = "客户ID")
+   private Long orderId;
+
+   @NotBlank(message = "amount不能为空")
+   @Pattern(regexp = "^[1-9]\\d*\\.\\d{1,2}$|^0\\.\\d{1,2}$|^[1-9]\\d*$", message = "amount内容不正确")
+   @Schema(description = "订单金额")
+   private String amount;
+}
+   
+@PostMapping("/voucher/customer/useVoucher")
+R useVoucher(UseVoucherForm form);
+
+@Data
+@Schema(description = "查询客户OpenId的表单")
+public class SearchCustomerOpenIdForm {
+
+   @Schema(description = "客户ID")
+   private Long customerId;
+   
+}
+
+@PostMapping("/customer/searchCustomerOpenId")
+public R searchCustomerOpenId(SearchCustomerOpenIdForm form);
+
+@Data
+@Schema(description = "查询司机OpenId的表单")
+public class SearchDriverOpenIdForm {
+
+   @Schema(description = "司机ID")
+   private Long driverId;
+   
+}
+
+@PostMapping("/driver/searchDriverOpenId")
+public R searchDriverOpenId(SearchDriverOpenIdForm form);
+
+HashMap createWxPayment(long orderId, long customerId, Long customerVoucherId, Long voucherId);
+
+@Override
+@Transactional
+@LcnTransaction
+public HashMap createWxPayment(long orderId, long customerId, Long customerVoucherId, Long voucherId) {
+   // 先查询订单是否为6状态，其余状态都不可以生成支付订单
+   ValidCanPayOrderForm form_1 = new ValidCanPayOrderForm();
+   form_1.setOrderId(orderId);
+   form_1.setCustomerId(customerId);
+   R r = odrServiceApi.validCanPayOrder(form_1);
+   HashMap map = (HashMap) r.get("result");
+   String amount = MapUtil.getStr(map, "realFee");
+   String uuid = MapUtil.getStr(map, "uuid");
+   long driverId = MapUtil.getLong(map, "driverId");
+   String discount = "0.00";
+   if (!Objects.isNull(voucherId) && !Objects.isNull(customerVoucherId)) {
+      // 查询代金券是否可以使用并绑定
+      UseVoucherForm form_2 = new UseVoucherForm();
+      form_2.setCustomerId(customerId);
+      form_2.setVoucherId(voucherId);
+      form_2.setOrderId(orderId);
+      form_2.setAmount(amount);
+      r = vhrServiceApi.useVoucher(form_2);
+      discount = MapUtil.getStr(r, "result");
+   }
+   if (new BigDecimal(amount).compareTo(new BigDecimal(discount)) == -1) {
+      throw new HxdsException("总金额不能小于优惠劵面额");
+   }
+   // 修改实付金额
+   amount = NumberUtil.sub(amount, discount).toString();
+   UpdateBillPaymentForm form_3 = new UpdateBillPaymentForm();
+   form_3.setOrderId(orderId);
+   form_3.setRealPay(amount);
+   form_3.setVoucherFee(discount);
+   odrServiceApi.updateBillPayment(form_3);
+   // 查询用户的OpenId字符串
+   SearchCustomerOpenIdForm form_4 = new SearchCustomerOpenIdForm();
+   form_4.setCustomerId(customerId);
+   r = cstServiceApi.searchCustomerOpenId(form_4);
+   String customerOpenId = MapUtil.getStr(r, "result");
+   // 查询司机的OpenId字符串
+   SearchDriverOpenIdForm form_5 = new SearchDriverOpenIdForm();
+   form_5.setDriverId(driverId);
+   r = drServiceApi.searchDriverOpenId(form_5);
+   String driverOpenId = MapUtil.getStr(r, "result");
+   // 创建支付订单
+   try {
+      WXPay wxPay = new WXPay(myWXPayConfig);
+      HashMap param = Maps.newHashMap();
+      // 生成随机字符串
+      param.put("nonce_str", WXPayUtil.generateNonceStr());
+      param.put("body", "代驾费");
+      param.put("out_trade_no", uuid);
+      // 充值金额转换成分为单位，并且让BigDecimal取整数
+      // amount = "1.00"
+      param.put("total_fee", NumberUtil.mul(amount, "100").setScale(0, RoundingMode.FLOOR).toString());
+      param.put("total_fee", "4");
+      param.put("spbill_create_ip", "127.0.0.1");
+      // 这里要修改成内网穿透的公网URL
+      param.put("notify_url", "http://s2.nsloop.com:8955/hxds-odr/order/recieveMessage");
+      param.put("trade_type", "JSAPI");
+      param.put("openid", customerOpenId);
+      param.put("attach", driverOpenId);
+      // 支付需要分账
+      param.put("profit_sharing", "Y");
+      // 创建支付订单
+      Map<String, String> result = wxPay.unifiedOrder(param);
+      System.out.println(result);
+      // 预支付交易会话标识id
+      String prepayId = result.get("prepay_id");
+      if (Objects.isNull(prepayId)) {
+         // 更新订单记录中的prepay_id字段值
+         UpdateOrderPrepayIdForm form_6 = new UpdateOrderPrepayIdForm();
+         form_6.setOrderId(orderId);
+         form_6.setPrepayId(prepayId);
+         odrServiceApi.updateOrderPrepayId(form_6);
+         // 准备生成数字签名用的数据
+         map.clear();
+         map.put("appId", myWXPayConfig.getAppID());
+         String timeStamp = new Date().getTime() + "";
+         map.put("timeStamp", timeStamp);
+         String nonceStr = WXPayUtil.generateNonceStr();
+         map.put("nonceStr", nonceStr);
+         map.put("package", "prepay_id=" + prepayId);
+         map.put("signType", "MD5");
+         // 生成数字签名
+         String paySign = WXPayUtil.generateSignature(map, myWXPayConfig.getKey());
+         // 清理HashMap，放入结果
+         map.clear();
+         map.put("package", "prepay_id=" + prepayId);
+         map.put("timeStamp", timeStamp);
+         map.put("nonceStr", nonceStr);
+         map.put("paySign", paySign);
+         // uuid用户付款成功后，移动端主动请求更新充值状态
+         map.put("uuid", uuid);
+         return map;
+      } else {
+         log.error("创建支付订单失败");
+         throw new HxdsException("创建支付订单失败");
+      }
+   } catch (Exception e) {
+      log.error("创建支付订单失败", e);
+      throw new HxdsException("创建支付订单失败");
+   }
+}
+
+@Data
+@Schema(description = "创建支付订单")
+public class CreateWxPaymentForm {
+   @NotNull(message = "orderId不为空")
+   @Min(value = 1, message = "orderId不能小于1")
+   @Schema(description = "订单ID")
+   private Long orderId;
+
+   @Schema(description = "客户ID")
+   private Long customerId;
 
 
+   @Min(value = 1, message = "customerVoucherId不能小于1")
+   @Schema(description = "领取的代金券ID")
+   private Long customerVoucherId;
+
+   @Min(value = 1, message = "customerVoucherId不能小于1")
+   @Schema(description = "代金券ID")
+   private Long voucherId;
+}
+
+@PostMapping("/createWxPayment")
+@Operation(summary = "创建支付订单")
+@SaCheckLogin
+public R createWxPayment(@RequestBody @Valid CreateWxPaymentForm form) {
+   long customerId = StpUtil.getLoginIdAsLong();
+   form.setCustomerId(customerId);
+   HashMap map = orderService.createWxPayment(form.getOrderId(), form.getCustomerId(), form.getCustomerVoucherId(), form.getVoucherId());
+   return R.ok().put("result", map);
+}
+```
+### 乘客端小程序唤起付款窗口
+1. 写 hxds-customer-wx/main.js#Vue.prototype.url
+   写 hxds-customer-wx/pages/order/order.vue#payHandle
+```vue
+createWxPayment: `${baseUrl}/order/createWxPayment`,
+
+payHandle: function() {
+   let that = this;
+   uni.showModal({
+       title: '提示消息',
+       content: '您确定支付该订单？',
+       success: function(resp) {
+           if (resp.confirm) {
+               let data = {
+                   orderId: that.orderId,
+                   customerVoucherId: that.voucher.id,
+                   voucherId: that.voucher.voucherId
+               };
+               that.ajax(that.url.createWxPayment, 'POST', data, function(resp) {
+                   let result = resp.data.result;
+                   let pk = result.package;
+                   let timeStamp = result.timeStamp;
+                   let nonceStr = result.nonceStr;
+                   let paySign = result.paySign;
+                   let uuid = result.uuid;
+                   uni.requestPayment({
+                       timeStamp: timeStamp,
+                       nonceStr: nonceStr,
+                       package: pk,
+                       paySign: paySign,
+                       signType: 'MD5',
+                       success: function() {
+                           console.log('付款成功');
+                           // TODO: 主动发起查询请求
+                       },
+                       fail: function(error) {
+                           console.error(error);
+                           uni.showToast({
+                               icon: 'error',
+                               title: '付款失败'
+                           });
+                       }
+                   });
+               });
+           }
+       }
+   });
+},
+```
+2. 写 gateway/src/main/resources/bootstrap.yml
+```properties
+- id: hxds-odr
+ uri: lb://hxds-odr
+ predicates:
+   - Path=/hxds-odr/**
+ filters:
+   - StripPrefix=1
+```
+3. 写 bff-customer/src/main/java/com/example/hxds/bff/customer/controller/OrderController.java#receiveMessage
+```java
+@RequestMapping("/receiveMessage")
+@Operation(summary = "接收代驾费消息通知")
+public void receiveMessage(HttpServletRequest request, HttpServletResponse response) throws Exception {
+   request.setCharacterEncoding("UTF-8");
+   Reader reader = request.getReader();
+   BufferedReader buffer = new BufferedReader(reader);
+   String line = buffer.readLine();
+   StringBuffer temp = new StringBuffer();
+   while (line != null) {
+      temp.append(line);
+      line = buffer.readLine();
+   }
+   buffer.close();
+   reader.close();
+   String xml = temp.toString();
+   if (WXPayUtil.isSignatureValid(xml, myWXPayConfig.getKey())) {
+      Map<String, String> map = WXPayUtil.xmlToMap(xml);
+      String resultCode = map.get("result_code");
+      String returnCode = map.get("return_code");
+      if ("SUCCESS".equals(resultCode) && "SUCCESS".equals(returnCode)) {
+          response.setCharacterEncoding("UTF-8");
+          response.setContentType("application/xml");
+          Writer writer = response.getWriter();
+          BufferedWriter bufferedWriter = new BufferedWriter(writer);
+          bufferedWriter.write("<xml><return_code><![CDATA[SUCCESS]]></return_code> <return_msg><![CDATA[OK]]></return_msg></xml>");
+          bufferedWriter.close();
+          writer.close();
+          String uuid = map.get("out_trade_no");
+          String payId = map.get("transaction_id");
+          String driverOpenId = map.get("attach");
+          String payTime = DateUtil.parse(map.get("time_end"), "yyyyMMddHHmmss").toString("yyyy-MM-dd HH:mm:ss");
+          // TODO: 修改订单状态、执行分账、发放系统奖励
+      } else {
+          response.sendError(500, "数字签名异常");
+      }
+   }
+}
 ```
