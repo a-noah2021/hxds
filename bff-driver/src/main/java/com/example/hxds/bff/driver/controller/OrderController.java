@@ -116,4 +116,23 @@ public class OrderController {
         HashMap map = orderService.searchReviewDriverOrderBill(form);
         return R.ok().put("result", map);
     }
+
+    @PostMapping("/searchOrderStatus")
+    @SaCheckLogin
+    @Operation(summary = "查询订单状态")
+    public R searchOrderStatus(@RequestBody @Valid SearchOrderStatusForm form) {
+        long driverId = StpUtil.getLoginIdAsLong();
+        form.setDriverId(driverId);
+        Integer status = orderService.searchOrderStatus(form);
+        return R.ok().put("result", status);
+    }
+
+    @PostMapping("/updateOrderAboutPayment")
+    @SaCheckLogin
+    @Operation(summary = "更新订单相关的付款信息")
+    public R updateOrderAboutPayment(@RequestBody @Valid UpdateOrderAboutPaymentForm form) {
+        long driverId = StpUtil.getLoginIdAsLong();
+        String result = orderService.updateOrderAboutPayment(driverId, form);
+        return R.ok().put("result", result);
+    }
 }

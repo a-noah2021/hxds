@@ -234,4 +234,28 @@ public class OrderServiceImpl implements OrderService {
         HashMap map = (HashMap) r.get("result");
         return map;
     }
+
+    @Override
+    public Integer searchOrderStatus(SearchOrderStatusForm form) {
+        R r = odrServiceApi.searchOrderStatus(form);
+        Integer result = MapUtil.getInt(r, "result");
+        return result;
+    }
+
+    @Override
+    @Transactional
+    @LcnTransaction
+    public String updateOrderAboutPayment(long driverId, UpdateOrderAboutPaymentForm form) {
+        ValidDriverOwnOrderForm validForm = new ValidDriverOwnOrderForm();
+        validForm.setDriverId(driverId);
+        validForm.setOrderId(form.getOrderId());
+        R r = odrServiceApi.validDriverOwnOrder(validForm);
+        boolean bool = MapUtil.getBool(r, "result");
+        if (!bool) {
+            throw new HxdsException("司机未关联该订单");
+        }
+        r = odrServiceApi.updateOrderAboutPayment(form);
+        String result = MapUtil.getStr(r, "result");
+        return result;
+    }
 }

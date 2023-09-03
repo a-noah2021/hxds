@@ -283,4 +283,12 @@ public class OrderController {
             }
         }
     }
+
+    @PostMapping("/updateOrderAboutPayment")
+    @Operation(summary = "更新代驾订单支付信息")
+    public R updateOrderAboutPayment(@RequestBody @Valid UpdateOrderAboutPaymentForm form) {
+        Map param = BeanUtil.beanToMap(form);
+        String result = orderService.updateOrderAboutPayment(param);
+        return R.ok().put("result", result);
+    }
 }

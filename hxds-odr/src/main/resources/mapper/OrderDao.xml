@@ -340,4 +340,24 @@
         SET `status` = 8
         WHERE uuid = #{uuid}
     </update>
+    <select id="searchUuidAndStatus" parameterType="long" resultType="HashMap">
+        SELECT uuid,
+               `status`
+        FROM tb_order
+        WHERE id = #{orderId}
+    </select>
+    <update id="updateOrderAboutPayment" parameterType="Map">
+        UPDATE tb_order
+        SET status   = 7,
+            pay_id   = #{payId},
+            pay_time = #{payTime}
+        WHERE id = #{orderId}
+    </update>
+    <select id="validDriverAndCustomerOwnOrder" parameterType="Map" resultType="long">
+        SELECT COUNT(*)
+        FROM tb_order
+        WHERE id = #{orderId}
+          AND driver_id = #{driverId}
+          AND customer_id = #{customerId}
+    </select>
 </mapper>

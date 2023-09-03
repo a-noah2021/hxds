@@ -477,7 +477,570 @@ else if ("PROCESSING".equals(status)) {
    3.如果付款成功，等待2分钟，然后查看订单状态是否修改成了8状态
    4.等待20分钟(各个子系统都不能停止)，然后查看分账记录的status是否变成了2状态
 ### 订单微服务主动查询付款结果
+1. 写 hxds-odr/src/main/resources/mapper/OrderDao.xml 及其对应接口
+   写 hxds-odr/src/main/java/com/example/hxds/odr/service/OrderService.java#updateOrderAboutPayment 及其实现类
+   写 hxds-odr/src/main/java/com/example/hxds/odr/controller/form/UpdateOrderAboutPaymentForm.java
+   写 hxds-odr/src/main/java/com/example/hxds/odr/controller/OrderController.java#updateOrderAboutPayment
+```java
+<select id="searchUuidAndStatus" parameterType="long" resultType="HashMap">
+     SELECT uuid,
+            `status`
+     FROM tb_order
+     WHERE id = #{orderId}
+</select>
+<update id="updateOrderAboutPayment" parameterType="Map">
+     UPDATE tb_order
+     SET status   = 7,
+     pay_id   = #{payId},
+     pay_time = #{payTime}
+     WHERE id = #{orderId}
+</update>
+
+HashMap searchUuidAndStatus(long orderId);
+
+int updateOrderAboutPayment(Map param);
+
+String updateOrderAboutPayment(Map param);
+
+@Override
+@Transactional
+@LcnTransaction
+public String updateOrderAboutPayment(Map param) {
+    long orderId = MapUtil.getLong(param, "orderId");
+    // 查询订单状态
+    // 因为有可能Web方法先收到了付款结果通知消息，把订单状态改成了7、8状态
+    // 所以先进行订单状态判断
+    HashMap map = orderDao.searchUuidAndStatus(orderId);
+    String uuid = MapUtil.getStr(map, "uuid");
+    int status = MapUtil.getInt(map, "status");
+    // 如果订单状态已经是已付款，就退出当前方法
+    if (status == 7 || status == 8) {
+        return "付款成功";
+    }
+    // 查询支付结果的参数
+    map.clear();
+    map.put("appid", myWXPayConfig.getAppID());
+    map.put("mch_id", myWXPayConfig.getMchID());
+    map.put("out_trade_no", uuid);
+    map.put("nonce_str", WXPayUtil.generateNonceStr());
+    try {
+        // 生成数字签名
+        String sign = WXPayUtil.generateSignature(map, myWXPayConfig.getKey());
+        map.put("sign", sign);
+        WXPay wxPay = new WXPay(myWXPayConfig);
+        // 查询支付结果
+        Map<String, String> result = wxPay.orderQuery(map);
+        Object returnCode = result.get("return_code");
+        Object resultCode = result.get("result_code");
+        if ("SUCCESS".equals(returnCode) && "SUCCESS".equals(resultCode)) {
+            String tradeState = result.get("trade_state");
+            if ("SUCCESS".equals(tradeState)) {
+                String driverOpenId = result.get("attach");
+                String payId = result.get("transaction_id");
+                String payTime = new DateTime(result.get("time_end"), "yyyyMMddHHmmss").toString("yyyy-MM-dd HH:mm:ss");
+                // 更新订单相关付款信息和状态
+                param.put("payId", payId);
+                param.put("payTime", payTime);
+                // 把订单更新为7状态
+                int rows = orderDao.updateOrderAboutPayment(param);
+                if (rows != 1) {
+                    throw new HxdsException("更新订单相关付款信息失败");
+                }
+                // 查询系统奖励
+                map = orderDao.searchDriverIdAndIncentiveFee(uuid);
+                String incentiveFee = MapUtil.getStr(map, "incentiveFee");
+                long driverId = MapUtil.getLong(map, "driverId");
+                // 判断系统奖励费是否大于0
+                if (new BigDecimal(incentiveFee).compareTo(new BigDecimal("0.00")) == 1) {
+                    TransferForm form = new TransferForm();
+                    form.setUuid(IdUtil.simpleUUID());
+                    form.setAmount(incentiveFee);
+                    form.setDriverId(driverId);
+                    form.setType((byte) 2);
+                    form.setRemark("系统奖励费");
+                    // 给司机钱包转账奖励费
+                    drServiceApi.transfer(form);
+                }
+                // 先判断是否有分账定时器
+                if (quartzUtil.checkExists(uuid, "代驾单分账任务组")
+                        || quartzUtil.checkExists(uuid, "查询代驾单分账任务组")) {
+                    // 存在分账计时器就不需要再执行分账
+                    return "付款成功";
+                }
+                // 执行分账
+                JobDetail jobDetail = JobBuilder.newJob(HandleProfitsharingJob.class).build();
+                Map dataMap = jobDetail.getJobDataMap();
+                dataMap.put("uuid", uuid);
+                dataMap.put("driverOpenId", driverOpenId);
+                dataMap.put("payId", payId);
+                Date executeDate = new DateTime().offset(DateField.MINUTE, 2);
+                quartzUtil.addJob(jobDetail, uuid, "代驾单分账任务组", executeDate);
+                rows = orderDao.finishOrder(uuid);
+                if (rows != 1) {
+                    throw new HxdsException("更新订单结束状态失败");
+                }
+                return "付款成功";
+            } else {
+                return "付款异常";
+            }
+        } else {
+            return "付款异常";
+        }
+    } catch (Exception e) {
+        e.printStackTrace();
+        throw new HxdsException("更新订单相关付款信息失败");
+    }
+}
+
+@Data
+@Schema(description = "更新代驾订单支付信息的表单")
+public class UpdateOrderAboutPaymentForm {
+
+   @NotNull(message = "orderId不能为空")
+   @Min(value = 1, message = "orderId不能小于1")
+   @Schema(description = "订单ID")
+   private Long orderId;
+   
+}
+
+@PostMapping("/updateOrderAboutPayment")
+@Operation(summary = "更新代驾订单支付信息")
+public R updateOrderAboutPayment(@RequestBody @Valid UpdateOrderAboutPaymentForm form) {
+   Map param = BeanUtil.beanToMap(form);
+   String result = orderService.updateOrderAboutPayment(param);
+   return R.ok().put("result", result);
+}
+```
+2. 写 bff-customer/src/main/java/com/example/hxds/bff/customer/controller/form/UpdateOrderAboutPaymentForm.java
+   写 bff-customer/src/main/java/com/example/hxds/bff/customer/feign/OdrServiceApi.java#updateOrderAboutPayment
+   写 bff-customer/src/main/java/com/example/hxds/bff/customer/service/OrderService.java#updateOrderAboutPayment 及其实现类
+   写 bff-customer/src/main/java/com/example/hxds/bff/customer/controller/OrderController.java#updateOrderAboutPayment
+```java
+@Data
+@Schema(description = "更新代驾订单支付信息的表单")
+public class UpdateOrderAboutPaymentForm {
+
+    @NotNull(message = "orderId不能为空")
+    @Min(value = 1, message = "orderId不能小于1")
+    @Schema(description = "订单ID")
+    private Long orderId;
+}
+
+@PostMapping("/order/updateOrderAboutPayment")
+R updateOrderAboutPayment(UpdateOrderAboutPaymentForm form);
+
+String updateOrderAboutPayment(UpdateOrderAboutPaymentForm form);
+
+@Override
+@Transactional
+@LcnTransaction
+public String updateOrderAboutPayment(UpdateOrderAboutPaymentForm form) {
+   R r = odrServiceApi.updateOrderAboutPayment(form);
+   String result = MapUtil.getStr(r, "result");
+   return result;
+}
+
+@PostMapping("/updateOrderAboutPayment")
+@Operation(summary = "更新代驾订单支付信息")
+@SaCheckLogin
+public R updateOrderAboutPayment(@RequestBody @Valid UpdateOrderAboutPaymentForm form) {
+   String result = orderService.updateOrderAboutPayment(form);
+   return R.ok().put("result", result);
+}
+```
+3. 写 hxds-customer-wx/main.js#Vue.prototype.url
+   补全 hxds-customer-wx/execution/order/order.vue#payHandle
+```vue
+updateOrderAboutPayment: `${baseUrl}/order/updateOrderAboutPayment`,
+
+// 主动发起查询请求
+that.ajax(that.url.updateOrderAboutPayment, 'POST', data, function(resp) {
+	let result = resp.data.result;
+	if (result == '付款成功') {
+		uni.showToast({
+			icon: 'success',
+			title: '付款成功'
+		});
+		setTimeout(function() {
+            url: '../workbench/workbench'
+		}, 2000);
+	} else {
+		uni.showToast({
+			icon: 'success',
+			title: '付款异常，如有疑问可以拨打客服电话'
+		});
+	}
+});
+```
+4. 【测试】1.我们把量子互联程序关闭，这样后端Web方法就无法接收到付款结果通知消息了
+   2.重新生成UUID字符串，更新到订单记录的uuid字段，然后把订单修改成6状态
+   3.把分账记录修改成1状态
+   4.启动各个子系统，然后在乘客端小程序上面支付订单
+   5.支付成功之后，查看小程序是否跳转到工作台页面
+   6.等待2分钟，查看订单记录是否修改成了8状态
+   7.等待20分钟，查看分账记录是否修改成了2状态
+### 司机端小程序轮询付款结果
+1. 写 bff-driver/src/main/java/com/example/hxds/bff/driver/controller/form/SearchOrderStatusForm.java
+   写 bff-driver/src/main/java/com/example/hxds/bff/driver/controller/form/UpdateOrderAboutPaymentForm.java
+   写 bff-driver/src/main/java/com/example/hxds/bff/driver/feign/OdrServiceApi.java#searchOrderStatus/updateOrderAboutPayment
+   写 bff-driver/src/main/java/com/example/hxds/bff/driver/service/OrderService.java#searchOrderStatus/updateOrderAboutPayment 及其实现类
+   写 bff-driver/src/main/java/com/example/hxds/bff/driver/controller/OrderController.java#searchOrderStatus/updateOrderAboutPayment
+```java
+@Data
+@Schema(description = "查询订单状态的表单")
+public class SearchOrderStatusForm {
+    @NotNull(message = "orderId不能为空")
+    @Min(value = 1, message = "orderId不能小于1")
+    @Schema(description = "订单ID")
+    private Long orderId;
+
+    @Schema(description = "司机ID")
+    private Long driverId;
+}
+
+@Data
+@Schema(description = "更新代驾订单支付信息的表单")
+public class UpdateOrderAboutPaymentForm {
+   @NotNull(message = "orderId不能为空")
+   @Min(value = 1, message = "orderId不能小于1")
+   @Schema(description = "订单ID")
+   private Long orderId;
+}
+
+@PostMapping("/order/searchOrderStatus")
+R searchOrderStatus(SearchOrderStatusForm form);
+
+@PostMapping("/order/updateOrderAboutPayment")
+R updateOrderAboutPayment(UpdateOrderAboutPaymentForm form);
+
+Integer searchOrderStatus(SearchOrderStatusForm form);
+
+String updateOrderAboutPayment(long driverId, UpdateOrderAboutPaymentForm form);
+
+@Override
+public Integer searchOrderStatus(SearchOrderStatusForm form) {
+   R r = odrServiceApi.searchOrderStatus(form);
+   Integer result = MapUtil.getInt(r, "result");
+   return result;
+}
+
+@Override
+@Transactional
+@LcnTransaction
+public String updateOrderAboutPayment(long driverId, UpdateOrderAboutPaymentForm form) {
+   ValidDriverOwnOrderForm validForm = new ValidDriverOwnOrderForm();
+   validForm.setDriverId(driverId);
+   validForm.setOrderId(form.getOrderId());
+   R r = odrServiceApi.validDriverOwnOrder(validForm);
+   boolean bool = MapUtil.getBool(r, "result");
+   if (!bool) {
+      throw new HxdsException("司机未关联该订单");
+   }
+   r = odrServiceApi.updateOrderAboutPayment(form);
+   String result = MapUtil.getStr(r, "result");
+   return result;
+}
+
+@PostMapping("/searchOrderStatus")
+@SaCheckLogin
+@Operation(summary = "查询订单状态")
+public R searchOrderStatus(@RequestBody @Valid SearchOrderStatusForm form) {
+   long driverId = StpUtil.getLoginIdAsLong();
+   form.setDriverId(driverId);
+   Integer status = orderService.searchOrderStatus(form);
+   return R.ok().put("result", status);
+}
+
+@PostMapping("/updateOrderAboutPayment")
+@SaCheckLogin
+@Operation(summary = "更新订单相关的付款信息")
+public R updateOrderAboutPayment(@RequestBody @Valid UpdateOrderAboutPaymentForm form) {
+   long driverId = StpUtil.getLoginIdAsLong();
+   String result = orderService.updateOrderAboutPayment(driverId, form);
+   return R.ok().put("result", result);
+}
+```
+2. 写 hxds-driver-wx/main.js#Vue.prototype.url
+   写 hxds-driver-wx/order/waiting_payment/waiting_payment.vue#onLoad
+   写 hxds-driver-wx/order/waiting_payment/waiting_payment.vue#checkPaymentHandle
+```vue
+searchOrderStatus: `${baseUrl}/order/searchOrderStatus`,
+updateOrderAboutPayment: `${baseUrl}/order/updateOrderAboutPayment`,
+
+onLoad: function(options) {
+		let that = this;
+		that.orderId = options.orderId;
+		that.timer = setInterval(function() {
+			that.i++;
+			if (that.i % 2 == 0) {
+				let data = {
+					orderId: that.orderId
+				};
+				that.ajax(
+					that.url.searchOrderStatus,
+					'POST',
+					data,
+					function(resp) {
+						if (!resp.data.hasOwnProperty('result')) {
+							uni.showToast({
+								icon: 'none',
+								title: '没有找到订单'
+							});
+							clearInterval(that.timer);
+							that.i = 0;
+						} else {
+							let result = resp.data.result;
+							if (result == 7 || result == 8) {
+								uni.showToast({
+									title: '客户已付款'
+								});
+								uni.setStorageSync('workStatus', '停止接单');
+								clearInterval(that.timer);
+								that.i = 0;
+								setTimeout(function() {
+									uni.switchTab({
+										url: '../../pages/workbench/workbench'
+									});
+								}, 2500);
+							}
+						}
+					},
+					false
+				);
+			}
+		}, 1000);
+},
+
+checkPaymentHandle: function() {
+	let that = this;
+	let data = {
+		orderId: that.orderId
+	};
+	that.ajax(that.url.updateOrderAboutPayment, 'POST', data, function(resp) {
+		let result = resp.data.result;
+		if (result == '付款成功') {
+			uni.showToast({
+				title: '客户已付款'
+			});
+			uni.setStorageSync('workStatus', '停止接单');
+			clearInterval(that.timer);
+			that.i = 0;
+			setTimeout(function() {
+				uni.switchTab({
+					url: '../../pages/workbench/workbench'
+				});
+			}, 2500);
+		} else {
+			uni.showToast({
+				icon: '未检测到成功付款'
+			});
+		}
+	});
+}
+```
+5. 【测试】测试司机端小程序轮询订单支付结果的操作步骤如下:
+   1.运行量子互联程序，把后端各个子系统运行起来。
+   2.生成新的UUID字符串，更新到订单记录的uuid字段上面，订单status字段修改成6状态。
+   3.分账记录修改成1状态。
+   4.用小程序模拟器运行司机端小程序，直接运行waiting_payment.vue页面，然后URL传入orderId参数.
+   5.【补】订单status字段修改成7或8状态
+   6.观察司机端小程序是否检测到付款成功,然后跳转到工作台页面。
+   测试司机端小程序强制查询付款结果步骤如下:
+   1.关闭运行量子互联程序，把后端各个子系统运行起来。
+   2.生成新的UUID字符串，更新到订单记录的uuid字段上面，订单status字段修改成6状态。
+   3.分账记录修改成1状态。
+   4.注释乘客端付款成功之后自动发起Ajax查询付款结果的代码。
+   5.用小程序模拟器运行司机端小程序，直接运行waiting_payment.vue页面，然后URL传入orderId参数
+   6.乘客端小程序为代驾订单付款。即便付款成功，订单依旧是6状态。
+   7.在司机端小程序上面点击按钮，强制后端查询付款结果
+   8.测试完毕之后,把注释掉的程序恢复
+## 订单评价与申诉（如遇恶意差评，司机可以申诉）
+由于乘客的评价关乎系统限制司机接单，所以一旦遇到乘客的恶意差评，代驾系统允许司机执行申诉，经过大数据审查与人工核验，可以给司机撤销恶意差评。如果差评属实，则系统自动限制司机接单，并且降低司机分账比例和接单奖励
+### 订单子系统保存订单评价，并过滤内容
+1. 写 hxds-odr/pom.xml
+   写 hxds-odr/src/main/resources/mapper/OrderDao.xml#validDriverAndCustomerOwnOrder 及其对应接口
+   写 hxds-odr/src/main/resources/mapper/OrderCommentDao.xml#insert 及其对应接口
+   写 hxds-odr/src/main/java/com/example/hxds/odr/service/OrderCommentService.java#insert 及其实现类
+   写 hxds-odr/src/main/java/com/example/hxds/odr/controller/form/InsertCommentForm.java
+   写 hxds-odr/src/main/java/com/example/hxds/odr/controller/OrderCommentController.java#insertComment
+```java
+<!--数据万象依赖库-->
+<dependency>
+   <groupId>com.qcloud</groupId>
+   <artifactId>cos_api</artifactId>
+   <version>5.6.74</version>
+</dependency>
+
+<select id="validDriverAndCustomerOwnOrder" parameterType="Map" resultType="long">
+     SELECT COUNT(*)
+     FROM tb_order
+     WHERE id = #{orderId}
+     AND driver_id = #{driverId}
+     AND customer_id = #{customerId}
+</select>
+
+long validDriverAndCustomerOwnOrder(Map param);
+
+<insert id="insert" parameterType="com.example.hxds.odr.db.pojo.OrderCommentEntity">
+     INSERT INTO tb_order_comment
+     SET order_id=#{orderId},
+     driver_id=#{driverId},
+     customer_id=#{customerId},
+     rate=#{rate},
+     remark=#{remark},
+     status=#{status},
+     instance_id=#{instanceId},
+     create_time=#{createTime}
+</insert>
+
+int insert(OrderCommentEntity entity);
+
+int insert(OrderCommentEntity entity);
+
+@Override
+@Transactional
+@LcnTransaction
+public int insert(OrderCommentEntity entity) {
+    // 验证司机和乘客与该订单是否关联
+    HashMap param = new HashMap() {{
+      put("orderId", entity.getOrderId());
+      put("driverId", entity.getDriverId());
+      put("customerId", entity.getCustomerId());
+    }};
+    long count = orderDao.validDriverAndCustomerOwnOrder(param);
+    if (count != 1) {
+      throw new HxdsException("司机和乘客与该订单无关联");
+    }
+    // 审核评价内容
+    COSCredentials cred = new BasicCOSCredentials(secretId, secretKey);
+    Region region = new Region("ap-beijing");
+    ClientConfig config = new ClientConfig(region);
+    COSClient client = new COSClient(cred, config);
+    TextAuditingRequest request = new TextAuditingRequest();
+    request.setBucketName(bucketPublic);
+    request.getInput().setContent(Base64.encode(entity.getRemark()));
+    request.getConf().setDetectType("all");
+
+    TextAuditingResponse response = client.createAuditingTextJobs(request);
+    AuditingJobsDetail detail = response.getJobsDetail();
+    String state = detail.getState();
+    if ("Success".equals(state)) {
+      String result = detail.getResult();
+      // 内容审查不通过就设置评价内容为null
+      if (!"0".equals(result)) {
+        entity.setRemark(null);
+      }
+    }
+    // 保存评价
+    int rows = orderCommentDao.insert(entity);
+    if (rows != 1) {
+      throw new HxdsException("保存订单评价失败");
+    }
+    return rows;
+}
+
+@Data
+@Schema(description = "保存订单评价的表单")
+public class InsertCommentForm {
+
+   @NotNull
+   @Min(value = 1, message = "orderId不能小于1")
+   @Schema(description = "订单ID")
+   private Long orderId;
+
+   @NotNull(message = "driverId不能为空")
+   @Min(value = 1, message = "driverId不能小于1")
+   @Schema(description = "司机ID")
+   private Long driverId;
+
+   @NotNull(message = "customerId不能为空")
+   @Min(value = 1, message = "customerId不能小于1")
+   @Schema(description = "客户ID")
+   private Long customerId;
+
+
+   @NotNull(message = "rate不能为空")
+   @Range(min = 1, max = 5, message = "rate范围不正确")
+   @Schema(description = "评价分数")
+   private Byte rate;
+
+   @Schema(description = "评价")
+   private String remark = "默认系统好评";
+
+}
+
+@PostMapping("/insertComment")
+@Operation(summary = "保存订单评价")
+public R insertComment(@RequestBody @Valid InsertCommentForm form) {
+   OrderCommentEntity entity = BeanUtil.toBean(form, OrderCommentEntity.class);
+   entity.setStatus((byte) 1);
+   entity.setCreateTime(new Date());
+   int rows = orderCommentService.insert(entity);
+   return R.ok().put("rows", rows);
+}
+```
+2. 写 bff-customer/src/main/java/com/example/hxds/bff/customer/controller/form/InsertCommentForm.java
+   写 bff-customer/src/main/java/com/example/hxds/bff/customer/feign/OdrServiceApi.java#insertComment
+   写 bff-customer/src/main/java/com/example/hxds/bff/customer/service/OrderCommentService.java#insertComment 及其实现类
+   写 bff-customer/src/main/java/com/example/hxds/bff/customer/controller/OrderCommentController.java#insertComment
+```java
+@Data
+@Schema(description = "保存订单评价的表单")
+public class InsertCommentForm {
+
+    @NotNull
+    @Min(value = 1, message = "orderId不能小于1")
+    @Schema(description = "订单ID")
+    private Long orderId;
+
+    @NotNull(message = "driverId不能为空")
+    @Min(value = 1, message = "driverId不能小于1")
+    @Schema(description = "司机ID")
+    private Long driverId;
+
+    @Schema(description = "客户ID")
+    private Long customerId;
+
+
+    @NotNull(message = "rate不能为空")
+    @Range(min = 1, max = 5, message = "rate范围不正确")
+    @Schema(description = "评价分数")
+    private Byte rate;
+
+    @Schema(description = "评价")
+    private String remark = "默认系统好评";
+}
+
+@PostMapping("/comment/insertComment")
+R insertComment(InsertCommentForm form);
+
+int insertComment(InsertCommentForm form);
+
+@Override
+@Transactional
+@LcnTransaction
+public int insertComment(InsertCommentForm form) {
+   R r = odrServiceApi.insertComment(form);
+   int rows = MapUtil.getInt(r, "result");
+   if (rows != 1) {
+      throw new HxdsException("保存订单评价失败");
+   }
+   return rows;
+}
+
+@PostMapping("/insertComment")
+@Operation(summary = "保存订单评价")
+@SaCheckLogin
+public R insertComment(@RequestBody @Valid InsertCommentForm form){
+   long customerId = StpUtil.getLoginIdAsLong();
+   form.setCustomerId(customerId);
+   int rows = orderCommentService.insertComment(form);
+   return R.ok().put("rows",rows);
+}
+```
+### 乘客付款后对订单评价
 1. 写 
+
 ```java
 
 ```

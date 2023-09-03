@@ -347,4 +347,14 @@ public class OrderServiceImpl implements OrderService {
             throw new HxdsException("创建支付订单失败");
         }
     }
+
+    @Override
+    @Transactional
+    @LcnTransaction
+    public String updateOrderAboutPayment(UpdateOrderAboutPaymentForm form) {
+        R r = odrServiceApi.updateOrderAboutPayment(form);
+        String result = MapUtil.getStr(r, "result");
+        return result;
+    }
+
 }

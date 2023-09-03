@@ -59,6 +59,12 @@ public interface OrderDao {
     int updateOrderPayIdAndStatus(Map param);
 
     int finishOrder(String uuid);
+
+    HashMap searchUuidAndStatus(long orderId);
+
+    int updateOrderAboutPayment(Map param);
+
+    long validDriverAndCustomerOwnOrder(Map param);
 }
 
 

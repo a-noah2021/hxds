@@ -3,5 +3,15 @@
         PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.example.hxds.odr.db.dao.OrderCommentDao">
-    
+    <insert id="insert" parameterType="com.example.hxds.odr.db.pojo.OrderCommentEntity">
+        INSERT INTO tb_order_comment
+        SET order_id=#{orderId},
+            driver_id=#{driverId},
+            customer_id=#{customerId},
+            rate=#{rate},
+            remark=#{remark},
+            status=#{status},
+            instance_id=#{instanceId},
+            create_time=#{createTime}
+    </insert>
 </mapper>
