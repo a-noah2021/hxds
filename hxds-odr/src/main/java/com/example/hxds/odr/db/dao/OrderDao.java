@@ -65,6 +65,14 @@ public interface OrderDao {
     int updateOrderAboutPayment(Map param);
 
     long validDriverAndCustomerOwnOrder(Map param);
+
+    List<HashMap> searchDriverOrderByPage(Map param);
+
+    long searchDriverOrderCount(Map param);
+
+    List<HashMap> searchCustomerOrderByPage(Map param);
+
+    long searchCustomerOrderCount(Map param);
 }
 
 

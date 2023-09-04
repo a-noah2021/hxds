@@ -61,4 +61,8 @@ public interface OrderService {
     void handlePayment(String uuid, String payId, String driverOpenId, String payTime);
 
     String updateOrderAboutPayment(Map param);
+
+    PageUtils searchDriverOrderByPage(Map param);
+
+    PageUtils searchCustomerOrderByPage(Map param);
 }

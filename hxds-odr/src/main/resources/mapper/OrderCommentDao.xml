@@ -14,4 +14,103 @@
             instance_id=#{instanceId},
             create_time=#{createTime}
     </insert>
+    <select id="searchCommentByOrderId" parameterType="Map" resultType="HashMap">
+        SELECT CAST(id AS CHAR) AS id,
+        CAST(driver_id AS CHAR) AS driverId,
+        CAST(customer_id AS CHAR) AS customerId,
+        rate,
+        remark,
+        `status`,
+        instance_id AS instanceId,
+        DATE_FORMAT(create_time, '%Y-%m-%d %H:%i:%s') AS createTime
+        FROM tb_order_comment
+        WHERE order_id = #{orderId}
+        <if test="driverId!=null">
+            AND driver_id = #{driverId}
+        </if>
+        <if test="customerId!=null">
+            AND customer_id = #{customerId}
+        </if>
+    </select>
+    <select id="searchCommentByPage" parameterType="Map" resultType="HashMap">
+        SELECT CAST(c.id AS CHAR) AS commentId,
+        CAST(o.id AS CHAR) AS orderId,
+        CAST(o.driver_id AS CHAR) AS driverId,
+        CAST(o.customer_id AS CHAR) AS customerId,
+        IFNULL(c.rate,5) AS rate,
+        IFNULL(c.remark,'默认好评') AS remark,
+        IFNULL(c.status,1) AS `status`,
+        DATE_FORMAT(o.accept_time, '%Y-%m-%d %H:%i:%s') AS acceptTime,
+        c.instance_id AS instanceId,
+        CAST(c.user_id AS CHAR) AS userId,
+        c.user_name AS userName,
+        IFNULL((c.user_id = #{userId}),false) AS `handler`
+        FROM tb_order o
+        LEFT JOIN tb_order_comment c ON c.order_id = o.id
+        WHERE 1 = 1
+        AND o.status >= 7
+        <if test="orderId!=null">
+            AND o.id = #{orderId}
+        </if>
+        <if test="driverId!=null">
+            AND o.driver_id = #{driverId}
+        </if>
+        <if test="customerId!=null">
+            AND o.customer_id = #{customerId}
+        </if>
+        <if test='rate!=null and rate=="差评"'>
+            AND c.rate BETWEEN 1 AND 2
+        </if>
+        <if test='rate!=null and rate=="中评"'>
+            AND c.rate BETWEEN 3 AND 4
+        </if>
+        <if test='rate!=null and rate=="好评"'>
+            AND (c.rate = 5 OR c.rate IS NULL)
+        </if>
+        <if test="startDate!=null and endDate!=null">
+            AND o.accept_time BETWEEN #{startDate} AND #{endDate}
+        </if>
+        <if test="status!=null and status==1">
+            AND (c.`status` = 1 OR c.`status` IS NULL)
+        </if>
+        <if test="status!=null and status!=1">
+            AND c.`status` = #{status}
+        </if>
+        ORDER BY o.id DESC
+        LIMIT #{start}, #{length}
+    </select>
+    <select id="searchCommentCount" parameterType="Map" resultType="long">
+        SELECT COUNT(*)
+        FROM tb_order o
+        LEFT JOIN tb_order_comment c ON c.order_id = o.id
+        WHERE 1 = 1
+        AND o.status >= 7
+        <if test="orderId!=null">
+            AND o.id = #{orderId}
+        </if>
+        <if test="driverId!=null">
+            AND o.driver_id = #{driverId}
+        </if>
+        <if test="customerId!=null">
+            AND o.customer_id = #{customerId}
+        </if>
+        <if test='rate!=null and rate=="差评"'>
+            AND c.rate BETWEEN 1 AND 2
+        </if>
+        <if test='rate!=null and rate=="中评"'>
+            AND c.rate BETWEEN 3 AND 4
+        </if>
+        <if test='rate!=null and rate=="好评"'>
+            AND (c.rate = 5 OR c.rate IS NULL)
+        </if>
+        <if test="startDate!=null and endDate!=null">
+            AND o.accept_time BETWEEN #{startDate} AND #{endDate}
+        </if>
+        <if test="status!=null and status==1">
+            AND (c.`status` = 1 OR c.`status` IS NULL)
+        </if>
+        <if test="status!=null and status!=1">
+            AND c.`status` = #{status}
+        </if>
+    </select>
 </mapper>

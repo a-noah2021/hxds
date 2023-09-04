@@ -7,7 +7,9 @@ import com.example.hxds.bff.driver.controller.form.*;
 import com.example.hxds.bff.driver.feign.*;
 import com.example.hxds.bff.driver.service.OrderService;
 import com.example.hxds.common.exception.HxdsException;
+import com.example.hxds.common.util.PageUtils;
 import com.example.hxds.common.util.R;
+import com.google.common.collect.Maps;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -257,5 +259,44 @@ public class OrderServiceImpl implements OrderService {
         r = odrServiceApi.updateOrderAboutPayment(form);
         String result = MapUtil.getStr(r, "result");
         return result;
+    }
+
+    @Override
+    public PageUtils searchDriverOrderByPage(SearchDriverOrderByPageForm form) {
+        R r = odrServiceApi.searchDriverOrderByPage(form);
+        PageUtils pageUtils = (PageUtils) r.get("result");
+        return pageUtils;
+    }
+
+    @Override
+    public HashMap searchOrderById(SearchOrderByIdForm form) {
+        // 查询订单信息
+        R r = odrServiceApi.searchOrderById(form);
+        HashMap orderMap = (HashMap) r.get("result");
+        // 查询代驾客户信息
+        Long customerId = MapUtil.getLong(orderMap, "customerId");
+        SearchCustomerInfoInOrderForm form_1 = new SearchCustomerInfoInOrderForm();
+        form_1.setCustomerId(customerId);
+        r = cstServiceApi.searchCustomerInfoInOrder(form_1);
+        HashMap cstMap = (HashMap) r.get("result");
+        // 查询评价信息
+        int status = MapUtil.getInt(orderMap, "status");
+        Map cmtMap = Maps.newHashMap();
+        if (status >= 7) {
+            SearchCommentByOrderIdForm form_2 = new SearchCommentByOrderIdForm();
+            form_2.setOrderId(form.getOrderId());
+            form_2.setDriverId(form.getDriverId());
+            r = odrServiceApi.searchCommentByOrderId(form_2);
+            if (r.containsKey("result")) {
+                cmtMap = (HashMap) r.get("result");
+            } else {
+                cmtMap.put("rate", 5);
+            }
+        }
+        HashMap map = Maps.newHashMap();
+        map.putAll(orderMap);
+        map.putAll(cstMap);
+        map.put("comment", cmtMap);
+        return map;
     }
 }
