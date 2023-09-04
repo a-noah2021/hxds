@@ -1039,8 +1039,294 @@ public R insertComment(@RequestBody @Valid InsertCommentForm form){
 }
 ```
 ### 乘客付款后对订单评价
-1. 写 
-
+1. 写 hxds-mis-vue/src/router/index.js
+   写 hxds-mis-vue/src/views/main.vue
+   写 hxds-mis-vue/src/views/comment.vue#loadDataList
+   写 hxds-mis-vue/src/views/comment.vue#created
+   写 hxds-mis-vue/src/views/comment.vue#searchHandle
+   写 hxds-mis-vue/src/views/comment.vue#sizeChangeHandle
+   写 hxds-mis-vue/src/views/comment.vue#currentChangeHandle
 ```java
+import Comment from "../views/comment.vue"
 
+{
+   path: '/comment',
+   name: 'Comment',
+   component: Comment,
+   meta: {
+      title: '订单评价',
+      isTab: true
+   }
+},
+
+<el-menu-item
+        index="order"
+        v-if="isAuth(['ROOT', 'COMMENT:SELECT'])"
+@click="$router.push({ name: 'Comment' })">
+   <SvgIcon name="company_fill" class="icon-svg" />
+   <span slot="title">订单评价</span>
+</el-menu-item>
+
+loadDataList: function() {
+  let that = this;
+  that.dataListLoading = true;
+  let data = {
+    page: that.pageIndex,
+    length: that.pageSize,
+    orderId: that.dataForm.orderId == '' ? null : that.dataForm.orderId,
+    driverId: that.dataForm.driverId == '' ? null : that.dataForm.driverId,
+    customerId: that.dataForm.customerId == '' ? null : that.dataForm.customerId,
+    rate: that.dataForm.rate == '' ? null : that.dataForm.rate,
+    status: that.dataForm.status == '' ? null : that.dataForm.status
+  };
+  if (that.dataForm.date != null && that.dataForm.date.length == 2) {
+    let startDate = that.dataForm.date[0];
+    let endDate = that.dataForm.date[1];
+    data.startDate = dayjs(startDate).format('YYYY-MM-DD');
+    data.endDate = dayjs(endDate).format('YYYY-MM-DD');
+  }
+
+  that.$http('comment/searchCommentByPage', 'POST', data, true, function(resp) {
+    let result = resp.result;
+    let list = result.list;
+    let status = {
+      '1': '未申诉',
+      '2': '已申诉',
+      '3': '申诉失败',
+      '4': '申诉成功'
+    };
+    let rate = {
+      '1': '差评',
+      '2': '差评',
+      '3': '中评',
+      '4': '中评',
+      '5': '好评'
+    };
+    for (let one of list) {
+      one.status = status[one.status + ''];
+      one.rate = rate[one.rate + ''];
+    }
+    that.dataList = list;
+    that.totalCount = Number(result.totalCount);
+    that.dataListLoading = false;
+  });
+},
+
+created: function() {
+  this.loadDataList();
+}
+
+searchHandle: function() {
+   this.$refs['dataForm'].validate(valid => {
+      if (valid) {
+         this.$refs['dataForm'].clearValidate();
+         this.loadDataList();
+      } else {
+         return false;
+      }
+   });
+},
+
+sizeChangeHandle: function(val) {
+  this.pageSize = val;
+  this.pageIndex = 1;
+  this.loadDataList();
+},
+currentChangeHandle: function(val) {
+  this.pageIndex = val;
+  this.loadDataList();
+},
+```
+2. 写 hxds-mis-api/src/main/java/com/example/hxds/mis/api/controller/form/AcceptCommentAppealForm.java
+   写 hxds-mis-api/src/main/java/com/example/hxds/mis/api/feign/WorkflowServiceApi.java#acceptCommentAppeal
+   写 hxds-mis-api/src/main/java/com/example/hxds/mis/api/service/OrderCommentService.java#acceptCommentAppeal 及其实现类
+   写 hxds-mis-api/src/main/java/com/example/hxds/mis/api/controller/OrderCommandController.java#acceptCommentAppeal
+```java
+@Data
+@Schema(description = "受理订单评价申诉的表单")
+public class AcceptCommentAppealForm {
+
+    @Schema(description = "用户ID")
+    private Integer userId;
+
+    @Schema(description = "用户姓名")
+    private String userName;
+
+    @NotNull(message = "commentId不能为空")
+    @Min(value = 1, message = "commentId不能小于1")
+    @Schema(description = "评价ID")
+    private Long commentId;
+}
+
+@PostMapping("/comment/acceptCommentAppeal")
+R acceptCommentAppeal(AcceptCommentAppealForm form);
+
+void acceptCommentAppeal(AcceptCommentAppealForm form);
+
+@Override
+@Transactional
+@LcnTransaction
+public void acceptCommentAppeal(AcceptCommentAppealForm form) {
+   HashMap map = userDao.searchUserSummary(form.getUserId());
+   String name = MapUtil.getStr(map, "name");
+   form.setUserName(name);
+   workflowServiceApi.acceptCommentAppeal(form);
+}
+
+@PostMapping("/acceptCommentAppeal")
+@Operation(summary = "受理评价申诉")
+public R acceptCommentAppeal(@RequestBody @Valid AcceptCommentAppealForm form){
+   int userId = StpUtil.getLoginIdAsInt();
+   form.setUserId(userId);
+   orderCommentService.acceptCommentAppeal(form);
+   return R.ok();
+}
+```
+3. 写 hxds-mis-vue/src/views/comment.vue#showAcceptModel
+   写 hxds-mis-vue/src/views/comment.vue#acceptHandle
+```vue
+showAcceptModel: function(id) {
+   this.acceptVisible = true;
+   this.commentId = id;
+},
+acceptHandle: function() {
+   let that = this;
+   let data = {
+       commentId: that.commentId
+   };
+   that.$http('comment/acceptCommentAppeal', 'POST', data, true, function(resp) {
+       that.acceptVisible = false;
+       that.$message.success('受理成功');
+       that.expands = [];
+       that.loadDataList();
+   });
+},
+```
+4. 写 hxds-mis-api/src/main/java/com/example/hxds/mis/api/controller/form/HandleCommentAppealForm.java
+   写 hxds-mis-api/src/main/java/com/example/hxds/mis/api/feign/WorkflowServiceApi.java#handleCommentAppeal
+   写 hxds-mis-api/src/main/java/com/example/hxds/mis/api/service/OrderCommentService.java#handleCommentAppeal 及其实现类
+   写 hxds-mis-api/src/main/java/com/example/hxds/mis/api/controller/OrderCommandController.java#handleCommentAppeal
+```java
+@Data
+@Schema(description = "处理评价申诉的表单")
+public class HandleCommentAppealForm {
+    @NotNull(message = "customerId不能为空")
+    @Min(value = 1,message = "commentId不能小于1")
+    private Long commentId;
+
+    @NotBlank(message = "result不能为空")
+    @Pattern(regexp = "^同意$|^不同意$", message = "result内容不正确")
+    @Schema(description = "处理结果")
+    private String result;
+
+    @Schema(description = "处理说明")
+    private String note;
+
+    @NotBlank(message = "instanceId不能为空")
+    @Schema(description = "工作流实例ID")
+    private String instanceId;
+
+    @Schema(description = "用户ID")
+    private Integer userId;
+}
+
+@PostMapping("/comment/handleCommentAppeal")
+R handleCommentAppeal(HandleCommentAppealForm form);
+
+void handleCommentAppeal(HandleCommentAppealForm form);
+
+@Override
+@Transactional
+@LcnTransaction
+public void handleCommentAppeal(HandleCommentAppealForm form) {
+   workflowServiceApi.handleCommentAppeal(form);
+}
+
+@PostMapping("/handleCommentAppeal")
+@Operation(summary = "处理评价申诉")
+public R handleCommentAppeal(@RequestBody @Valid HandleCommentAppealForm form){
+   int userId = StpUtil.getLoginIdAsInt();
+   form.setUserId(userId);
+   orderCommentService.handleCommentAppeal(form);
+   return R.ok();
+}
+```
+5. 写 hxds-mis-vue/src/views/comment.vue#handleAppeal
+```vue
+handleAppeal: function() {
+  let that = this;
+  let data = {
+    commentId: that.commentId,
+    result: that.handleMode == 'yes' ? '同意' : '不同意',
+    note: that.note != null && that.note.length > 0 ? that.note : null,
+    instanceId: that.instanceId
+  };
+  that.$http('comment/handleCommentAppeal', 'POST', data, true, function(resp) {
+    that.handleVisible = false;
+    that.$message.success('执行成功');
+    that.expands = [];
+    that.loadDataList();
+  });
+},
+```
+6. 写 hxds-mis-api/src/main/java/com/example/hxds/mis/api/controller/form/SearchAppealContentForm.java
+   写 hxds-mis-api/src/main/java/com/example/hxds/mis/api/feign/WorkflowServiceApi.java#searchAppealContent
+   写 hxds-mis-api/src/main/java/com/example/hxds/mis/api/service/OrderCommentService.java#searchAppealContent 及其实现类
+   写 hxds-mis-api/src/main/java/com/example/hxds/mis/api/controller/OrderCommandController.java#searchAppealContent
+```java
+@Data
+@Schema(description = "查询审批工作流内容的表单")
+public class SearchAppealContentForm {
+    @NotBlank(message = "instanceId不能为空")
+    @Schema(description = "工作流实例ID")
+    private String instanceId;
+
+    @NotNull(message = "isEnd不能为空")
+    @Schema(description = "审批是否结束")
+    private Boolean isEnd;
+}
+
+@PostMapping("/comment/searchAppealContent") 
+R searchAppealContent(SearchAppealContentForm form);
+
+HashMap searchAppealContent(SearchAppealContentForm form);
+
+@Override
+public HashMap searchAppealContent(SearchAppealContentForm form) {
+   R r = workflowServiceApi.searchAppealContent(form);
+   HashMap map = (HashMap) r.get("result");
+   return map;
+}
+
+@PostMapping("/searchAppealContent")
+@SaCheckPermission(value = {"ROOT", "COMMENT:SELECT"}, mode = SaMode.OR)
+@Operation(summary = "查询审批工作流内容")
+public R searchAppealContent(@RequestBody @Valid SearchAppealContentForm form){
+   HashMap map = orderCommentService.searchAppealContent(form);
+   return R.ok().put("result",map);
+}
+```
+7. 写 hxds-mis-vue/src/views/comment.vue#expand
+```vue
+expand: function(row, expandedRows) {
+   let that = this;
+   if (expandedRows.length > 0) {
+       that.expands = [];
+       if (row) {
+           that.expands.push(row.orderId);
+           if (row.status != '未申诉') {
+               let data = {
+                   instanceId: row.instanceId,
+                   isEnd: row.status == '已申诉' ? false : true
+               };
+               that.$http('comment/searchAppealContent', 'POST', data, true, function(resp) {
+                   row.reason = resp.result.reason;
+                   row.note = resp.result.note;
+               });
+           }
+       } else {
+           that.expands = [];
+       }
+   }
+}
 ```
