@@ -4,6 +4,7 @@ import cn.dev33.satoken.annotation.SaCheckLogin;
 import cn.dev33.satoken.stp.StpUtil;
 import com.example.hxds.bff.customer.controller.form.*;
 import com.example.hxds.bff.customer.service.OrderService;
+import com.example.hxds.common.util.PageUtils;
 import com.example.hxds.common.util.R;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -117,5 +118,15 @@ public class OrderController {
     public R updateOrderAboutPayment(@RequestBody @Valid UpdateOrderAboutPaymentForm form) {
         String result = orderService.updateOrderAboutPayment(form);
         return R.ok().put("result", result);
+    }
+
+    @PostMapping("/searchCustomerOrderByPage")
+    @SaCheckLogin
+    @Operation(summary = "查询订单分页记录")
+    public R searchCustomerOrderByPage(@RequestBody @Valid SearchCustomerOrderByPageForm form) {
+        long customerId = StpUtil.getLoginIdAsLong();
+        form.setCustomerId(customerId);
+        PageUtils pageUtils = orderService.searchCustomerOrderByPage(form);
+        return R.ok().put("result", pageUtils);
     }
 }

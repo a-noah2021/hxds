@@ -1039,6 +1039,1300 @@ public R insertComment(@RequestBody @Valid InsertCommentForm form){
 }
 ```
 ### 乘客付款后对订单评价
+1. 写 hxds-customer-wx/pages/order/order.vue 视图层
+   写 hxds-customer-wx/pages/order/order.less
+   写 hxds-customer-wx/pages/order/order.vue#模型层
+   写 hxds-customer-wx/main.js#Vue.prototype.url
+   写 hxds-customer-wx/pages/order/order.vue#payHandle
+   写 hxds-customer-wx/pages/order/order.vue#insertComment
+```java
+  <u-popup v-model="comment.showComment" mode="center" border-radius="14" width="550rpx" height="580rpx">
+      <view class="comment-title">华夏代驾服务您满意吗</view>
+      <view class="comment-desc">请给司机的服务一点评价吧~</view>
+      <view class="comment-rate"><u-rate :count="comment.count" v-model="comment.value" active-color="#FFBB2A" size="40"></u-rate></view>
+      <u-input v-model="comment.remark" type="textarea" :border="false" :clearable="false" placeholder="说说哪里好,其他顾客想知道~" :custom-style="comment.remarkStyle" />
+      <u-button type="success" :custom-style="comment.btnStyle" @click="insertComment">确定</u-button>
+  </u-popup>
+
+.comment-title {
+   color: @fc-20;
+   font-weight: bold;
+   font-size: 40rpx;
+   text-align: center;
+   padding: 45rpx 0 20rpx 0;
+}
+.comment-desc {
+   color: @fc-16;
+   text-align: center;
+   font-size: 26rpx;
+   padding-bottom: 30rpx;
+}
+
+.comment-rate {
+   text-align: center;
+   margin-bottom: 30rpx;
+}
+
+comment: {
+   showComment: false,
+   count: 5,
+   value: 0,
+   remark: null,
+   remarkStyle: {
+      'background-color': '#f8f8f8',
+      padding: '20rpx',
+      margin: '0 40rpx'
+   },
+   btnStyle: {
+      margin: '40rpx 40rpx 30rpx 40rpx'
+   }
+}
+
+insertComment: `${baseUrl}/order/insertComment`,
+
+// 删除付款成功跳转的逻辑，增加弹出评论
+//setTimeout(function() {
+//   url: '../workbench/workbench'
+//}, 2000);
+setTimeout(function() {
+    that.comment.showComment = true;
+}, 2000);
+
+insertComment: function () {
+  let that = this;
+  if (that.comment.value == 0) {
+    uni.showToast({
+      icon: 'error',
+      title: '请给司机评分'
+    });
+    return;
+  }
+  let data = {
+    orderId: that.orderId,
+    driverId: that.driverId,
+    customerId: that.customerId,
+    rate: that.comment.rate,
+    remark: that.comment.remark
+  };
+  that.ajax(that.url.insertComment, 'POST', data, function (resp) {
+    let rows = resp.data.rows;
+    if (rows == 1) {
+      that.comment.showComment = false;
+      uni.showToast({
+        icon: 'success',
+        title: '感谢评价'
+      });
+      setTimeout(function () {
+        uni.switchTab({
+          url: '../workbench/workbench'
+        });
+      }, 2000);
+    }
+  });
+}
+```
+### 订单微服务查询司机端订单列表
+1. 写 hxds-odr/src/main/resources/mapper/OrderDao.xml#searchCustomerOrderByPage/searchCustomerOrderCount 及其对应接口
+   写 hxds-odr/src/main/java/com/example/hxds/odr/service/OrderService.java#searchDriverOrderByPage 及其实现类
+   写 hxds-odr/src/main/java/com/example/hxds/odr/controller/form/SearchDriverOrderByPageForm.java
+   写 hxds-odr/src/main/java/com/example/hxds/odr/controller/OrderController.java#searchDriverOrderByPage
+```java
+<select id="searchDriverOrderByPage" parameterType="Map" resultType="HashMap">
+     SELECT CAST(o.id AS CHAR) AS id,
+     DATE_FORMAT(o.accept_time, '%Y-%m-%d %H:%i:%s') AS acceptTime,
+     DATE_FORMAT(o.accept_time, '%Y年%m月') AS `month`,
+     CAST(o.real_fee AS CHAR) AS realFee,
+     o.`status`,
+     o.start_place AS startPlace,
+     o.end_place AS endPlace,
+     IFNULL(c.rate, -1) AS rate
+     FROM tb_order o
+     LEFT JOIN tb_order_comment c ON o.id = c.order_id
+     WHERE 1=1
+      <if test="driverId!=null">
+         AND o.driver_id = #{driverId}
+      </if>
+      <if test="status!=null">
+         AND o.`status` = #{status}
+      </if>
+      ORDER BY o.id DESC
+      LIMIT #{start}, #{length}
+</select>
+<select id="searchDriverOrderCount" parameterType="Map" resultType="long">
+     SELECT COUNT(*)
+     FROM tb_order 
+     WHERE 1=1
+      <if test="driverId!=null">
+           AND driver_id = #{driverId}
+      </if>
+      <if test="status!=null">
+           AND `status` = #{status}
+      </if>
+</select>
+
+List<HashMap> searchDriverOrderByPage(Map param);
+
+long searchDriverOrderCount(Map param);
+
+PageUtils searchDriverOrderByPage(Map param);
+
+@Override
+public PageUtils searchDriverOrderByPage(Map param) {
+     long count = orderDao.searchDriverOrderCount(param);
+     List<HashMap> list = Lists.newArrayList();
+     if (count > 0) {
+        list = orderDao.searchDriverOrderByPage(param);
+     }
+     int start = MapUtil.getInt(param, "start");
+     int length = MapUtil.getInt(param, "length");
+     PageUtils pageUtils = new PageUtils(list, count, start, length);
+     return pageUtils;
+}
+
+@Data
+@Schema(description = "查询订单分页记录的表单")
+public class SearchDriverOrderByPageForm {
+
+   @Min(value = 1, message = "driverId不能小于1")
+   @Schema(description = "司机ID")
+   private Long driverId;
+
+   @NotNull(message = "page不能为空")
+   @Min(value = 1, message = "page不能小于1")
+   @Schema(description = "页数")
+   private Integer page;
+
+   @NotNull(message = "length不能为空")
+   @Range(min = 10, max = 50, message = "length必须为10~50之间")
+   @Schema(description = "每页记录数")
+   private Integer length;
+}
+
+@PostMapping("/searchDriverOrderByPage")
+@Operation(summary = "查询订单分页记录")
+public R searchDriverOrderByPage(@RequestBody @Valid SearchDriverOrderByPageForm form) {
+   Map param = BeanUtil.beanToMap(form);
+   int page = form.getPage();
+   int length = form.getLength();
+   int start = (page - 1) * length;
+   param.put("start", start);
+   PageUtils pageUtils = orderService.searchDriverOrderByPage(param);
+   return R.ok().put("result", pageUtils);
+}
+```
+2. 写 bff-driver/src/main/java/com/example/hxds/bff/driver/controller/form/SearchDriverOrderByPageForm.java
+   写 bff-driver/src/main/java/com/example/hxds/bff/driver/feign/OdrServiceApi.java#searchDriverOrderByPage
+   写 bff-driver/src/main/java/com/example/hxds/bff/driver/service/OrderService.java#searchDriverOrderByPage 及其实现类
+   写 bff-driver/src/main/java/com/example/hxds/bff/driver/controller/OrderController.java#searchDriverOrderByPage
+```java
+@Data
+@Schema(description = "查询订单分页记录的表单")
+public class SearchDriverOrderByPageForm {
+
+    @Schema(description = "司机ID")
+    private Long driverId;
+
+    @NotNull(message = "page不能为空")
+    @Min(value = 1, message = "page不能小于1")
+    @Schema(description = "页数")
+    private Integer page;
+
+    @NotNull(message = "length不能为空")
+    @Range(min = 10, max = 50, message = "length必须为10~50之间")
+    @Schema(description = "每页记录数")
+    private Integer length;
+}
+
+@PostMapping("/order/searchDriverOrderByPage")
+R searchDriverOrderByPage(SearchDriverOrderByPageForm form);
+
+PageUtils searchDriverOrderByPage(SearchDriverOrderByPageForm form);
+
+@Override
+public PageUtils searchDriverOrderByPage(SearchDriverOrderByPageForm form) {
+   R r = odrServiceApi.searchDriverOrderByPage(form);
+   PageUtils pageUtils = (PageUtils) r.get("result");
+   return pageUtils;
+}
+
+@PostMapping("/searchDriverOrderByPage")
+@SaCheckLogin
+@Operation(summary = "查询订单分页记录")
+public R searchDriverOrderByPage(@RequestBody @Valid SearchDriverOrderByPageForm form){
+   long driverId = StpUtil.getLoginIdAsLong();
+   form.setDriverId(driverId);
+   PageUtils pageUtils = orderService.searchDriverOrderByPage(form);
+   return R.ok().put("result", pageUtils);
+}
+```
+3. 写 hxds-driver-wx/main.js#Vue.prototype.url
+   写 hxds-driver-wx/pages/order_list/order_list.vue#loadPageData
+   写 hxds-driver-wx/pages/order_list/order_list.vue#onLoad
+   写 hxds-driver-wx/pages/order_list/order_list.vue#onReachBottom
+   写 hxds-driver-wx/pages/order_list/order_list.vue#viewOrderHandle
+   【说明】onReachBottom事件：页面滚动到底部的事件（不是scroll-view滚到底），常用于下拉下一页数据
+```vue
+searchDriverOrderByPage: `${baseUrl}/order/searchDriverOrderByPage`,
+
+ loadPageData: function (ref) {
+   let data = {
+     page: ref.page,
+     length: ref.length
+   };
+   let status = {
+     '1': '等待接单',
+     '2': '已接单',
+     '3': '司机已到达',
+     '4': '开始代驾',
+     '5': '结束代驾',
+     '6': '未付款',
+     '7': '已付款',
+     '8': '订单已结束',
+     '9': '顾客撤单',
+     '10': '司机撤单',
+     '11': '事故关闭',
+     '12': '其他'
+   };
+   ref.ajax(ref.url.searchDriverOrderByPage, 'POST', data, function (resp) {
+     let result = resp.data.result;
+     // 表示每次遍历的order对应的acceptTime的month
+     let temp = null;
+     let orderList = [];
+     let monthList = [];
+     if (!result.hasOwnProperty("list") || result.list.length == 0) {
+       ref.isLastPage = true;
+       return;
+     }
+     for (let one of result.list) {
+       // 在每次遍历的当次加上上一次遍历的结果
+       if (temp != null && temp != one.month) {
+         monthList.push({month: temp, orders: orderList});
+         return;
+       }
+       if (one.status == 6) {
+         one.style = 'status red';
+       } else if (one.status == 7) {
+         one.style = 'status green';
+       } else if ([9, 10].includes(one.status)) {
+         one.style = 'status orange';
+       } else {
+         one.style = 'status';
+       }
+       one.status = status[one.status + ''];
+       one.acceptTime = dayjs(one.acceptTime, 'YYYY-MM-DD HH-mm-ss').format('MM/DD HH:mm');
+       orderList.push(one);
+       temp = one.month;
+     }
+     // 加上最后一次遍历的结果
+     monthList.push({month: temp, orders: orderList});
+     if (ref.monthList.length == 0) {
+       // 如果是第一页，直接把monthList覆盖到模型层变量上面
+       ref.monthList = monthList;
+     } else {
+       // 如果加载的不是第一页数据，需要把当前页面数据和模型层的分页做合并
+       for (let one of monthList) {
+         let flag = false;
+         for (let temp of ref.monthList) {
+           if (one.month == temp.month) {
+             temp.orders = temp.orders.concat(one.orders);
+             flag = true;
+             return;
+           }
+         }
+         if (!flag) {
+           ref.monthList.push(one);
+         }
+       }
+     }
+   })
+ }
+
+onLoad: function () {
+   let that = this;
+   that.loadPageData(that);
+},
+
+onReachBottom: function () {
+   let that = this;
+   if (that.isLastPage) {
+      return;
+   }
+   that.page = that.page + 1;
+   that.loadPageData(that);
+},
+
+viewOrderHandle: function (orderId) {
+   uni.navigateTo({
+      url: '../../order/order/order?orderId=' + orderId
+   });
+}
+```
+### 订单微服务查询司机端订单信息
+1. 写 hxds-odr/src/main/resources/mapper/OrderCommentDao.xml#searchCommentByOrderId 及其对应接口
+   写 hxds-odr/src/main/java/com/example/hxds/odr/service/OrderCommentService.java#searchCommentByOrderId 及其实现类
+   写 hxds-odr/src/main/java/com/example/hxds/odr/controller/form/SearchCommentByOrderIdForm.java
+   写 hxds-odr/src/main/java/com/example/hxds/odr/controller/OrderCommentController.java#searchCommentByOrderId
+```java
+ <select id="searchCommentByOrderId" parameterType="Map" resultType="HashMap">
+     SELECT CAST(id AS CHAR) AS id,
+     CAST(driver_id AS CHAR) AS driverId,
+     CAST(customer_id AS CHAR) AS customerId,
+     rate,
+     remark,
+     `status`,
+     instance_id AS instanceId,
+     DATE_FORMAT(create_time, '%Y-%m-%d %H:%i:%s') AS createTime
+     FROM tb_order_comment
+     WHERE order_id = #{orderId}
+     <if test="driverId!=null">
+         AND driver_id = #{driverId}
+     </if>
+     <if test="customerId!=null">
+         AND customer_id = #{customerId}
+     </if>
+ </select>
+
+HashMap searchCommentByOrderId(Map param);
+
+HashMap searchCommentByOrderId(Map param);
+
+@Override
+public HashMap searchCommentByOrderId(Map param) {
+     HashMap map = orderCommentDao.searchCommentByOrderId(param);
+     return map;
+}
+
+@Data
+@Schema(description = "根据订单号查询评价的表单")
+public class SearchCommentByOrderIdForm {
+
+   @NotNull(message = "orderId不能为空")
+   @Min(value = 1, message = "orderId不能小于1")
+   @Schema(description = "订单ID")
+   private Long orderId;
+
+   @Min(value = 1, message = "customerId不能小于1")
+   @Schema(description = "客户ID")
+   private Long customerId;
+
+   @Min(value = 1, message = "driverId不能小于1")
+   @Schema(description = "司机ID")
+   private Long driverId;
+}
+
+@PostMapping("/searchCommentByOrderId")
+@Operation(summary = "根据订单ID查询评价")
+public R searchCommentByOrderId(@RequestBody @Valid SearchCommentByOrderIdForm form) {
+   Map param = BeanUtil.beanToMap(form);
+   HashMap map = orderCommentService.searchCommentByOrderId(param);
+   return R.ok().put("result", map);
+}
+```
+2. 写 bff-driver/src/main/java/com/example/hxds/bff/driver/controller/form/SearchCommentByOrderIdForm.java
+   写 bff-driver/src/main/java/com/example/hxds/bff/driver/feign/OdrServiceApi.java#searchCommentByOrderId
+   写 bff-driver/src/main/java/com/example/hxds/bff/driver/controller/form/SearchOrderByIdForm.java
+   写 bff-driver/src/main/java/com/example/hxds/bff/driver/feign/OdrServiceApi.java#searchOrderById
+   写 bff-driver/src/main/java/com/example/hxds/bff/driver/service/OrderService.java#searchOrderById 及其实现类
+   写 bff-driver/src/main/java/com/example/hxds/bff/driver/controller/OrderController.java#searchOrderById
+```java
+@Data
+@Schema(description = "根据订单号查询评价的表单")
+public class SearchCommentByOrderIdForm {
+
+    @NotNull(message = "orderId不能为空")
+    @Min(value = 1, message = "orderId不能小于1")
+    @Schema(description = "订单ID")
+    private Long orderId;
+
+    @Schema(description = "司机ID")
+    private Long driverId;
+}
+
+@PostMapping("/comment/searchCommentByOrderId")
+R searchCommentByOrderId(SearchCommentByOrderIdForm form);
+
+@Data
+@Schema(description = "根据订单ID查询订单记录的表单")
+public class SearchOrderByIdForm {
+   @NotNull(message = "orderId不能为空")
+   @Min(value = 1, message = "orderId不能小于1")
+   @Schema(description = "订单ID")
+   private Long orderId;
+
+   @Schema(description = "司机ID")
+   private Long driverId;
+}
+
+HashMap searchOrderById(SearchOrderByIdForm form);
+
+@Override
+public HashMap searchOrderById(SearchOrderByIdForm form) {
+   // 查询订单信息
+   R r = odrServiceApi.searchOrderById(form);
+   HashMap orderMap = (HashMap) r.get("result");
+   // 查询代驾客户信息
+   Long customerId = MapUtil.getLong(orderMap, "customerId");
+   SearchCustomerInfoInOrderForm form_1 = new SearchCustomerInfoInOrderForm();
+   form_1.setCustomerId(customerId);
+   r = cstServiceApi.searchCustomerInfoInOrder(form_1);
+   HashMap cstMap = (HashMap) r.get("result");
+   // 查询评价信息
+   int status = MapUtil.getInt(orderMap, "status");
+   Map cmtMap = Maps.newHashMap();
+   if (status >= 7) {
+      SearchCommentByOrderIdForm form_2 = new SearchCommentByOrderIdForm();
+      form_2.setOrderId(form.getOrderId());
+      form_2.setDriverId(form.getDriverId());
+      r = odrServiceApi.searchCommentByOrderId(form_2);
+      if (r.containsKey("result")) {
+         cmtMap = (HashMap) r.get("result");
+      } else {
+         cmtMap.put("rate", 5);
+      }
+   }
+   HashMap map = Maps.newHashMap();
+   map.putAll(orderMap);
+   map.putAll(cstMap);
+   map.put("comment", cmtMap);
+   return map;
+}
+
+@PostMapping("/searchOrderById")
+@Operation(summary = "根据ID查询订单信息")
+public R searchOrderById(@RequestBody @Valid SearchOrderByIdForm form) {
+   Map param = BeanUtil.beanToMap(form);
+   HashMap map = orderService.searchOrderById(param);
+   return R.ok().put("result", map);
+}
+```
+3. 写 hxds-driver-wx/main.js#Vue.prototype.url
+   写 hxds-driver-wx/order/order/order.vue#onLoad
+   写 hxds-driver-wx/order/order/order.vue#enterFeeHandle
+```vue
+searchOrderById: `${baseUrl}/order/searchOrderById`,
+
+onLoad: function(options) {
+  let that = this;
+  let orderId = options.orderId;
+  that.orderId = orderId;
+  let data = {
+    orderId: orderId
+  };
+  that.ajax(that.url.searchOrderById, 'POST', data, function(resp) {
+    let result = resp.data.result;
+    that.customerId = result.customerId;
+    that.photo = result.photo;
+    that.title = result.title;
+    that.tel = result.tel;
+    that.startPlace = result.startPlace;
+    that.endPlace = result.endPlace;
+    that.createTime = result.createTime;
+    that.favourFee = result.favourFee;
+    that.incentiveFee = result.incentiveFee;
+    that.carPlate = result.carPlate;
+    that.carType = result.carType;
+    let status = result.status;
+    that.status = status;
+    if ([5, 6, 7, 8].includes(status)) {
+      that.realMileage = result.realMileage;
+      that.mileageFee = result.mileageFee;
+      that.waitingFee = result.waitingFee;
+      that.waitingMinute = result.waitingMinute;
+      that.returnFee = result.returnFee;
+      that.returnMileage = result.returnMileage;
+      that.parkingFee = result.parkingFee;
+      that.tollFee = result.tollFee;
+      that.otherFree = result.otherFree;
+      that.total = result.total;
+      that.voucherFee = result.voucherFee;
+    }
+    that.baseMileagePrice = result.baseMileagePrice;
+    that.baseMileage = result.baseMileage;
+    that.exceedMileagePrice = result.exceedMileagePrice;
+    // that.createTime = result.createTime;
+    that.base_minute = result.baseMinute;
+    that.exceedMinutePrice = result.exceedMinutePrice;
+    that.baseReturnMileage = result.baseReturnMileage;
+    that.exceedReturnPrice = result.exceedReturnPrice;
+    that.realPay = '--';
+    if ([2, 3].includes(status)) {
+      that.img = '../static/order/icon-1.png';
+    } else if ([4].includes(status)) {
+      that.img = '../static/order/icon-2.png';
+    } else if ([5, 6].includes(status)) {
+      that.img = '../static/order/icon-3.png';
+    } else if ([7].includes(status)) {
+      that.img = '../static/order/icon-4.png';
+      that.realPay = result.realPay;
+    } else if ([8, 9, 10, 11, 12].includes(status)) {
+      that.img = '../static/order/icon-5.png';
+      that.realPay = result.realPay;
+    }
+    that.comment.value = result.comment.rate;
+    if (result.comment.hasOwnProperty('remark')) {
+      that.comment.remark = result.comment.remark;
+      that.comment.status = result.comment.status;
+    }
+  });
+},
+
+enterFeeHandle: function() {
+  uni.navigateTo({
+    url: '../enter_fee/enter_fee?orderId=' + this.orderId + '&customerId=' + this.customerId
+  });
+},
+```
+### 订单微服务查询乘客端订单列表
+1. 写 hxds-odr/src/main/resources/mapper/OrderDao.xml 及其对应接口
+   写 hxds-odr/src/main/java/com/example/hxds/odr/service/OrderService.java#searchCustomerOrderByPage 及其实现类
+   写 hxds-odr/src/main/java/com/example/hxds/odr/controller/form/SearchCustomerOrderByPageForm.java
+   写 hxds-odr/src/main/java/com/example/hxds/odr/controller/OrderController.java#searchCustomerOrderByPage
+```java
+ <select id="searchCustomerOrderByPage" parameterType="Map" resultType="HashMap">
+     SELECT CAST(o.id AS CHAR) AS id,
+     DATE_FORMAT(o.accept_time, '%Y-%m-%d %H:%i:%s') AS acceptTime,
+     DATE_FORMAT(o.accept_time, '%Y年%m月') AS `month`,
+     CAST(o.real_fee AS CHAR) AS realFee,
+     o.`status`,
+     o.start_place AS startPlace,
+     o.end_place AS endPlace,
+     IFNULL(c.rate, -1) AS rate
+     FROM tb_order o
+     LEFT JOIN tb_order_comment c ON o.id = c.order_id
+     WHERE 1=1
+     <if test="customerId!=null">
+         AND o.customer_id = #{customerId}
+     </if>
+     <if test="status!=null">
+         AND o.`status` = #{status}
+     </if>
+     ORDER BY o.id DESC
+     LIMIT #{start}, #{length}
+ </select>
+ <select id="searchCustomerOrderCount" parameterType="Map" resultType="long">
+     SELECT COUNT(*)
+     FROM tb_order
+     WHERE 1=1
+     <if test="customerId!=null">
+         AND customer_id = #{customerId}
+     </if>
+     <if test="status!=null">
+         AND `status` = #{status}
+     </if>
+ </select>
+
+List<HashMap> searchCustomerOrderByPage(Map param);
+
+long searchCustomerOrderCount(Map param);
+
+PageUtils searchCustomerOrderByPage(Map param);
+
+@Override
+public PageUtils searchCustomerOrderByPage(Map param) {
+     long count = orderDao.searchCustomerOrderCount(param);
+     List list = Lists.newArrayList();
+     if (count > 0) {
+        list = orderDao.searchCustomerOrderByPage(param);
+     }
+     int start = MapUtil.getInt(param, "start");
+     int length = MapUtil.getInt(param, "length");
+     PageUtils pageUtils = new PageUtils(list, count, start, length);
+     return pageUtils;
+}
+
+@Data
+@Schema(description = "查询订单分页记录的表单")
+public class SearchCustomerOrderByPageForm {
+
+   @Min(value = 1, message = "customerId不能小于1")
+   @Schema(description = "乘客ID")
+   private Long customerId;
+
+   @NotNull(message = "page不能为空")
+   @Min(value = 1, message = "page不能小于1")
+   @Schema(description = "页数")
+   private Integer page;
+
+   @NotNull(message = "length不能为空")
+   @Range(min = 10, max = 50, message = "length必须为10~50之间")
+   @Schema(description = "每页记录数")
+   private Integer length;
+}
+
+@PostMapping("/searchCustomerOrderByPage")
+@Operation(summary = "查询订单分页记录")
+public R searchCustomerOrderByPage(@RequestBody @Valid SearchCustomerOrderByPageForm form){
+   Map param = BeanUtil.beanToMap(form);
+   int page = form.getPage();
+   int length = form.getLength();
+   int start = (page - 1) * length;
+   param.put("start", start);
+   PageUtils pageUtils = orderService.searchCustomerOrderByPage(param);
+   return R.ok().put("result", pageUtils);
+}
+```
+2. 写 bff-customer/src/main/java/com/example/hxds/bff/customer/controller/form/SearchCustomerOrderByPageForm.java
+   写 bff-customer/src/main/java/com/example/hxds/bff/customer/feign/OdrServiceApi.java#searchCustomerOrderByPage
+   写 bff-customer/src/main/java/com/example/hxds/bff/customer/service/OrderService.java#searchCustomerOrderByPage 及其实现类
+   写 bff-customer/src/main/java/com/example/hxds/bff/customer/controller/OrderController.java#searchCustomerOrderByPage
+```java
+@Data
+@Schema(description = "查询订单分页记录的表单")
+public class SearchCustomerOrderByPageForm {
+    @Schema(description = "乘客ID")
+    private Long customerId;
+
+    @NotNull(message = "page不能为空")
+    @Min(value = 1, message = "page不能小于1")
+    @Schema(description = "页数")
+    private Integer page;
+
+    @NotNull(message = "length不能为空")
+    @Range(min = 10, max = 50, message = "length必须为10~50之间")
+    @Schema(description = "每页记录数")
+    private Integer length;
+}
+
+@PostMapping("/order/searchCustomerOrderByPage")
+R searchCustomerOrderByPage(SearchCustomerOrderByPageForm form);
+
+PageUtils searchCustomerOrderByPage(SearchCustomerOrderByPageForm form);
+
+@Override
+public PageUtils searchCustomerOrderByPage(SearchCustomerOrderByPageForm form) {
+   R r = odrServiceApi.searchCustomerOrderByPage(form);
+   PageUtils pageUtils = (PageUtils) r.get("result");
+   return pageUtils;
+}
+
+@PostMapping("/searchCustomerOrderByPage")
+@SaCheckLogin
+@Operation(summary = "查询订单分页记录")
+public R searchCustomerOrderByPage(@RequestBody @Valid SearchCustomerOrderByPageForm form) {
+   long customerId = StpUtil.getLoginIdAsLong();
+   form.setCustomerId(customerId);
+   PageUtils pageUtils = orderService.searchCustomerOrderByPage(form);
+   return R.ok().put("result", pageUtils);
+}
+```
+3. 写 hxds-customer-wx/pages.json#pages
+   写 hxds-customer-wx/main.js#Vue.prototype.url
+   写 hxds-customer-wx/pages/order_list/order_list.vue#loadPageData
+   写 hxds-customer-wx/pages/order_list/order_list.vue#onLoad
+   写 hxds-customer-wx/pages/order_list/order_list.vue#onReachBottom
+   写 hxds-customer-wx/pages/order_list/order_list.vue#viewOrderHandle
+   写 hxds-customer-wx/pages/mine/mine.vue 视图层
+```java
+{
+     "path": "pages/order_list/order_list",
+     "style": {
+        "navigationBarTitleText": "订单列表",
+        "enablePullDownRefresh": false
+     }
+}
+
+searchCustomerOrderByPage: `${baseUrl}/order/searchCustomerOrderByPage`,
+
+loadPageData: function(ref) {
+  let data = {
+    page: ref.page,
+    length: ref.length
+  };
+  let status = {
+    '1': '等待接单',
+    '2': '已接单',
+    '3': '司机已到达',
+    '4': '开始代驾',
+    '5': '结束代驾',
+    '6': '未付款',
+    '7': '已付款',
+    '8': '订单已结束',
+    '9': '顾客撤单',
+    '10': '司机撤单',
+    '11': '事故关闭',
+    '12': '其他'
+  };
+  ref.ajax(ref.url.searchCustomerOrderByPage, 'POST', data, function(resp) {
+    let result = resp.data.result;
+    let temp = null;
+    let orderList = [];
+    let monthList = [];
+    if (!result.hasOwnProperty('list') || result.list.length == 0) {
+      ref.isLastPage = true;
+      return;
+    }
+    for (let one of result.list) {
+      if (temp != null && temp != one.month) {
+        monthList.push({ month: temp, orders: orderList });
+        orderList = [];
+      }
+      if (one.status == 6) {
+        one.style = 'status red';
+      } else if (one.status == 7) {
+        one.style = 'status green';
+      } else if ([9, 10].includes(one.status)) {
+        one.style = 'status orange';
+      } else {
+        one.style = 'status';
+      }
+      one.status = status[one.status + ''];
+      one.acceptTime = dayjs(one.acceptTime, 'YYYY-MM-DD HH-mm-ss').format('MM/DD HH:mm');
+      orderList.push(one);
+      temp = one.month;
+    }
+    monthList.push({ month: temp, orders: orderList });
+    if (ref.monthList.length == 0) {
+      ref.monthList = monthList;
+    } else {
+      for (let one of monthList) {
+        let flag = false;
+        for (let temp of ref.monthList) {
+          if (one.month == temp.month) {
+            temp.orders = temp.orders.concat(one.orders);
+            flag = true;
+            break;
+          }
+        }
+        if (!flag) {
+          ref.monthList.push(one);
+        }
+      }
+    }
+  });
+},
+
+onLoad: function() {
+     let that = this;
+     that.loadPageData(that);
+},
+
+onReachBottom: function() {
+     let that = this;
+     if (that.isLastPage) {
+        return;
+     }
+     that.page = that.page + 1;
+     that.loadPageData(that);
+},
+
+viewOrderHandle: function(orderId) {
+     uni.navigateTo({
+        url: '../order/order?orderId=' + orderId
+     });
+}
+
+<u-cell-item icon="file-text-fill" title="订单" @click="this.toPage('../order_list/order_list')"></u-cell-item>
+```
+4. 写 bff-customer/src/main/java/com/example/hxds/bff/customer/controller/form/SearchCommentByOrderIdForm.java
+   写 bff-customer/src/main/java/com/example/hxds/bff/customer/feign/OdrServiceApi.java#searchCommentByOrderId
+   补充 bff-customer/src/main/java/com/example/hxds/bff/customer/service/impl/OrderServiceImpl.java#searchOrderById
+```java
+@Data
+@Schema(description = "根据订单号查询评价的表单")
+public class SearchCommentByOrderIdForm {
+
+    @NotNull(message = "orderId不能为空")
+    @Min(value = 1, message = "orderId不能小于1")
+    @Schema(description = "订单ID")
+    private Long orderId;
+
+    @Schema(description = "乘客ID")
+    private Long customerId;
+    
+}
+
+@PostMapping("/comment/searchCommentByOrderId")
+R searchCommentByOrderId(SearchCommentByOrderIdForm form);
+
+@Override
+public HashMap searchOrderById(SearchOrderByIdForm form) {
+   R r = odrServiceApi.searchOrderById(form);
+   HashMap map = (HashMap) r.get("result");
+   Long driverId = MapUtil.getLong(map, "driverId");
+   if (!Objects.isNull(driverId)) {
+      SearchDriverBriefInfoForm infoForm = new SearchDriverBriefInfoForm();
+      infoForm.setDriverId(driverId);
+      r = drServiceApi.searchDriverBriefInfo(infoForm);
+      HashMap temp = (HashMap) r.get("result");
+      map.putAll(temp);
+
+      int status = MapUtil.getInt(r, "status");
+      HashMap cmtMap = Maps.newHashMap();
+      if (status >= 7) {
+         SearchCommentByOrderIdForm commentForm = new SearchCommentByOrderIdForm();
+         commentForm.setOrderId(form.getOrderId());
+         commentForm.setCustomerId(form.getCustomerId());
+         r = odrServiceApi.searchCommentByOrderId(commentForm);
+         if (r.containsKey("result")) {
+            cmtMap = (HashMap) r.get("result");
+         } else {
+            cmtMap.put("rate", 5);
+         }
+      }
+      map.put("comment", cmtMap);
+      return map;
+   }
+   return null;
+}
+```
+5. 写 hxds-customer-wx/pages/order/order.vue#onLoad
+```vue
+} else if ([8, 9, 10, 11, 12].includes(status)) {
+  that.img = '../../static/order/icon-5.png';
+  that.realPay = result.realPay;  // 新加
+}
+// 新加
+that.customerComment.value = result.comment.rate;
+if (result.comment.hasOwnProperty("remark")) {
+  that.customerComment.remark = result.comment.remark;
+}
+```
+### 运行WorkFlow子系统
+1. 在 MySQL_1 中执行下面的 SQL 语句
+```sql
+# 向模块表添加订单评价模块
+INSERT INTO `hxds_mis`.`tb_module` VALUES (10, 'COMMENT', '订单评价模块');
+
+# 向权限表添加订单评价模块的增删改查和审批权限
+INSERT INTO `hxds_mis`.`tb_permission` VALUES ('COMMENT:INSERT', 10, 1);
+INSERT INTO `hxds_mis`.`tb_permission` VALUES ('COMMENT:DELETE', 10, 2);
+INSERT INTO `hxds_mis`.`tb_permission` VALUES ('COMMENT:UPDATE', 10, 3);
+INSERT INTO `hxds_mis`.`tb_permission` VALUES ('COMMENT:SELECT', 10, 4);
+INSERT INTO `hxds_mis`.`tb_permission` VALUES ('COMMENT:APPROVAL', 10, 5);
+```
+2. 因为审批差评申诉用上了Activiti工作流技术,所以我们要往My/SQL里面导入Activiti用到的数据表。你去
+到GIT上面找一下工作流.sql文件,然后往MySQL_1的hxds__mis 逻辑库里面导人这个SQL文件。导入
+成功之后,所有以act_开头的数据表,都是跟工作流相关的
+3. 修改 ss 容器的 /root/ss/ShardingSphere/conf/config-sharding.yaml，然后重启 ss 容器
+```yaml
+rules:
+- !SHARDING
+   tables:
+      # ...
+      tb_user:
+         actualDataNodes: rep_s1_mis.tb_user
+# 以下为新添加内容
+   act_evt_log:
+      actualDataNodes: rep_s1_mis.act_evt_log
+   act_ge_bytearray:
+      actualDataNodes: rep_s1_mis.act_ge_bytearray
+   act_ge_property:
+      actualDataNodes: rep_s1_mis.act_ge_property
+   act_hi_actinst:
+      actualDataNodes: rep_s1_mis.act_hi_actinst
+   act_hi_attachment:
+      actualDataNodes: rep_s1_mis.act_hi_attachment
+   act_hi_comment:
+      actualDataNodes: rep_s1_mis.act_hi_comment
+   act_hi_detail:
+      actualDataNodes: rep_s1_mis.act_hi_detail
+   act_hi_identitylink:
+      actualDataNodes: rep_s1_mis.act_hi_identitylink
+   act_hi_procinst:
+      actualDataNodes: rep_s1_mis.act_hi_procinst
+   act_hi_taskinst:
+      actualDataNodes: rep_s1_mis.act_hi_taskinst
+   act_hi_varinst:
+      actualDataNodes: rep_s1_mis.act_hi_varinst
+   act_procdef_info:
+      actualDataNodes: rep_s1_mis.act_procdef_info
+   act_re_deployment:
+      actualDataNodes: rep_s1_mis.act_re_deployment
+   act_re_model:
+      actualDataNodes: rep_s1_mis.act_re_model
+   act_re_procdef:
+      actualDataNodes: rep_s1_mis.act_re_procdef
+   act_ru_deadletter_job:
+      actualDataNodes: rep_s1_mis.act_ru_deadletter_job
+   act_ru_event_subscr:
+      actualDataNodes: rep_s1_mis.act_ru_event_subscr
+   act_ru_execution:
+      actualDataNodes: rep_s1_mis.act_ru_execution
+   act_ru_identitylink:
+      actualDataNodes: rep_s1_mis.act_ru_identitylink
+   act_ru_integration:
+      actualDataNodes: rep_s1_mis.act_ru_integration
+   act_ru_job:
+      actualDataNodes: rep_s1_mis.act_ru_job
+   act_ru_suspended_job:
+      actualDataNodes: rep_s1_mis.act_ru_suspended_jobb
+   act_ru_task:
+      actualDataNodes: rep_s1_mis.act_ru_task
+   act_ru_timer_job:
+      actualDataNodes: rep_s1_mis.act_ru_timer_job
+   act_ru_variable:
+      actualDataNodes: rep_s1_mis.act_ru_variable
+```
+4. 修改订单评价表的结构：为了能记录某个订单评价的申诉是哪个工作人员审批的,所以我们需要在tb_order_comment表中添加。两个字段,分别记录工作人员的ID和姓名。
+   下面的SQL语句一定三要放在MySQL集群上面运行。这里我要解释一下,看似给订单评价表添加上user_id字段就够了,我们可以通过表连接的方式查找到
+   工作人员的姓名。但是这条路行不通,因为MIS系统的数据表只存放在MySQL_1上面,而订单评价表存
+   放在MySQL_3和MySQL_4上面,所以用户表和订单评价表是不不能跨节点做表连接的。这里我看似违反了
+   第二范式,把工作人员姓名保存到订单评价表里面,这样做是可可以避免做跨节点的表连接(也做不到)。
+   既然订单评价表里面多了两个字段,我们要修改hxds-odr/src/main/java/com/example/hxds/odr/db/pojo/OrderCommentEntity.java的代码,补充两个变量的声明
+```sql
+ALTER TABLE tb_order_comment ADD user_id INT COOMMENT'审批人ID' AFTER instance_id;
+ALTER TABLE tb_order_comment ADD user_name VARCHAR (20) COMMENT '审批人姓名'AFTER user_id;
+ALTER TABLE tb_order_comment ADD INDEX idx_user_id(user_id);
+
+
+/**
+ * 审批人ID
+ */
+private Integer userid;
+
+/**
+ * 审批人姓名
+ */
+private String userName;
+```
+5. 我已经将工作流子系统封装成JAR文件了,大家可以用命令直接运行。从GIT上面下载hxds-workflow.jar文件,放到没有中文的路径下,然后修改YML文件中的内
+   容,最后执行下面的指令运行该JAR文件。如果命令行没有报错信息,说明JAR文件运行成功了。特别是用Windows系统的同学,命令行一定要用CMD窗口,而不要用PowerShell命令行
+```bash
+java -jar hxds-workflow.jar --spring.config.location=application-common.yml,application.yml
+
+# 如果用云主机的同学,上面的application.yml文件名字要改成bootstarp.yml,然后执行下面的命
+java -jar hxds-workflow.jar --spring.config.location=application-common.yml,bootstarp.yml
+```
+### 开启差评申诉工作流程
+1. 【说明】远程调用的请求发送给工作流子系统后,会开启审批工作流实例,然后订单评价的status更新成2状
+   态,代表司机已经申诉。从下面的BPMN流程图来看,审批差评申诉的流程比较简单。如果工作人员审核
+   通过,工作流子系统会把评分修改成5分,评价文字会被删除,然后status变成4状态(申诉成功)。如
+   果审核不通过,评价记录更新成3状态(申诉失败)。无论申诉成功还是失败,系统都会给司机发送通知消息
+2. 写 bff-driver/src/main/java/com/example/hxds/bff/driver/controller/form/StartCommentWorkflowForm.java
+   写 bff-driver/src/main/java/com/example/hxds/bff/driver/feign/WorkflowServiceApi.java#startCommentWorkflow
+   写 bff-driver/src/main/java/com/example/hxds/bff/driver/service/OrderCommentService.java#startCommentWorkflow 及其实现类
+   写 bff-driver/src/main/java/com/example/hxds/bff/driver/controller/OrderCommentController.java#startCommentWorkflow
+```java
+@Data
+@Schema(description = "开启评价申诉工作流的表单")
+public class StartCommentWorkflowForm {
+
+    @NotNull(message = "orderId不能为空")
+    @Min(value = 1, message = "orderId不能小于1")
+    @Schema(description = "订单ID")
+    private Long orderId;
+
+    @Schema(description = "司机ID")
+    private Long driverId;
+
+    @NotNull(message = "customerId不能为空")
+    @Min(value = 1, message = "customerId不能小于1")
+    @Schema(description = "司机ID")
+    private Long customerId;
+
+    @NotBlank(message = "reason不能为空")
+    @Schema(description = "申诉原因")
+    private String reason;
+}
+
+@PostMapping("/comment/startCommentWorkflow")
+R startCommentWorkflow(StartCommentWorkflowForm form);
+
+void startCommentWorkflow(StartCommentWorkflowForm form);
+
+@Override
+@Transactional
+@LcnTransaction
+public void startCommentWorkflow(StartCommentWorkflowForm form) {
+   workflowServiceApi.startCommentWorkflow(form);
+}
+
+@PostMapping("/startCommentWorkflow")
+@Operation(summary = "开启评价申诉工作流")
+public R startCommentWorkflow(@RequestBody @Valid StartCommentWorkflowForm form){
+   long driverId = StpUtil.getLoginIdAsLong();
+   form.setDriverId(driverId);
+   orderCommentService.startCommentWorkflow(form);
+   return R.ok();
+}
+```
+3. 写 hxds-driver-wx/main.js#Vue.prototype.url
+   补充 hxds-driver-wx/order/order/order.vue 视图层
+   写 hxds-driver-wx/order/order/order.vue#insertAppeal
+   【说明】在页面上面我要申诉的文字只有在status是1状态(未申诉),并且是差评的条件下才会出现。点击该文字,申诉弹窗会自动显示。另外申诉中的文字是在差评并!且status是2状态(已申诉)的时候才会显示
+```vue
+startCommentWorkflow: `${baseUrl}/order/startCommentWorkflow`,
+
+<view v-if="comment.value <= 2 && comment.status == 1" @tap="appeal.showAppeal = true">
+我要申诉
+</view>
+<view v-if="comment.value <= 2 && comment.status == 2">申诉中</view>
+
+insertAppeal: function() {
+  let that = this;
+  if (that.appeal.reason == null || that.appeal.reason.length == 0) {
+    uni.showToast({
+      icon: 'error',
+      title: '申诉原因不能为空'
+    });
+    return;
+  }
+  let data = {
+    orderId: that.orderId,
+    customerId: that.customerId,
+    reason: that.appeal.reason
+  };
+  that.ajax(that.url.startCommentWorkflow, 'POST', data, function(resp) {
+    that.appeal.showAppeal = false;
+    that.comment.status = 2;
+    setTimeout(function() {
+      uni.showToast({
+        icon: 'success',
+        title: '申诉提交成功'
+      });
+    }, 1000);
+  });
+}
+```
+### 订单服务中查询评价分页记录
+1. 写 hxds-odr/src/main/resources/mapper/OrderCommentDao.xml#searchCommentByPage/searchCommentCount 及其对应接口
+   写 hxds-odr/src/main/java/com/example/hxds/odr/service/OrderCommentService.java#searchCommentByPage 及其实现类
+   写 hxds-odr/src/main/java/com/example/hxds/odr/controller/form/SearchCommentByPageForm.java
+   写 hxds-odr/src/main/java/com/example/hxds/odr/controller/OrderCommentController.java#searchCommentByPage
+   【说明】在OrderCommentDao.xml文件中,声明SQL语句,用来查询记录总数和分页记录。这里有个细节大家需要
+   注意,如果乘客没有对订单评价,订单评价表是没有记录的,但是是这个订单被当成默认好评。如果我们从
+   订单评价表里面查询分页记录,就会缺少哪些默认好评的评价。所以我把订单表当做左表,用LEFTJOIN
+   去连接订单评价表,这样就能保证把每个订单的评价给查询出出来
+```java
+ <select id="searchCommentByPage" parameterType="Map" resultType="HashMap">
+     SELECT CAST(c.id AS CHAR) AS commentId,
+            CAST(o.id AS CHAR) AS orderId,
+            CAST(o.driver_id AS CHAR) AS driverId,
+            CAST(o.customer_id AS CHAR) AS customerId,
+            IFNULL(c.rate,5) AS rate,
+            IFNULL(c.remark,'默认好评') AS remark,
+            IFNULL(c.status,1) AS `status`,
+            DATE_FORMAT(o.accept_time, '%Y-%m-%d %H:%i:%s') AS acceptTime,
+            c.instance_id AS instanceId,
+            CAST(c.user_id AS CHAR) AS userId,
+            c.user_name AS userName,
+            IFNULL((c.user_id = #{userId}),false) AS `handler`
+     FROM tb_order o
+     LEFT JOIN tb_order_comment c ON c.order_id = o.id
+     WHERE 1 = 1
+     AND o.status >= 7
+     <if test="orderId!=null">
+         AND o.id = #{orderId}
+     </if>
+     <if test="driverId!=null">
+         AND o.driver_id = #{driverId}
+     </if>
+     <if test="customerId!=null">
+         AND o.customer_id = #{customerId}
+     </if>
+     <if test='rate!=null and rate=="差评"'>
+         AND c.rate BETWEEN 1 AND 2
+     </if>
+     <if test='rate!=null and rate=="中评"'>
+         AND c.rate BETWEEN 3 AND 4
+     </if>
+     <if test='rate!=null and rate=="好评"'>
+         AND (c.rate = 5 OR c.rate IS NULL)
+     </if>
+     <if test="startDate!=null and endDate!=null">
+         AND o.accept_time BETWEEN #{startDate} AND #{endDate}
+     </if>
+     <if test="status!=null and status==1">
+         AND (c.`status` = 1 OR c.`status` IS NULL)
+     </if>
+     <if test="status!=null and status!=1">
+         AND c.`status` = #{status}
+     </if>
+     ORDER BY o.id DESC
+     LIMIT #{start}, #{length}
+ </select>
+ <select id="searchCommentCount" parameterType="Map" resultType="long">
+     SELECT COUNT(*)
+     FROM tb_order o
+     LEFT JOIN tb_order_comment c ON c.order_id = o.id
+     WHERE 1 = 1
+     AND o.status >= 7
+     <if test="orderId!=null">
+         AND o.id = #{orderId}
+     </if>
+     <if test="driverId!=null">
+         AND o.driver_id = #{driverId}
+     </if>
+     <if test="customerId!=null">
+         AND o.customer_id = #{customerId}
+     </if>
+     <if test='rate!=null and rate=="差评"'>
+         AND c.rate BETWEEN 1 AND 2
+     </if>
+     <if test='rate!=null and rate=="中评"'>
+         AND c.rate BETWEEN 3 AND 4
+     </if>
+     <if test='rate!=null and rate=="好评"'>
+         AND (c.rate = 5 OR c.rate IS NULL)
+     </if>
+     <if test="startDate!=null and endDate!=null">
+         AND o.accept_time BETWEEN #{startDate} AND #{endDate}
+     </if>
+     <if test="status!=null and status==1">
+         AND (c.`status` = 1 OR c.`status` IS NULL)
+     </if>
+     <if test="status!=null and status!=1">
+         AND c.`status` = #{status}
+     </if>
+ </select>
+
+List<HashMap> searchCommentByPage(Map param);
+
+long searchCommentCount(Map param);
+
+@Override
+public PageUtils searchCommentByPage(Map param) {
+     long count = orderCommentDao.searchCommentCount(param);
+     List<HashMap> list = Lists.newArrayList();
+     if (count > 0) {
+        list = orderCommentDao.searchCommentByPage(param);
+        list.stream().forEach(one -> {
+           Integer temp = MapUtil.getInt(one, "handle");
+           one.replace("handle", temp == 1);
+        });
+     }
+     int start = MapUtil.getInt(param, "start");
+     int length = MapUtil.getInt(param, "length");
+     PageUtils pageUtils = new PageUtils(list, count, start, length);
+     return pageUtils;
+}
+
+@Data
+@Schema(description = "查询订单评价分页记录的表单")
+public class SearchCommentByPageForm {
+
+   @NotNull(message = "userId不能为空")
+   @Min(value = 1, message = "userId不能小于1")
+   @Schema(description = "用户ID")
+   private Integer userId;
+
+   @Min(value = 1, message = "orderId不能小于1")
+   @Schema(description = "订单ID")
+   private Long orderId;
+
+   @Min(value = 1, message = "driverId不能小于1")
+   @Schema(description = "司机ID")
+   private Long driverId;
+
+   @Min(value = 1, message = "customerId不能小于1")
+   @Schema(description = "乘客ID")
+   private Long customerId;
+
+   @Pattern(regexp = "^差评$|^中评$|^好评$", message = "rate内容不正确")
+   @Schema(description = "评价")
+   private String rate;
+
+   @Pattern(regexp = "^((((1[6-9]|[2-9]\\d)\\d{2})-(0?[13578]|1[02])-(0?[1-9]|[12]\\d|3[01]))|(((1[6-9]|[2-9]\\d)\\d{2})-(0?[13456789]|1[012])-(0?[1-9]|[12]\\d|30))|(((1[6-9]|[2-9]\\d)\\d{2})-0?2-(0?[1-9]|1\\d|2[0-8]))|(((1[6-9]|[2-9]\\d)(0[48]|[2468][048]|[13579][26])|((16|[2468][048]|[3579][26])00))-0?2-29-))$",
+           message = "startDate内容不正确")
+   @Schema(description = "开始日期")
+   private String startDate;
+
+   @Pattern(regexp = "^((((1[6-9]|[2-9]\\d)\\d{2})-(0?[13578]|1[02])-(0?[1-9]|[12]\\d|3[01]))|(((1[6-9]|[2-9]\\d)\\d{2})-(0?[13456789]|1[012])-(0?[1-9]|[12]\\d|30))|(((1[6-9]|[2-9]\\d)\\d{2})-0?2-(0?[1-9]|1\\d|2[0-8]))|(((1[6-9]|[2-9]\\d)(0[48]|[2468][048]|[13579][26])|((16|[2468][048]|[3579][26])00))-0?2-29-))$",
+           message = "endDate内容不正确")
+   @Schema(description = "结束日期")
+   private String endDate;
+
+   @Range(min = 1, max = 4, message = "status不正确")
+   private Integer status;
+
+   @NotNull(message = "page不能为空")
+   @Min(value = 1, message = "page不能小于1")
+   @Schema(description = "页数")
+   private Integer page;
+
+   @NotNull(message = "length不能为空")
+   @Range(min = 10, max = 50, message = "length必须为10~50之间")
+   @Schema(description = "每页记录数")
+   private Integer length;
+}
+
+@PostMapping("/searchCommentByPage")
+@Operation(summary = "查询订单评价分页记录")
+public R searchCommentByPage(@RequestBody @Valid SearchCommentByPageForm form) {
+   Map param = BeanUtil.beanToMap(form);
+   int page = form.getPage();
+   int length = form.getLength();
+   int start = (page - 1) * length;
+   param.put("start", start);
+   PageUtils pageUtils = orderCommentService.searchCommentByPage(param);
+   return R.ok().put("result", pageUtils);
+}
+```
+2. 写 hxds-mis-api/src/main/java/com/example/hxds/mis/api/controller/form/SearchCommentByPageForm.java
+   写 hxds-mis-api/src/main/java/com/example/hxds/mis/api/feign/OdrServiceApi.java#searchCommentByPage
+   写 hxds-mis-api/src/main/java/com/example/hxds/mis/api/service/OrderCommentService.java#searchCommentByPage 及其实现类
+   写 hxds-mis-api/src/main/java/com/example/hxds/mis/api/controller/OrderCommentController.java#searchCommentByPage
+```java
+@Data
+@Schema(description = "查询订单评价分页记录的表单")
+public class SearchCommentByPageForm {
+
+    @Schema(description = "用户ID")
+    private Integer userId;
+
+    @Min(value = 1, message = "orderId不能小于1")
+    @Schema(description = "订单ID")
+    private Long orderId;
+
+    @Min(value = 1, message = "driverId不能小于1")
+    @Schema(description = "司机ID")
+    private Long driverId;
+
+    @Min(value = 1, message = "customerId不能小于1")
+    @Schema(description = "乘客ID")
+    private Long customerId;
+
+    @Pattern(regexp = "^差评$|^中评$|^好评$", message = "rate内容不正确")
+    @Schema(description = "评价")
+    private String rate;
+
+    @Pattern(regexp = "^((((1[6-9]|[2-9]\\d)\\d{2})-(0?[13578]|1[02])-(0?[1-9]|[12]\\d|3[01]))|(((1[6-9]|[2-9]\\d)\\d{2})-(0?[13456789]|1[012])-(0?[1-9]|[12]\\d|30))|(((1[6-9]|[2-9]\\d)\\d{2})-0?2-(0?[1-9]|1\\d|2[0-8]))|(((1[6-9]|[2-9]\\d)(0[48]|[2468][048]|[13579][26])|((16|[2468][048]|[3579][26])00))-0?2-29-))$",
+            message = "startDate内容不正确")
+    @Schema(description = "开始日期")
+    private String startDate;
+
+    @Pattern(regexp = "^((((1[6-9]|[2-9]\\d)\\d{2})-(0?[13578]|1[02])-(0?[1-9]|[12]\\d|3[01]))|(((1[6-9]|[2-9]\\d)\\d{2})-(0?[13456789]|1[012])-(0?[1-9]|[12]\\d|30))|(((1[6-9]|[2-9]\\d)\\d{2})-0?2-(0?[1-9]|1\\d|2[0-8]))|(((1[6-9]|[2-9]\\d)(0[48]|[2468][048]|[13579][26])|((16|[2468][048]|[3579][26])00))-0?2-29-))$",
+            message = "endDate内容不正确")
+    @Schema(description = "结束日期")
+    private String endDate;
+
+    @Range(min = 1, max = 4, message = "status不正确")
+    private Integer status;
+
+    @NotNull(message = "page不能为空")
+    @Min(value = 1, message = "page不能小于1")
+    @Schema(description = "页数")
+    private Integer page;
+
+    @NotNull(message = "length不能为空")
+    @Range(min = 10, max = 50, message = "length必须为10~50之间")
+    @Schema(description = "每页记录数")
+    private Integer length;
+}
+
+@PostMapping("/comment/searchCommentByPage")
+R searchCommentByPage(SearchCommentByPageForm form);
+
+PageUtils searchCommentByPage(SearchCommentByPageForm form);
+
+@Override
+public PageUtils searchCommentByPage(SearchCommentByPageForm form) {
+   R r = odrServiceApi.searchCommentByPage(form);
+   PageUtils pageUtils = (PageUtils) r.get("result");
+   return pageUtils;
+}
+
+@PostMapping("/searchCommentByPage")
+@SaCheckPermission(value = {"ROOT", "COMMENT:SELECT"}, mode = SaMode.OR)
+@Operation(summary = "查询订单评价分页记录")
+public R searchCommentByPage(@RequestBody @Valid SearchCommentByPageForm form) {
+   int userId = StpUtil.getLoginIdAsInt();
+   form.setUserId(userId);
+   PageUtils pageUtils = orderCommentService.searchCommentByPage(form);
+   return R.ok().put("result", pageUtils);
+}
+```
+### MIS系统显示订单评价分页记录
 1. 写 hxds-mis-vue/src/router/index.js
    写 hxds-mis-vue/src/views/main.vue
    写 hxds-mis-vue/src/views/comment.vue#loadDataList
@@ -1329,4 +2623,3 @@ expand: function(row, expandedRows) {
        }
    }
 }
-```

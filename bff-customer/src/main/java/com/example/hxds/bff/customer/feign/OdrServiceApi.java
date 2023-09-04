@@ -49,4 +49,10 @@ public interface OdrServiceApi {
 
     @PostMapping("/comment/insertComment")
     R insertComment(InsertCommentForm form);
+
+    @PostMapping("/order/searchCustomerOrderByPage")
+    R searchCustomerOrderByPage(SearchCustomerOrderByPageForm form);
+
+    @PostMapping("/comment/searchCommentByOrderId")
+    R searchCommentByOrderId(SearchCommentByOrderIdForm form);
 }

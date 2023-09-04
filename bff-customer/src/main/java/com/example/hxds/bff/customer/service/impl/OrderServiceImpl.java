@@ -9,6 +9,7 @@ import com.example.hxds.bff.customer.controller.form.*;
 import com.example.hxds.bff.customer.feign.*;
 import com.example.hxds.bff.customer.service.OrderService;
 import com.example.hxds.common.exception.HxdsException;
+import com.example.hxds.common.util.PageUtils;
 import com.example.hxds.common.util.R;
 import com.example.hxds.common.wxpay.MyWXPayConfig;
 import com.example.hxds.common.wxpay.WXPay;
@@ -238,6 +239,21 @@ public class OrderServiceImpl implements OrderService {
             r = drServiceApi.searchDriverBriefInfo(infoForm);
             HashMap temp = (HashMap) r.get("result");
             map.putAll(temp);
+
+            int status = MapUtil.getInt(r, "status");
+            HashMap cmtMap = Maps.newHashMap();
+            if (status >= 7) {
+                SearchCommentByOrderIdForm commentForm = new SearchCommentByOrderIdForm();
+                commentForm.setOrderId(form.getOrderId());
+                commentForm.setCustomerId(form.getCustomerId());
+                r = odrServiceApi.searchCommentByOrderId(commentForm);
+                if (r.containsKey("result")) {
+                    cmtMap = (HashMap) r.get("result");
+                } else {
+                    cmtMap.put("rate", 5);
+                }
+            }
+            map.put("comment", cmtMap);
             return map;
         }
         return null;
@@ -355,6 +371,13 @@ public class OrderServiceImpl implements OrderService {
         R r = odrServiceApi.updateOrderAboutPayment(form);
         String result = MapUtil.getStr(r, "result");
         return result;
+    }
+
+    @Override
+    public PageUtils searchCustomerOrderByPage(SearchCustomerOrderByPageForm form) {
+        R r = odrServiceApi.searchCustomerOrderByPage(form);
+        PageUtils pageUtils = (PageUtils) r.get("result");
+        return pageUtils;
     }
 
 }

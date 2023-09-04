@@ -56,5 +56,16 @@ public class OrderCommentEntity implements Serializable {
      */
     private Date createTime;
 
+    /**
+     * 审批人ID
+     */
+    private Integer userid;
+
+    /**
+     * 审批人姓名
+     */
+    private String userName;
+
+
     private static final long serialVersionUID = 1L;
 }

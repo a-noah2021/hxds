@@ -1,6 +1,7 @@
 package com.example.hxds.mis.api.feign;
 
 import com.example.hxds.common.util.R;
+import com.example.hxds.mis.api.controller.form.SearchCommentByPageForm;
 import com.example.hxds.mis.api.controller.form.SearchOrderByPageForm;
 import com.example.hxds.mis.api.controller.form.SearchOrderContentForm;
 import com.example.hxds.mis.api.controller.form.SearchOrderStatusForm;
@@ -27,4 +28,7 @@ public interface OdrServiceApi {
 
     @PostMapping("/order/searchOrderStartLocationIn30Days")
     R searchOrderStartLocationIn30Days();
+
+    @PostMapping("/comment/searchCommentByPage")
+    R searchCommentByPage(SearchCommentByPageForm form);
 }

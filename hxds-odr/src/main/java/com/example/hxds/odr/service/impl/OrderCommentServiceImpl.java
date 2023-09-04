@@ -1,5 +1,8 @@
 package com.example.hxds.odr.service.impl;
 
+import cn.hutool.core.map.MapUtil;
+import com.example.hxds.common.util.PageUtils;
+import com.google.common.collect.Lists;
 import com.qcloud.cos.model.ciModel.auditing.TextAuditingRequest;
 import com.qcloud.cos.model.ciModel.auditing.TextAuditingResponse;
 import lombok.extern.slf4j.Slf4j;
@@ -22,7 +25,10 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.transaction.annotation.Transactional;
 
 import javax.annotation.Resource;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 /**
  * @program: hxds
@@ -93,6 +99,29 @@ public class OrderCommentServiceImpl implements OrderCommentService {
             throw new HxdsException("保存订单评价失败");
         }
         return rows;
+    }
+
+    @Override
+    public HashMap searchCommentByOrderId(Map param) {
+        HashMap map = orderCommentDao.searchCommentByOrderId(param);
+        return map;
+    }
+
+    @Override
+    public PageUtils searchCommentByPage(Map param) {
+        long count = orderCommentDao.searchCommentCount(param);
+        List<HashMap> list = Lists.newArrayList();
+        if (count > 0) {
+            list = orderCommentDao.searchCommentByPage(param);
+            list.stream().forEach(one -> {
+                Integer temp = MapUtil.getInt(one, "handle");
+                one.replace("handle", temp == 1);
+            });
+        }
+        int start = MapUtil.getInt(param, "start");
+        int length = MapUtil.getInt(param, "length");
+        PageUtils pageUtils = new PageUtils(list, count, start, length);
+        return pageUtils;
     }
 
 }

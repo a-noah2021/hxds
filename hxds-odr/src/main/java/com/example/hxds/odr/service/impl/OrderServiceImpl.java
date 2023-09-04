@@ -11,7 +11,6 @@ import com.example.hxds.common.exception.HxdsException;
 import com.example.hxds.common.util.PageUtils;
 import com.example.hxds.common.wxpay.MyWXPayConfig;
 import com.example.hxds.common.wxpay.WXPay;
-import com.example.hxds.common.wxpay.WXPayConfig;
 import com.example.hxds.common.wxpay.WXPayUtil;
 import com.example.hxds.odr.controller.form.TransferForm;
 import com.example.hxds.odr.db.dao.OrderBillDao;
@@ -480,6 +479,32 @@ public class OrderServiceImpl implements OrderService {
             e.printStackTrace();
             throw new HxdsException("更新订单相关付款信息失败");
         }
+    }
+
+    @Override
+    public PageUtils searchDriverOrderByPage(Map param) {
+        long count = orderDao.searchDriverOrderCount(param);
+        List<HashMap> list = Lists.newArrayList();
+        if (count > 0) {
+            list = orderDao.searchDriverOrderByPage(param);
+        }
+        int start = MapUtil.getInt(param, "start");
+        int length = MapUtil.getInt(param, "length");
+        PageUtils pageUtils = new PageUtils(list, count, start, length);
+        return pageUtils;
+    }
+
+    @Override
+    public PageUtils searchCustomerOrderByPage(Map param) {
+        long count = orderDao.searchCustomerOrderCount(param);
+        List list = Lists.newArrayList();
+        if (count > 0) {
+            list = orderDao.searchCustomerOrderByPage(param);
+        }
+        int start = MapUtil.getInt(param, "start");
+        int length = MapUtil.getInt(param, "length");
+        PageUtils pageUtils = new PageUtils(list, count, start, length);
+        return pageUtils;
     }
 
 }
