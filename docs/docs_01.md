@@ -8,43 +8,43 @@
 
 ### 目标
 
-搭建 5 个 MySQL 节点，其中四个作为集群节点，剩下的一个作为分布式配置存储节点
+搭建 5 个 MySQL 节点，其中四个作为集群节点，剩下的一个作为分布式配置存储节点，并不存储业务数据
 
 ### 背景
 
 #### 数据切分
 
-​		MySQL单表数据超过两千万，CRUD性能就会急速下降，所以我们需要把同一张表的数据切分到不同的MySQL节点中。这需要引入MySQL中间件，其实就是个SQL路由器而已。MyCat、ProxySQL、ShardingSphere等等。课程中选择了 ShardingSphere 而且还是Apache负责维护的，国内也有很多项目组在用这个产品，手册资料相对齐全，所以相对来说是个主流的中间件。
+​		MySQL 单表数据超过两千万，CRUD 性能就会急速下降，所以我们需要把同一张表的数据切分到不同的 MySQL 节点中。这需要引入 MySQL 中间件，其实就是个 SQL 路由器而已。这种集群中间件有很多，比如 MyCat、ProxySQL、ShardingSphere 等等。因为 MyCat 弃管了，所以我选择了 ShardingSphere，功能不输给 MyCat，而且还是 Apache 负责维护的，国内也有很多项目组在用这个产品，手册资料相对齐全，所以相对来说是个主流的中间件
 
   ![https://img1.sycdn.imooc.com/62f4d68d0001d47504480348.jpg](https://img1.sycdn.imooc.com/62f4d68d0001d47504480348.jpg)
 
-​		规则是：在 MySQL_1 和 MySQL_2 两个节点上分别创建订单表，然后在 ShardingSphere 做好设置。如果 INSERT 语句主键值对2求模余0，这个 INSERT 语句就路由给 MySQL_1 节点；如果余数是1，INSERT 语句就被路由给 MySQL_2 执行，通过控制 SQL 语句的转发就能把订单数据切分到不同的 MySQL 节点上。将来查询的数据的时候，ShardingSphere 把SELECT语句发送给每个 MySQL 节点执行，然后 ShardingSphere 把得到的数据做汇总返回给Navicat就行了。我们在Navicat上面执行CRUD操作，几乎跟操作单节点 MySQL 差不多，但是这背后确实通过路由 SQL 语句来实现的。
+​		在 MySQL_1 和 MySQL_2 两个节点上分别创建订单表，然后在 ShardingSphere 做好设置。如果 INSERT 语句主键值对 2 求模余 0，这个 INSERT 语句就路由给 MySQL_1 节点；如果余数是 1，INSERT 语句就被路由给 MySQL_2 执行。通过控制 SQL 语句的转发就能把订单数据切分到不同的 MySQL 节点上了。将来查询的数据的时候，ShardingSphere 把 SELECT 语句发送给每个 MySQL 节点执行，然后 ShardingSphere 把得到的数据做汇总返回给 Navicat 就行了。我们在 Navicat 上面执行 CRUD 操作，几乎跟操作单节点 MySQL 差不多，但是这背后确实通过路由 SQL 语句来实现的
 
-​		解释：我们可以将海量得数据切分到不同得 MySQL 节点。但是时间日积月累每个 MySQL 里面得数据还是会超过几千万条， 这时候 就必须做归档。 对于一年以上得业务数据,可以看作过期得冷数据，我们可以把这部分得数据转移到归档数据库， 例如 ToKuDB、 MongoDB 或者 HBase 里面。这样 MySQL 节点就实现缩表了，性能也就上去了。比方说你在银行APP上面只能插到12个月以内的流水账单，再早的账单是查不到的。这就是银行做了冷数据归档操作，只有银行内部少数人可以查阅这些过期的冷数据
+你可能要问，即便海量数据可以切分到不同的 MySQL 节点，但是日积月累，每个 MySQL 里面的数据还是会超过两千万的，那该怎么办？这个也简单，做数据归档就好了。对于 1 年以上的业务数据，可以看做是过期的冷数据。我们可以把这部分数据转移到归档库里面，例如 ToKuDB、MongoDB 或者 HBase 里面。这样 MySQL 节点就实现缩表了，性能也就上去了。比方说你在银行 APP 上面只能查到 12 个月以内的流水账单，再早的账单是查不到的。这就是银行做了冷数据归档操作，只有银行内部少数人可以查阅这些过期的冷数据
 
 #### 数据同步
 
-​		数据切分虽然能应对大量业务数据的存储，但是 MySQL_1 和 MySQL_2 节点数据是不同的，而且还没有备用的冗余节点，一旦宕机就会严重影响线上业务。接下来我们要考虑怎么给MySQL节点设置冗余节点。
+​		数据切分虽然能应对大量业务数据的存储，但是 MySQL_1 和 MySQL_2 节点数据是不同的，而且还没有备用的冗余节点，一旦宕机就会严重影响线上业务。接下来我们要考虑怎么给 MySQL 节点设置冗余节点
 
-​		MySQL自带了 Master-Slave 数据同步模式，也被称作主从同步模式。例如 MySQL_A 节点开启了 binlog 日志文件之后，MySQL_A上面执行SQL语句都会被记录在binlog日志里面。MySQL_B节点通过订阅MySQL_A的binlog文件，能实时下载到这个日志文件，然后在MySQL_B节点上运行这些SQL语句，于是就保证了自己的数据和MySQL_A节点一致
+​		MySQL 自带了 Master-Slave 数据同步模式，也被称作主从同步模式。例如 MySQL_A 节点开启了 binlog 日志文件之后，MySQL_A上面执行 SQL 语句都会被记录在 binlog 日志里面。MySQL_B 节点通过订阅 MySQL_A 的 binlog 文件，能实时下载到这个日志文件，然后在 MySQL_B 节点上运行这些 SQL 语句，于是就保证了自己的数据和 MySQL_A 节点一致
 
   ![https://img1.sycdn.imooc.com/62f4d7b60001f9e504960270.jpg](https://img1.sycdn.imooc.com/62f4d7b60001f9e504960270.jpg)
 
 
 
- 		MySQL_A被称作Master（主节点），MySQL_B被称作Slave（从节点）。主从同步模式里面，数据同步是单项的，如果你在MySQL_A 上写入数据，可以同步到MySQL_B上面；如果在MySQL_B上面写入数据，是不能同步到MySQL_A节点的
+MySQL_A 被称作 Master（主节点），MySQL_B 被称作 Slave（从节点）。需要注意，主从同步模式里面，数据同步是单项的，如果你在 MySQL_A 上写入数据，可以同步到 MySQL_B 上面；如果在 MySQL_B 上面写入数据，是不能同步到 MySQL_A 节点的。于是我们要配置双向主从同步，也就是互为主从节点
 
   ![https://img1.sycdn.imooc.com/62f4d7dd0001f2a105010319.jpg](https://img1.sycdn.imooc.com/62f4d7dd0001f2a105010319.jpg)
 
 
 
-​		于是我们要配置双向主从同步，也就是互为主从节点。MySQL_A订阅MySQL_B的日志文件，MySQL_B订阅MySQL_A的日志文件
+​		MySQL_A 订阅 MySQL_B 的日志文件，MySQL_B 订阅 MySQL_A 的日志文件，这样无论我们在哪个节点上写入数据，另一个节点就会自动同步到了
 
 #### 读写分离
 
 ​		绝大多数Web系统都是读多写少的，比如电商网站，我们都是要货比三家，然后再下单购买。所以搭建MySQL集群的时候，就要划定某些节点是读节点，某些节点是写节点
 
-​		主从同步有个问题就是Master和Slave身份是固定，如果MySQL_1宕机，MySQL_2和MySQL_3都不能升级成写节点。那怎么办呢，给MySQL_1加上双向同步的MySQL_4节点。
+​		我规划的是MySQL_1为写节点，MySQL_2和MySQL_3是读节点。多配制一些读节点也没问题，毕竟系统的读任务比较多。但是主从同步有个问题就是Master和Slave身份是固定，如果MySQL_1宕机，MySQL_2和MySQL_3都不能升级成写节点。那怎么办呢，给MySQL_1加上双向同步的MySQL_4节点
 
 
 
@@ -52,17 +52,25 @@
 
 
 
-​    ShardingSphere会轮询的方式给MySQL_1和MySQL_4发送写操作的SQL语句（INSERT、DELETE、UPDATE等）；如果是查询语句，ShardingSphere会发给其余四个读节点去执行，这就实现了读写分离。假设MySQL_1宕机，ShardingSphere通过心跳检测能知道，于是所有的写操作就转发给MySQL_4。反之如果MySQL_4宕机，MySQL_1也会接替工作。在上面示意图中的6个MySQL节点，无论哪一个宕机都不影响数据库整体的使用，都有各自的冗余节点。
+​    	ShardingSphere 会轮询的方式给 MySQL_1 和 MySQL_4 发送写操作的SQL语句（INSERT、DELETE、UPDATE等）；如果是查询语句，ShardingSphere 会发给其余四个读节点去执行，这就实现了读写分离。假设 MySQL_1 宕机，ShardingSphere 通过心跳检测能知道，于是所有的写操作就转发给 MySQL_4。反之如果 MySQL_4 宕机，MySQL_1 也会接替工作。在上面示意图中的 6 个 MySQL 节点，无论哪一个宕机都不影响数据库整体的使用，都有各自的冗余节点
 
 #### 数据分片
 
-  ![https://img1.sycdn.imooc.com/62f4d8b0000189ba08070390.jpg](https://img1.sycdn.imooc.com/62f4d8b0000189ba08070390.jpg)
+​		上面的 6 个 MySQL 节点并不是最终的 MySQL 集群方案，因为无论我在 MySQL_1 或者 MySQL_4 写入数据，最终都会同步给其他的节点，也就是说数据不能实现切分。于是我们要引入数据库分片概念，分片内部数据可以做读写分了和主从同步，但是分片之间数据是不能同步的
 
-  前6个节点组成了第一个MySQL分片，后6个MySQL节点组成了另一个MySQL分片，两个分片之间没有任何的数据同步。这时候ShardingSphere把各种SQL语句路由给相应的MySQL分片，数据就实现了切分。
+  <img src="https://img1.sycdn.imooc.com/62f4d8b0000189ba08070390.jpg" style="zoom: 67%;" />
+
+​		如上图，前 6 个节点组成了第一个 MySQL 分片，后 6个MySQL 节点组成了另一个 MySQL 分片，两个分片之间没有任何的数据同步。这时候 ShardingSphere 把各种 SQL 语句路由给相应的 MySQL 分片，数据就实现了切分。这么看来，我们想要搭建一个最普通的 MySQL 集群，至少需要 12 个 MySQL 节点，但是我们的虚拟机又没有那么大的内存，而且我们是开发环境，没必要配置冗余节点。负载不高，我们也不需要配置读写分离，所以我们只保留数据切分就够了。例如分片 A 中我只保留了一个 MySQL 节点，其余五个节点都不需要。分片 A 和分片 B 切分的是某些数据表，比如司机表和钱包表的数据等等，分片 C 和分片 D 切分其他一些数据表的记录
+
+<img src="https://noah2021.top/pics/Snipaste_2023-09-09_23-51-40.png" style="zoom:50%;" />
+
+你可能要问，既然切分数据，用分片 A 和分片 B 就够了，把所有的数据表都弄到这两个分片上不行吗？这么做也是可以的。但是为了降低负载 A 和 B 分片的负载，我把订单相关的数据表放在了 C 和 D 分片上面。等将来我们正式部署项目的时候，四个分片一共需要 24 个 MySQL 节点，现阶段我们用四个 MySQL 节点就够了
 
 #### ShardingSphere
 
-  ShardingSphere是开源免费的数据库集群中间件，自带了各种切分数据的算法和雪花主键生成算法，甚至我们自己也可以写代码订制新的算法，相对来说比MyCat扩展性更强
+​		ShardingSphere 是开源免费的数据库集群中间件，自带了各种切分数据的算法和雪花主键生成算法，甚至我们自己也可以写代码订制新的算法，相对来说比 MyCat 扩展性更强。更多介绍，大家可以去官网自己查阅
+
+​		我这里使用的是 ShardingSphere 5.0 版本，属于最新的版本。5.0 版本的配置文件和 4.0 版本有很大的区别，所以大家百度的时候尽量看清楚 ShardingSphere 的版本号，目前百度上大多数帖子讲 ShardingSphere 配置，都是基于 4.0 版本的
 
 ### 步骤
 
