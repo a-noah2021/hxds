@@ -12,21 +12,21 @@
 
 ### 背景
 
-#### 数据切分
+**数据切分**
 
-​		MySQL 单表数据超过两千万，CRUD 性能就会急速下降，所以我们需要把同一张表的数据切分到不同的 MySQL 节点中。这需要引入 MySQL 中间件，其实就是个 SQL 路由器而已。这种集群中间件有很多，比如 MyCat、ProxySQL、ShardingSphere 等等。因为 MyCat 弃管了，所以我选择了 ShardingSphere，功能不输给 MyCat，而且还是 Apache 负责维护的，国内也有很多项目组在用这个产品，手册资料相对齐全，所以相对来说是个主流的中间件
+MySQL 单表数据超过两千万，CRUD 性能就会急速下降，所以我们需要把同一张表的数据切分到不同的 MySQL 节点中。这需要引入 MySQL 中间件，其实就是个 SQL 路由器而已。这种集群中间件有很多，比如 MyCat、ProxySQL、ShardingSphere 等等。因为 MyCat 弃管了，所以我选择了 ShardingSphere，功能不输给 MyCat，而且还是 Apache 负责维护的，国内也有很多项目组在用这个产品，手册资料相对齐全，所以相对来说是个主流的中间件
 
   ![https://img1.sycdn.imooc.com/62f4d68d0001d47504480348.jpg](https://img1.sycdn.imooc.com/62f4d68d0001d47504480348.jpg)
 
-​		在 MySQL_1 和 MySQL_2 两个节点上分别创建订单表，然后在 ShardingSphere 做好设置。如果 INSERT 语句主键值对 2 求模余 0，这个 INSERT 语句就路由给 MySQL_1 节点；如果余数是 1，INSERT 语句就被路由给 MySQL_2 执行。通过控制 SQL 语句的转发就能把订单数据切分到不同的 MySQL 节点上了。将来查询的数据的时候，ShardingSphere 把 SELECT 语句发送给每个 MySQL 节点执行，然后 ShardingSphere 把得到的数据做汇总返回给 Navicat 就行了。我们在 Navicat 上面执行 CRUD 操作，几乎跟操作单节点 MySQL 差不多，但是这背后确实通过路由 SQL 语句来实现的
+在 MySQL_1 和 MySQL_2 两个节点上分别创建订单表，然后在 ShardingSphere 做好设置。如果 INSERT 语句主键值对 2 求模余 0，这个 INSERT 语句就路由给 MySQL_1 节点；如果余数是 1，INSERT 语句就被路由给 MySQL_2 执行。通过控制 SQL 语句的转发就能把订单数据切分到不同的 MySQL 节点上了。将来查询的数据的时候，ShardingSphere 把 SELECT 语句发送给每个 MySQL 节点执行，然后 ShardingSphere 把得到的数据做汇总返回给 Navicat 就行了。我们在 Navicat 上面执行 CRUD 操作，几乎跟操作单节点 MySQL 差不多，但是这背后确实通过路由 SQL 语句来实现的
 
 你可能要问，即便海量数据可以切分到不同的 MySQL 节点，但是日积月累，每个 MySQL 里面的数据还是会超过两千万的，那该怎么办？这个也简单，做数据归档就好了。对于 1 年以上的业务数据，可以看做是过期的冷数据。我们可以把这部分数据转移到归档库里面，例如 ToKuDB、MongoDB 或者 HBase 里面。这样 MySQL 节点就实现缩表了，性能也就上去了。比方说你在银行 APP 上面只能查到 12 个月以内的流水账单，再早的账单是查不到的。这就是银行做了冷数据归档操作，只有银行内部少数人可以查阅这些过期的冷数据
 
-#### 数据同步
+**数据同步**
 
-​		数据切分虽然能应对大量业务数据的存储，但是 MySQL_1 和 MySQL_2 节点数据是不同的，而且还没有备用的冗余节点，一旦宕机就会严重影响线上业务。接下来我们要考虑怎么给 MySQL 节点设置冗余节点
+数据切分虽然能应对大量业务数据的存储，但是 MySQL_1 和 MySQL_2 节点数据是不同的，而且还没有备用的冗余节点，一旦宕机就会严重影响线上业务。接下来我们要考虑怎么给 MySQL 节点设置冗余节点
 
-​		MySQL 自带了 Master-Slave 数据同步模式，也被称作主从同步模式。例如 MySQL_A 节点开启了 binlog 日志文件之后，MySQL_A上面执行 SQL 语句都会被记录在 binlog 日志里面。MySQL_B 节点通过订阅 MySQL_A 的 binlog 文件，能实时下载到这个日志文件，然后在 MySQL_B 节点上运行这些 SQL 语句，于是就保证了自己的数据和 MySQL_A 节点一致
+MySQL 自带了 Master-Slave 数据同步模式，也被称作主从同步模式。例如 MySQL_A 节点开启了 binlog 日志文件之后，MySQL_A上面执行 SQL 语句都会被记录在 binlog 日志里面。MySQL_B 节点通过订阅 MySQL_A 的 binlog 文件，能实时下载到这个日志文件，然后在 MySQL_B 节点上运行这些 SQL 语句，于是就保证了自己的数据和 MySQL_A 节点一致
 
   ![https://img1.sycdn.imooc.com/62f4d7b60001f9e504960270.jpg](https://img1.sycdn.imooc.com/62f4d7b60001f9e504960270.jpg)
 
@@ -38,13 +38,13 @@ MySQL_A 被称作 Master（主节点），MySQL_B 被称作 Slave（从节点）
 
 
 
-​		MySQL_A 订阅 MySQL_B 的日志文件，MySQL_B 订阅 MySQL_A 的日志文件，这样无论我们在哪个节点上写入数据，另一个节点就会自动同步到了
+MySQL_A 订阅 MySQL_B 的日志文件，MySQL_B 订阅 MySQL_A 的日志文件，这样无论我们在哪个节点上写入数据，另一个节点就会自动同步到了
 
-#### 读写分离
+**读写分离**
 
-​		绝大多数Web系统都是读多写少的，比如电商网站，我们都是要货比三家，然后再下单购买。所以搭建MySQL集群的时候，就要划定某些节点是读节点，某些节点是写节点
+绝大多数Web系统都是读多写少的，比如电商网站，我们都是要货比三家，然后再下单购买。所以搭建MySQL集群的时候，就要划定某些节点是读节点，某些节点是写节点
 
-​		我规划的是MySQL_1为写节点，MySQL_2和MySQL_3是读节点。多配制一些读节点也没问题，毕竟系统的读任务比较多。但是主从同步有个问题就是Master和Slave身份是固定，如果MySQL_1宕机，MySQL_2和MySQL_3都不能升级成写节点。那怎么办呢，给MySQL_1加上双向同步的MySQL_4节点
+我规划的是MySQL_1为写节点，MySQL_2和MySQL_3是读节点。多配制一些读节点也没问题，毕竟系统的读任务比较多。但是主从同步有个问题就是Master和Slave身份是固定，如果MySQL_1宕机，MySQL_2和MySQL_3都不能升级成写节点。那怎么办呢，给MySQL_1加上双向同步的MySQL_4节点
 
 
 
@@ -52,25 +52,23 @@ MySQL_A 被称作 Master（主节点），MySQL_B 被称作 Slave（从节点）
 
 
 
-​    	ShardingSphere 会轮询的方式给 MySQL_1 和 MySQL_4 发送写操作的SQL语句（INSERT、DELETE、UPDATE等）；如果是查询语句，ShardingSphere 会发给其余四个读节点去执行，这就实现了读写分离。假设 MySQL_1 宕机，ShardingSphere 通过心跳检测能知道，于是所有的写操作就转发给 MySQL_4。反之如果 MySQL_4 宕机，MySQL_1 也会接替工作。在上面示意图中的 6 个 MySQL 节点，无论哪一个宕机都不影响数据库整体的使用，都有各自的冗余节点
+ShardingSphere 会轮询的方式给 MySQL_1 和 MySQL_4 发送写操作的SQL语句（INSERT、DELETE、UPDATE等）；如果是查询语句，ShardingSphere 会发给其余四个读节点去执行，这就实现了读写分离。假设 MySQL_1 宕机，ShardingSphere 通过心跳检测能知道，于是所有的写操作就转发给 MySQL_4。反之如果 MySQL_4 宕机，MySQL_1 也会接替工作。在上面示意图中的 6 个 MySQL 节点，无论哪一个宕机都不影响数据库整体的使用，都有各自的冗余节点
 
-#### 数据分片
+**数据分片**
 
-​		上面的 6 个 MySQL 节点并不是最终的 MySQL 集群方案，因为无论我在 MySQL_1 或者 MySQL_4 写入数据，最终都会同步给其他的节点，也就是说数据不能实现切分。于是我们要引入数据库分片概念，分片内部数据可以做读写分了和主从同步，但是分片之间数据是不能同步的
+上面的 6 个 MySQL 节点并不是最终的 MySQL 集群方案，因为无论我在 MySQL_1 或者 MySQL_4 写入数据，最终都会同步给其他的节点，也就是说数据不能实现切分。于是我们要引入数据库分片概念，分片内部数据可以做读写分了和主从同步，但是分片之间数据是不能同步的
 
   <img src="https://img1.sycdn.imooc.com/62f4d8b0000189ba08070390.jpg" style="zoom: 67%;" />
 
-​		如上图，前 6 个节点组成了第一个 MySQL 分片，后 6个MySQL 节点组成了另一个 MySQL 分片，两个分片之间没有任何的数据同步。这时候 ShardingSphere 把各种 SQL 语句路由给相应的 MySQL 分片，数据就实现了切分。这么看来，我们想要搭建一个最普通的 MySQL 集群，至少需要 12 个 MySQL 节点，但是我们的虚拟机又没有那么大的内存，而且我们是开发环境，没必要配置冗余节点。负载不高，我们也不需要配置读写分离，所以我们只保留数据切分就够了。例如分片 A 中我只保留了一个 MySQL 节点，其余五个节点都不需要。分片 A 和分片 B 切分的是某些数据表，比如司机表和钱包表的数据等等，分片 C 和分片 D 切分其他一些数据表的记录
+如上图，前 6 个节点组成了第一个 MySQL 分片，后 6个MySQL 节点组成了另一个 MySQL 分片，两个分片之间没有任何的数据同步。这时候 ShardingSphere 把各种 SQL 语句路由给相应的 MySQL 分片，数据就实现了切分。这么看来，我们想要搭建一个最普通的 MySQL 集群，至少需要 12 个 MySQL 节点，但是我们的虚拟机又没有那么大的内存，而且我们是开发环境，没必要配置冗余节点。负载不高，我们也不需要配置读写分离，所以我们只保留数据切分就够了。例如分片 A 中我只保留了一个 MySQL 节点，其余五个节点都不需要。分片 A 和分片 B 切分的是某些数据表，比如司机表和钱包表的数据等等，分片 C 和分片 D 切分其他一些数据表的记录
 
 <img src="https://noah2021.top/pics/Snipaste_2023-09-09_23-51-40.png" style="zoom:50%;" />
 
 你可能要问，既然切分数据，用分片 A 和分片 B 就够了，把所有的数据表都弄到这两个分片上不行吗？这么做也是可以的。但是为了降低负载 A 和 B 分片的负载，我把订单相关的数据表放在了 C 和 D 分片上面。等将来我们正式部署项目的时候，四个分片一共需要 24 个 MySQL 节点，现阶段我们用四个 MySQL 节点就够了
 
-#### ShardingSphere
+**ShardingSphere**
 
-​		ShardingSphere 是开源免费的数据库集群中间件，自带了各种切分数据的算法和雪花主键生成算法，甚至我们自己也可以写代码订制新的算法，相对来说比 MyCat 扩展性更强。更多介绍，大家可以去官网自己查阅
-
-​		我这里使用的是 ShardingSphere 5.0 版本，属于最新的版本。5.0 版本的配置文件和 4.0 版本有很大的区别，所以大家百度的时候尽量看清楚 ShardingSphere 的版本号，目前百度上大多数帖子讲 ShardingSphere 配置，都是基于 4.0 版本的
+ShardingSphere 是开源免费的数据库集群中间件，自带了各种切分数据的算法和雪花主键生成算法，甚至我们自己也可以写代码订制新的算法，相对来说比 MyCat 扩展性更强。更多介绍，大家可以去官网自己查阅。这里使用的是 ShardingSphere 5.0 版本，属于最新的版本。5.0 版本的配置文件和 4.0 版本有很大的区别，所以大家百度的时候尽量看清楚 ShardingSphere 的版本号，目前百度上大多数帖子讲 ShardingSphere 配置，都是基于 4.0 版本的
 
 ### 步骤
 
@@ -143,6 +141,111 @@ docker exec -it ss bash # 进入容器
 cd /root/ss/ShardingSphere/bin # 进入bin目录
 ./start.sh # 启动ShardingSphere
 ```
+
+7. 【说明】在 /www/evmt/ss/ShardingSphere/conf/server.yaml 里的 rules 部分可以设置远程连接的用户名和密码
+
+```yaml
+rules:
+ - !AUTHORITY
+   users:
+     - root@%:abc123456
+     - sharding@:abc123456
+   provider:
+     type: ALL_PRIVILEGES_PERMITTED
+ - !TRANSACTION
+   defaultType: XA
+   providerType: Atomikos
+```
+
+在 /www/evmt/ss/ShardingSphere/conf/config-sharding.yaml 里的 dataSources 部分可以设置连接不同逻辑库的 JDBC 连接
+
+```yaml
+schemaName: hxds
+
+dataSources:
+ rep_s1_mis:
+   url: jdbc:mysql://172.18.0.2:3306/hxds_mis?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai&nullCatalogMeansCurrent=true&allowPublicKeyRetrieval=true
+   username: root
+   password: abc123456
+   connectionTimeoutMilliseconds: 30000
+   idleTimeoutMilliseconds: 60000
+   maxLifetimeMilliseconds: 1800000
+   maxPoolSize: 50
+   minPoolSize: 1
+ rep_s1_cst:
+   url: jdbc:mysql://172.18.0.2:3306/hxds_cst?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai&nullCatalogMeansCurrent=true&allowPublicKeyRetrieval=true
+   username: root
+   password: abc123456
+   connectionTimeoutMilliseconds: 30000
+   idleTimeoutMilliseconds: 60000
+   maxLifetimeMilliseconds: 1800000
+   maxPoolSize: 50
+   minPoolSize: 1
+ # ...
+```
+
+在 /www/evmt/ss/ShardingSphere/conf/config-sharding.yaml 里的 shardingAlgorithms 部分可以创建不同的切分规则：定义了一个切分规则叫做 cst-inline。type 设置成 INLINE 代表使用 ShardingSphere 内置的切分规则。algorithm-expression 代表具体的算法。id 主键值对 2 求模，余数是 0，那么计算出来的连接名字是 rep_s1_cst；如果余数是 1，那么计算出来的连接是 rep_s2_cst。然后 ShardingSphere 就会把 SQL 语句路由给这个连接的逻辑库去执行，数据也就切分好了
+
+```yaml
+ shardingAlgorithms:
+
+   cst-inline:
+     type: INLINE
+     props:
+       algorithm-expression: rep_s${(id % 2)+1}_cst
+   cst-children-inline: 
+     type: INLINE
+     props:
+       algorithm-expression: rep_s${(customer_id % 2)+1}_cst
+   # ...
+```
+
+在 /www/evmt/ss/ShardingSphere/conf/config-sharding.yaml 里的 rules 部分可以配置实际 MySQL 节点库与逻辑库的映射关系
+
+```yaml
+rules:
+- !SHARDING
+ tables:
+   # ...
+   tb_customer:
+     actualDataNodes: rep_s${1..2}_cst.tb_customer
+     databaseStrategy:
+       standard:
+         shardingColumn: id
+         shardingAlgorithmName: cst-inline
+     keyGenerateStrategy:
+       column: id
+       keyGeneratorName: snowflake
+	 
+   tb_customer_fine:
+     actualDataNodes: rep_s${1..2}_cst.tb_customer_fine
+     databaseStrategy:
+       standard:
+         shardingColumn: customer_id
+         shardingAlgorithmName: cst-children-inline
+     keyGenerateStrategy:
+       column: id
+       keyGeneratorName: snowflake
+   # ...
+```
+
+|      分片      |  逻辑库   |     备注      |              具体用途               |
+| :------------: | :-------: | :-----------: | :---------------------------------: |
+| 分片1(MySQL_1) | hxds_cst  |  客户逻辑库   |          客户信息、罚款等           |
+|                |  hxds_dr  |  司机逻辑库   |  司机信息、实名认证、罚款、钱包等   |
+|                | hxds_mis  | MIS系统逻辑库 |         后台管理用的数据表          |
+|                | hxds_rule |  规则逻辑库   | 代驾费计算规则,分账规则、取消规则等 |
+| 分片2(MySQL_2) | hxds_cst  |  客户逻辑库   |          客户信息、罚款等           |
+|                |  hxds_dr  |  司机逻辑库   |  司机信息、实名认证、罚款、钱包等   |
+|                | hxds_rule |  规则逻辑库   | 代驾费计算规则,分账规则、取消规则等 |
+| 分片3(MySQL_3) | hxds_odr  |  订单逻辑库   |      订单、账单、好评、分账等       |
+|                | hxds_vhr  | 代金券逻辑库  |    代金券、领取情况、使用情况等     |
+| 分片4(MySQL_4) | hxds_odr  |  订单逻辑库   |      订单、账单、好评、分账等       |
+|                | hxds_vhr  | 代金券逻辑库  |    代金券、领取情况、使用情况等     |
+
+平时我们用 MySQL 都喜欢用主键自增长，但是 MySQL 集群中，千万不能让 MySQL 生成主键值，必须有程序或者中间件来生成主键值。你想想看，刚才的切分规则是根据主键值的求模余数来路由SQL语句的，如果 ShardingSphere 接到的 INSERT 语句没有主键值，那么也就无法路由 SQL 语句了。你让 MySQL 节点生成主键值，太晚了，必须由 Java 程序或者 ShardingSphere 先生成主键值，才能路由 SQL 语句。ShardingSphere 内置了雪花算法生成主键值，雪花算法是18位的数字，所以我们创建数据表主键不能是 INT 类型，必须是 BIGINT 类型
+
+此外，因为 ShardingSphere 只是把自己打扮成虚拟的逻辑库，所以不要在 Navicat 上面查看数据库集群数据表的结构。你想看表结构，自己去某个 MySQL 节点上看数据表结构设计。包括你想要删除某个数据表，也不要在虚拟逻辑库上操作，而是需要去操作真实的 MySQL 节点
 
 ## 安装NoSQL
 
@@ -431,7 +534,7 @@ unionid: 微信下有好多产品，最常见的是公众号和小程序，在�
 锁定同一个用户，这样就 打通所有的小程序和公众号的账号系统。
 至于为啥返回的是主键 id 而不是 openId，是因为之后的司机信息查询大都由 id 作为筛选条件且主键在 SQL 层面读更快
 
-<img src="https://noah2021.cn/pics/wx-openid.jpg"  />
+<img src="https://noah2021.top/pics/wx-openid.jpg"  />
 
 ```java
 StpUtil.setLoginId(10001);              // 标记当前会话登录的账号id
